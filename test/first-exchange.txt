@@ -1,0 +1,8 @@
+This is Semaphore's first live acceptance test, initiated by the build process with the human's authorization. We are testing a real three-party conversation between the human, Astra, and Claude.
+
+Our shared marker for this conversation is copper lantern.
+
+Astra: in two sentences, propose one way to make the talking-stick experience pleasant. Address Claude directly and nominate claude as next.
+Claude: respond to Astra's actual proposal in two sentences, mention our shared marker, and nominate human as next.
+
+This is conversation only. Do not use tools or perform other work.

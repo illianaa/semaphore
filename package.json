@@ -1,0 +1,35 @@
+{
+  "name": "semaphore-conversation",
+  "version": "0.2.0",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/illianaa/semaphore.git"
+  },
+  "files": [
+    "cli.mjs",
+    "server.mjs",
+    "lib/",
+    "web/",
+    "skills/",
+    "README.md",
+    "DESIGN.md",
+    "docs/",
+    "LICENSE"
+  ],
+  "type": "module",
+  "description": "A group chat for you, Claude and Astra, where each AI stays in its own desktop app and a talking stick decides who speaks.",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "semaphore": "cli.mjs"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "setup": "node cli.mjs install",
+    "doctor": "node cli.mjs doctor",
+    "test": "node --test test/*.test.mjs"
+  }
+}

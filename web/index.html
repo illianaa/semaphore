@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta name="semaphore-token" content="__SEMAPHORE_TOKEN__" />
+    <meta
+      name="description"
+      content="One conversation with you, Astra, and Claude. Each in your own app."
+    />
+    <title>Semaphore</title>
+    <link rel="icon" href="/icon.svg" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar" aria-label="Conversations">
+        <a class="brand" href="/" aria-label="Semaphore home"
+          ><img src="/icon.svg" alt="" width="29" height="29" /><span
+            >semaphore<span class="brand-period">.</span></span
+          ></a
+        >
+        <button class="new-room" id="new-room">
+          <span aria-hidden="true">＋</span> New conversation <kbd>⌘ K</kbd>
+        </button>
+        <label class="search"
+          ><svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="10.5" cy="10.5" r="6.5" />
+            <path d="m16 16 4 4" /></svg
+          ><input
+            id="search"
+            placeholder="Find a conversation"
+            autocomplete="off"
+            aria-label="Find a conversation"
+        /></label>
+        <div class="sidebar-label">
+          YOUR CONVERSATIONS <span id="room-count">0</span>
+        </div>
+        <nav class="room-list" id="room-list" aria-label="Room list"></nav>
+        <div class="sidebar-bottom">
+          <div class="local-badge"><span></span> On your computer</div>
+          <button class="settings-button" id="settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M4 17h16M8 4v6m8 4v6" />
+            </svg>
+            Setup &amp; connections
+          </button>
+          <div class="sidebar-footnote">Your apps. Your conversations.</div>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="topbar">
+          <button
+            class="icon-button mobile-menu"
+            id="menu"
+            aria-label="Toggle conversations"
+          >
+            ☰
+          </button>
+          <div class="breadcrumb">
+            <span>Workspace</span><span aria-hidden="true">/</span
+            ><strong id="top-title">Home</strong>
+          </div>
+          <span class="local-pill"><span></span> Local &amp; private</span>
+        </header>
+        <div id="offline" class="offline" role="status" hidden>
+          Connection lost. Your draft is safe. Reconnecting…
+        </div>
+        <section id="welcome" class="welcome">
+          <div class="welcome-inner">
+            <div class="hero-avatars">
+              <span class="avatar you">Y</span
+              ><span class="avatar astra">✳</span
+              ><span class="avatar claude">✺</span>
+            </div>
+            <div class="eyebrow">BETTER TOGETHER</div>
+            <h1>Great minds.<br />Same conversation.</h1>
+            <p>
+              You, Astra, and Claude. A shared space to think,<br
+                class="desktop-break"
+              />
+              build, and find the ideas you wouldn’t find alone.
+            </p>
+            <button id="welcome-new" class="primary-button">
+              Start a conversation <span aria-hidden="true">↗</span>
+            </button>
+            <div class="welcome-note">
+              Connected to the desktop apps you already love.
+            </div>
+            <div class="starters">
+              <button data-starter="Explore a new idea">
+                <span class="starter-icon">✦</span
+                ><strong>Explore an idea</strong
+                ><span>Two perspectives. New possibilities.</span></button
+              ><button data-starter="Build something together">
+                <span class="starter-icon">⌘</span
+                ><strong>Build something</strong
+                ><span>From a first thought to a finished thing.</span></button
+              ><button data-starter="Get a second opinion">
+                <span class="starter-icon">◎</span
+                ><strong>Get a second opinion</strong
+                ><span>Let another mind take a look.</span>
+              </button>
+            </div>
+          </div>
+        </section>
+        <section id="conversation" class="conversation" hidden>
+          <div class="conversation-heading">
+            <div>
+              <div class="eyebrow">GROUP CONVERSATION</div>
+              <h1 id="conversation-title"></h1>
+            </div>
+            <button class="subtle-button" id="manage-connections">
+              Manage members <span aria-hidden="true">↗</span>
+            </button>
+          </div>
+          <div class="members" id="members"></div>
+          <div id="connection-guide" class="connection-guide" hidden></div>
+          <div id="state-banner" class="state-banner" role="status"></div>
+          <div class="message-scroll" id="message-scroll">
+            <div id="messages" class="messages"></div>
+          </div>
+          <div class="composer-area">
+            <form id="composer" class="composer">
+              <label class="sr-only" for="message"
+                >Message the conversation</label
+              ><textarea
+                id="message"
+                placeholder="Bring a thought to the conversation…"
+                rows="2"
+                maxlength="64000"
+              ></textarea>
+              <div class="composer-bottom">
+                <div class="recipient-picker">
+                  <span>Reply first</span
+                  ><button
+                    type="button"
+                    data-recipient="astra"
+                    class="recipient selected"
+                    aria-pressed="true"
+                  >
+                    <span class="mini-astra">✳</span> Astra</button
+                  ><button
+                    type="button"
+                    data-recipient="claude"
+                    class="recipient"
+                    aria-pressed="false"
+                  >
+                    <span class="mini-claude">✺</span> Claude
+                  </button>
+                </div>
+                <button
+                  type="submit"
+                  id="send"
+                  class="send-button"
+                  aria-label="Send message"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 19V5m-6 6 6-6 6 6" />
+                  </svg>
+                </button>
+              </div>
+            </form>
+            <div class="composer-caption">
+              <span id="composer-hint"
+                >One speaker at a time. You can take the stick whenever you
+                like.</span
+              ><span><kbd>⌘</kbd> <kbd>↵</kbd> to send</span>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <dialog id="new-dialog" class="dialog">
+      <form id="create-room">
+        <div class="dialog-heading">
+          <div class="dialog-icon">✦</div>
+          <button
+            type="button"
+            class="icon-button close-dialog"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+        <div class="eyebrow">A NEW SHARED SPACE</div>
+        <h2>What’s on your mind?</h2>
+        <p>
+          Give your conversation a name. Then invite Astra and Claude from their
+          desktop apps.
+        </p>
+        <label for="room-title">Conversation name</label
+        ><input
+          id="room-title"
+          name="title"
+          placeholder="The next big idea"
+          maxlength="100"
+          required
+          autocomplete="off"
+        />
+        <div class="dialog-note">
+          <span>✳</span><span>✺</span> Both models keep their tools and native
+          chat history.
+        </div>
+        <div class="dialog-actions">
+          <button type="button" class="subtle-button close-dialog">
+            Cancel</button
+          ><button type="submit" class="primary-button" id="create-button">
+            Create conversation <span>→</span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="connect-dialog" class="dialog connect-dialog">
+      <div class="dialog-heading">
+        <div class="dialog-icon">↗</div>
+        <button class="icon-button close-dialog" aria-label="Close">×</button>
+      </div>
+      <div class="eyebrow">BRING EVERYONE IN</div>
+      <h2 id="connect-title">Connect your apps</h2>
+      <p id="connect-description">
+        Each member joins from a real desktop chat. Your existing subscriptions
+        and app permissions stay with you.
+      </p>
+      <div id="connect-body"></div>
+    </dialog>
+    <dialog id="settings-dialog" class="dialog">
+      <div class="dialog-heading">
+        <div class="dialog-icon">⌘</div>
+        <button class="icon-button close-dialog" aria-label="Close">×</button>
+      </div>
+      <div class="eyebrow">YOUR LOCAL WORKSPACE</div>
+      <h2>Ready to connect.</h2>
+      <p>
+        Semaphore brings your native desktop chats together. Keep both apps open
+        while the group is talking.
+      </p>
+      <div id="diagnostics" class="diagnostics">Checking your setup…</div>
+      <div class="settings-note">
+        Conversations are saved on this computer. Semaphore has no hosted
+        account, analytics, or API key to configure.
+      </div>
+      <a
+        class="text-link"
+        href="https://github.com/illianaa/semaphore#readme"
+        target="_blank"
+        rel="noreferrer"
+        >Installation &amp; troubleshooting ↗</a
+      >
+    </dialog>
+    <dialog id="recover-dialog" class="dialog">
+      <div class="dialog-heading">
+        <div class="dialog-icon">Ⅱ</div>
+        <button class="icon-button close-dialog" aria-label="Close">×</button>
+      </div>
+      <h2>Check before continuing.</h2>
+      <p>
+        A previous message may have reached its desktop chat. Check that chat
+        first; continuing clears the pending turn without sending it again. Any
+        late reply to that turn will be rejected.
+      </p>
+      <label class="acknowledgment"
+        ><input type="checkbox" id="recover-check" /> I checked the native chat
+        and am ready to continue.</label
+      >
+      <div class="dialog-actions">
+        <button class="subtle-button close-dialog">Cancel</button
+        ><button class="primary-button" id="recover-confirm" disabled>
+          Continue conversation
+        </button>
+      </div>
+    </dialog>
+    <div class="toast" id="toast" role="status" hidden></div>
+  </body>
+</html>
