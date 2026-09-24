@@ -125,7 +125,7 @@ Live chats (run from inside the Astra or Claude desktop chat):
     Notes use one line, at most 280 characters. Use --clear without text to remove one.
   node cli.mjs artifact <room> list         Selected deliverables and exact registered versions (JSON)
   node cli.mjs artifact <room> add --turn <id> --file <path> [--title "<title>"] [--ready]
-    --id <artifact> updates one; --asset <relative-file> selects an adjacent asset (repeatable).
+    --id <artifact> updates one (omit --file to keep its path); --asset <relative-file> selects an adjacent asset (repeatable).
     Omit --asset to keep the previous selection; --no-assets clears it. --draft removes readiness.
     --url <http(s) link> --access "<who can open it>" records a publication claim for this version.
     --url "" clears the link. No file is uploaded and no URL is fetched.

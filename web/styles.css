@@ -628,6 +628,155 @@ textarea {
 .state-banner.paused .state-dot {
   background: #b8895b;
 }
+/* Deliverables: finished work, with the exact version that is ready, reviewed or published. */
+.deliverables {
+  margin: 0 0 10px;
+  border: 1px solid #e3e8da;
+  border-radius: 14px;
+  background: #fbfcf7;
+}
+.deliverables-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: none;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 14px;
+  color: #3f4a42;
+  text-align: left;
+  cursor: pointer;
+}
+.deliverables-label {
+  font-weight: 650;
+  color: #2b342f;
+}
+.deliverables-summary {
+  flex: 1;
+  min-width: 0;
+  color: #5b665d;
+}
+.deliverables-chevron {
+  color: #7a8575;
+}
+.deliverables-list {
+  display: grid;
+  gap: 8px;
+  padding: 0 10px 10px;
+  max-height: min(34vh, 360px);
+  overflow-y: auto;
+}
+/* The status bar and the panel keep their size; only the message list gives up space. */
+.state-banner,
+.deliverables {
+  flex-shrink: 0;
+}
+@media (max-width: 760px) {
+  .deliverables-list {
+    max-height: 30vh;
+  }
+}
+.artifact {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #e6ebdd;
+  border-radius: 10px;
+  background: #fffefa;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #4a554c;
+}
+.artifact:not([data-availability="current"]) {
+  border-color: #e8d7b0;
+}
+.artifact-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.artifact-title {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: #2b342f;
+  overflow-wrap: anywhere;
+}
+.artifact-status {
+  flex-shrink: 0;
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.artifact-status.ready {
+  background: #e3efdc;
+  color: #2f5a3d;
+}
+.artifact-status.draft {
+  background: #eef1e7;
+  color: #5b665d;
+}
+.artifact-status.attention {
+  background: #f8edd9;
+  color: #6b5429;
+}
+.artifact-meta,
+.artifact-line {
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+.artifact-meta,
+.artifact-via {
+  color: #6a7464;
+}
+.artifact-line a {
+  color: #2f5a3d;
+  font-weight: 600;
+}
+.artifact-warning {
+  color: #8a6424;
+}
+.artifact-files {
+  margin-top: 5px;
+  color: #6a7464;
+}
+.artifact-files summary {
+  cursor: pointer;
+}
+.artifact-path {
+  display: block;
+  margin: 6px 0 4px;
+  font-size: 12px;
+  color: #4a554c;
+  overflow-wrap: anywhere;
+}
+.artifact-files ul {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.artifact-files li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.artifact-files li span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.artifact-files button {
+  border: 1px solid #b9c7ad;
+  border-radius: 999px;
+  background: #fffefa;
+  color: #344e3e;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
 /* A status note: the AI's own line about the turn it holds. */
 .state-note {
   display: block;

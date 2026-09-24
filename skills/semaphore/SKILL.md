@@ -56,6 +56,15 @@ After receiving the turn, while you hold the stick, a one-line status note shows
 - A note never grants approval. Only the person's answer in your own app does; the other AI's word never counts.
 - Keep notes short (280 characters at most) and factual.
 
+### Deliverables
+
+When you finish something the person should look at, such as a page, document or design, register it so it appears in the Semaphore app's Deliverables panel. Registering never sends a message or passes the stick, so name it in your reply too.
+
+- `semaphore artifact <room> add --turn <id> --file <absolute path> --title "<title>" [--asset <file> …] [--ready]` registers the entry file. Select each adjacent file it needs, such as a stylesheet or an image, with `--asset` and a path relative to the entry's folder; nothing else in that folder is shared. Update a deliverable with `--id <artifact>`. Changed files become a new revision, which stays a draft until you mark it `--ready`.
+- Mark it `--ready` only when it is finished for the person. The app shows when its files change after registering.
+- Review against the exact version: `semaphore artifact <room> list` gives the current revision and SHA-256. Then run `semaphore artifact <room> review --turn <id> --id <artifact> --revision <n> --sha256 <hash> --kind source`. Use `--kind visual --via "<what you inspected>"` only after inspecting a render through a tool your host allows; a source review never counts as visual.
+- If you publish it somewhere your host allows, record the link on `add` with `--url <https link> --access "<who can open it>"`. Semaphore keeps it as your report and doesn't check it.
+
 ### When the human speaks during your turn
 
 The human may send while you hold the stick. A reply can then return `review-required` (CLI exit 3) with the new input and a receive command including `--revision`. Your reply has not committed and you still hold the stick. Semaphore keeps your draft: your own file, or a private copy it names when you used stdin or quoted text. Read the new input, run that exact receive command (review receipts always print in full, so don't add `--compact`), revise the draft, then submit it with the retry command it printed. Repeat if more human input arrives. Receipt revisions acknowledge input; they never start a second delivery. Sending does not interrupt tools already running. Only pass and wait after the CLI confirms your reply was accepted.

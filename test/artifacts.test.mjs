@@ -46,7 +46,7 @@ test("artifact versions include selected assets and never carry old reviews or p
   const review = { id: second.id, revision: 2, sha256: second.sha256, kind: "visual", speaker: "claude", via: "Permitted browser at desktop and phone widths" };
   recordArtifactReview(f.room, review);
   assert.equal(recordArtifactReview(f.room, review).duplicate, true);
-  const final = upsertArtifact(f.room, { file: f.file, speaker: "astra", ready: true, url: "https://example.com/result", access: "public" }).artifact;
+  const final = upsertArtifact(f.room, { id: second.id, speaker: "astra", ready: true, url: "https://example.com/result", access: "public" }).artifact;
   assert.equal(final.revision, 2); assert.equal(final.published.revision, 2);
   assert.equal(artifactView(final).currentReviews.length, 1);
   assert.equal(artifactView(final).currentReviews[0].kind, "visual");

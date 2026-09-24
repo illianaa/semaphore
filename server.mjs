@@ -16,7 +16,8 @@ import { WakePump } from "./lib/wake-delivery.mjs";
 import { diagnose } from "./lib/doctor.mjs";
 import { RUNTIME } from './lib/build-info.mjs';
 import { statusNote } from './lib/status-note.mjs';
-import { artifactViews } from './lib/artifacts.mjs';
+import { artifactView, artifactViews } from './lib/artifacts.mjs';
+import { createPreviewServer, previewAvailability } from './lib/preview.mjs';
 
 const SPEAKERS = ["astra", "claude"];
 const MAX_BODY = 80_000;
@@ -48,6 +49,7 @@ export function createAppServer({
   ]);
   const active = new Map();
   const artifactCache = new Map();
+  const previews = createPreviewServer();
   const flushing = new Set();
   const flushTimers = new Set();
   let closing = false;
@@ -101,7 +103,7 @@ export function createAppServer({
       }),
     );
     const last = room.messages.at(-1);
-    const artifacts = artifactViews(room, { cache: artifactCache });
+    const artifacts = artifactViews(summary ? { artifacts: room.artifacts?.filter(item => item.ready) } : room, { cache: artifactCache });
     return {
       name: room.name,
       title: room.title || room.name,
@@ -130,8 +132,7 @@ export function createAppServer({
           }
         : null,
       statusNote: statusNote(room),
-      artifacts,
-      deliverables: { total: artifacts.length, ready: artifacts.filter(item => item.ready).length },
+      deliverables: { total: room.artifacts?.length ?? 0, ready: artifacts.filter(item => item.ready).length },
       connections,
       lock: store.lockStatus(),
       autoTurns: room.autoTurns ?? 0,
@@ -145,6 +146,7 @@ export function createAppServer({
       ...(summary
         ? {}
         : {
+            artifacts: artifacts.map(artifact => ({ ...artifact, preview: previewAvailability(artifact) })),
             messages: room.messages,
             events: room.events.slice(-15),
             legacy: Object.values(room.participants).some(
@@ -387,6 +389,17 @@ export function createAppServer({
           return json(duplicate ? 200 : 201, { room: view(room, store), duplicate });
         } catch (err) { err.status ??= err.code === "ROOM_LOCKED" ? 423 : 409; throw err; }
       }
+      const previewMatch = /^\/api\/rooms\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})\/artifacts\/([a-f0-9-]{36})\/preview$/.exec(url.pathname);
+      if (previewMatch) {
+        if (req.method !== "POST") throw error(405, "Method not allowed.");
+        const input = await body(req);
+        if (!input || Array.isArray(input) || typeof input !== "object" || Object.keys(input).length)
+          throw error(400, "Preview selection comes from the registered artifact, not request paths.");
+        const { room } = readRoom(previewMatch[1]);
+        const artifact = room.artifacts?.find(item => item.id === previewMatch[2]);
+        if (!artifact) throw error(404, "Artifact not found.");
+        return json(200, await previews.issue(room.name, artifactView(artifact)));
+      }
       const match =
         /^\/api\/rooms\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(?:\/(messages|opening|take|recover|pass|invite|unlock|limit)(?:\/(astra|claude))?)?$/.exec(
           url.pathname,
@@ -538,6 +551,7 @@ export function createAppServer({
     async close() {
       closing = true;
       pump?.close();
+      await previews.close();
       for (const timer of flushTimers) clearTimeout(timer);
       for (const app of active.values()) if (app.running) app.takeStick();
       server.closeIdleConnections();

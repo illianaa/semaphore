@@ -11,11 +11,11 @@ semaphore artifact <room> add --turn <turn> --file /absolute/path/index.html --t
 semaphore artifact <room> list
 semaphore artifact <room> review --turn <turn> --id <artifact> --revision 1 --sha256 <hash> --kind source
 semaphore artifact <room> review --turn <turn> --id <artifact> --revision 1 --sha256 <hash> --kind visual --via "Permitted browser at desktop and phone widths"
-semaphore artifact <room> add --turn <turn> --id <artifact> --file /absolute/path/index.html --ready
-semaphore artifact <room> add --turn <turn> --id <artifact> --file /absolute/path/index.html --url https://example.com/result --access "account-private"
+semaphore artifact <room> add --turn <turn> --id <artifact> --ready
+semaphore artifact <room> add --turn <turn> --id <artifact> --url https://example.com/result --access "account-private"
 ```
 
-Registration returns JSON containing the ID, revision, hash and derived access/review state. Registering the same canonical path reuses its ID; an explicit `--id` can move that record to another source path. Identical retries are harmless. Omitted assets keep the previous explicit selection. A supplied `--asset` list replaces it; `--no-assets` selects only the entry file. `--draft` removes readiness and `--url ""` clears a publication link.
+Registration returns JSON containing the ID, revision, hash and derived access/review state. Registering the same canonical path reuses its ID; an explicit `--id` can move that record to another source path, or retain its path when `--file` is omitted. Identical retries are harmless. Omitted assets keep the previous explicit selection. A supplied `--asset` list replaces it; `--no-assets` selects only the entry file. `--draft` removes readiness and `--url ""` clears a publication link.
 
 An artifact can live in the room's shared folder or an existing project. The canonical source path resolves symlinks at registration. Adjacent assets are individually selected relative to that file's directory and cannot traverse out or use symlinks. No recursive directory publication occurs. There are at most 256 selected files and 50 MiB total per record, and 50 selected records per room. Byte changes during a read are rejected. Polling caches hashes only while the canonical file identity, size and nanosecond modification/change timestamps match; reviews always recheck the bytes.
 
@@ -41,7 +41,7 @@ A review requires the exact registered revision/hash and unchanged selected file
 
 ## Read-only API for the Deliverables panel
 
-Both room detail and summaries include `artifacts` plus `deliverables: {total, ready}`. Each projected artifact retains the stored fields and adds:
+Room detail includes `artifacts` plus `deliverables: {total, ready}`. Summaries include only the counts, inspecting only declared-ready files for drift. They do not transfer manifests or review histories. Each projected artifact in room detail retains the stored fields and adds:
 
 | Field | UI behavior |
 |---|---|
@@ -49,12 +49,26 @@ Both room detail and summaries include `artifacts` plus `deliverables: {total, r
 | `currentReviews` | Only reviews of this revision/hash, and empty when files are no longer current |
 | `declaredReady` | Stored readiness; projected `ready` becomes false if the files changed or cannot be read |
 | `publishedCurrent` | True only if the reported publication matches this current revision/hash |
-| `preview` | Currently `{available: false, reason: "Shared preview is not configured."}` |
+| `preview` | `{available, reason}`; available only for current HTML entries, without implying native host permission |
 
 The panel should show the filename/title, revision, ready/draft state, current review types and reviewers, source path, and any reported publication link with its access description and version. Show stale/missing files plainly. Escape all text; permit only the validated http/https publication links, opened without opener/referrer access. Do not create `file://` previews or imply an unavailable render was checked. Completion remains visible in Semaphore while the other participant is idle; native tasks still receive work only with the stick. Full turn envelopes identify registered revisions and print the list command to check for subsequent file changes.
 
-## Next: preview implementation and host verification
+## Isolated preview service
 
-The record/API portion does not serve artifact bytes. The proposed preview must use a separate loopback origin, an artifact-and-revision-scoped unguessable capability, a sandbox without same-origin or top-navigation privileges, and no Semaphore control token. It may expose only the explicit entry/assets manifest. Requests must reject traversal and symlink escapes and verify the registered bytes, including adjacent assets; no arbitrary filesystem or room routes. Control API isolation needs a hostile sample test.
+`POST /api/rooms/<room>/artifacts/<id>/preview` accepts an empty JSON object and requires the app's control token and same-origin checks. It returns `{url, revision, sha256, expiresAt}`. Selection comes only from that room's registered artifact; the caller cannot supply a path or manifest. Polling never creates preview links. The CLI's list output directs callers to the app to request one.
+
+The service starts on a separate, random loopback port and receives no control token or arbitrary filesystem route. An unguessable 256-bit capability names one room/artifact/revision/hash snapshot. Every issue rechecks all selected bytes, including when reusing an existing link. A snapshot is immutable for its 30-minute lifetime: later edits are never served under an old revision. The old labeled snapshot remains accessible until expiry; reopening changed sources is refused until they are registered again. Links disappear on app restart. The in-memory cache is bounded to 64 snapshots and 100 MiB, with the record's existing 50 MiB limit.
+
+The viewer labels the saved revision/hash and expiry and offers desktop and phone widths. HTML runs in an iframe with `sandbox="allow-scripts"`; the response repeats the sandbox in CSP. There is no same-origin, top-navigation, popup, form or download privilege. Selected local scripts, styles, images, fonts and data can work; external resources, workers, nested frames, other capabilities and control endpoints are excluded. Native app access rules still apply. See the [HTML iframe sandbox specification](https://html.spec.whatwg.org/multipage/iframe-embed-object.html) and [Content Security Policy specification](https://www.w3.org/TR/CSP/).
+
+The preview server only serves supported entries from the verified in-memory manifest. It rejects forged hosts, writes, traversal, malformed encoded paths, unsupported types, missing selections and expired capabilities. It sets `no-store`, `no-referrer` and `nosniff`. Sandboxed documents have opaque origins; CORS allows `Origin: null` for selected modules/fonts/data without credentials, while CSP restricts their URLs to this capability's prefix. The trusted wrapper contains no room controls or token. Unsupported document formats remain source-only.
+
+## Native verification
 
 Before claiming shared visual access, both hosts must independently allow and open the same new, harmless test artifact through the supported feature, at desktop and phone widths. The earlier denied `tell-all.html` preview remains out of scope for that probe: do not re-host or reopen it through an alternate route. If a host denies a preview, stop that attempt and retain source-only status. The UI must stay useful when shared rendering is unavailable. Preview availability and native host permission are separate checks.
+
+`node dev/preview-harness.mjs` creates a new temporary room and harmless selected HTML/CSS/SVG/JS fixture, with no native bindings or model calls. It prints the artifact metadata and writes `/tmp/semaphore-preview-handoff.json` so both hosts can inspect the exact same snapshot. `node dev/preview-isolation.mjs` separately creates a synthetic sandbox probe and a disposable local canary in place of room controls. Inspect every browser result and then the printed `/observations` endpoint, which must report zero canary requests. Neither harness opens a browser or changes any real room.
+
+On 24 September 2026, Astra's native chat opened fixture revision 1, hash `7002588939154e903492b426ca4b4a3a566c2d934757b785835bb31098a8d339`, using its permitted Chrome tool. Desktop and 390px phone layouts, selected assets, scrolling and the interaction button worked. The in-app browser was unavailable; this was a capability absence, not an access denial. Claude's check of this same fixture is pending.
+
+The separate browser probe showed 13 passing results: selected module and data fetch worked; parent document, storage, cookies, another capability and control reads/writes were inaccessible; referrer and opener were absent; top navigation and popups were blocked; an unselected file was denied. Its disposable control canary received zero requests. Automated HTTP tests independently cover control authentication/origin, path and manifest isolation, expiry, source/symlink drift and immutable snapshots. This verifies this browser/fixture combination, not universal host permission.

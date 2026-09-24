@@ -20,6 +20,7 @@ const state = {
   expanded: new Set(),
   owners: {},
   approvals: {},
+  readySeen: {},
 };
 // Message requests still in flight, by request ID. The box clears as soon as one is sent.
 const inFlight = new Map();
@@ -298,9 +299,10 @@ function roomSubtitle(room) {
         : "Starting…";
   }
   if (awaitingApproval(room)) return `${labels[room.pending.speaker]} needs your approval`;
-  if (room.pending) return `${labels[room.pending.speaker]}’s turn`;
+  const ready = room.deliverables?.ready ? ` · ${room.deliverables.ready} ready` : "";
+  if (room.pending) return `${labels[room.pending.speaker]}’s turn${ready}`;
   return room.messageCount
-    ? `${room.messageCount} messages · ${relativeTime(room.updatedAt)}`
+    ? `${room.messageCount} messages${ready} · ${relativeTime(room.updatedAt)}`
     : "Ready for a first thought";
 }
 function renderSidebar() {
@@ -428,11 +430,12 @@ function renderRoom(room, force = false) {
     ? `<i class="state-dot"></i><span>${stale ? "A previous app process stopped. Your conversation is saved." : "Paused · a previous delivery needs your review"}</span>`
     : pending
       ? `${avatar(pending.speaker)}<span>${approval ? `<strong>${labels[pending.speaker]} is waiting for your approval in ${hostApp(pending.speaker)}</strong>` : `<strong>${labels[pending.speaker]} has the stick</strong><span class="state-detail"> · ${escape(pendingDetail(pending, room))}${Number.isInteger(room.maxTurns) ? ` · reply ${Math.min((room.autoTurns ?? 0) + 1, room.maxTurns)} of ${room.maxTurns}` : ""}</span>`}${note ? `<span class="state-note">“${escape(note.text)}” · ${escape(relativeTime(note.updatedAt))}</span>` : ""}</span>`
-      : `${avatar("human")}<span><strong>Your turn</strong><span class="state-detail"> · reply, or hand the stick to one of them</span></span>`;
+      : `${avatar("human")}<span><strong>Your turn</strong><span class="state-detail"> · ${room.deliverables?.ready ? `${room.deliverables.ready} ${room.deliverables.ready === 1 ? "deliverable" : "deliverables"} ready below · ` : ""}reply, or hand the stick to one of them</span></span>`;
   // During the guided start, the start card is the only call to action.
   banner.innerHTML = setup
     ? ""
     : `<span class="state-who">${who}</span><div class="state-actions">${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${chatURL ? `<a class="state-link" href="${escape(chatURL)}">Open chat ↗</a>` : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
+  renderDeliverables(room, setup);
   const scroller = $("#message-scroll");
   const atBottom =
     scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 90;
@@ -446,6 +449,71 @@ function renderRoom(room, force = false) {
         .join("");
   scroller.scrollTop = setup ? 0 : force || atBottom ? scroller.scrollHeight : oldScroll;
   updateComposer();
+}
+
+// Finished work the AIs registered: exactly which version is ready, who reviewed it and how,
+// and any link a participant reports publishing. Everything shown is escaped data.
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes)) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+function webLink(url) {
+  try {
+    const link = new URL(url);
+    return ["http:", "https:"].includes(link.protocol) && !link.username && !link.password ? link : null;
+  } catch {
+    return null;
+  }
+}
+function artifactStatus(item) {
+  if (item.availability === "changed") return ["attention", `Changed since v${Number(item.revision)}`];
+  if (item.availability === "missing") return ["attention", "File missing"];
+  if (item.availability !== "current") return ["attention", "Can’t be read"];
+  return item.ready ? ["ready", "Ready"] : ["draft", "Draft"];
+}
+function artifactReviews(item) {
+  const reviews = item.currentReviews ?? [];
+  if (reviews.length)
+    return reviews
+      .map((review) => `${review.kind === "visual" ? "Visual" : "Source"} review by ${escape(labels[review.speaker] ?? review.speaker)}${review.kind === "visual" ? ` <span class="artifact-via">(${escape(review.via)})</span>` : ""}`)
+      .join(" · ");
+  if (item.availability !== "current")
+    return item.reviews?.length ? "Earlier reviews don’t cover these changes" : "Not reviewed";
+  return "Not reviewed yet";
+}
+function artifactCard(item) {
+  const [tone, status] = artifactStatus(item);
+  const extra = (item.files?.length ?? 1) - 1;
+  const link = item.published && webLink(item.published.url);
+  const published = item.published
+    ? `<div class="artifact-line">${link ? `<a href="${escape(link.href)}" target="_blank" rel="noopener noreferrer">${escape(link.host + (link.pathname === "/" ? "" : link.pathname))} ↗</a>` : "Link"} · ${escape(item.published.access)} · reported by ${escape(labels[item.published.by] ?? item.published.by)} for v${Number(item.published.revision)}${item.publishedCurrent ? "" : ' <span class="artifact-warning">· an earlier version</span>'}</div>`
+    : "";
+  const files = (item.files ?? [])
+    .map((file) => `<li><span>${escape(file.name)}</span><span>${escape(formatBytes(file.bytes))}</span></li>`)
+    .join("");
+  return `<article class="artifact" data-availability="${escape(item.availability)}"><div class="artifact-head"><strong class="artifact-title">${escape(item.title)}</strong><span class="artifact-status ${tone}">${escape(status)}</span></div><div class="artifact-meta">${escape(item.entry)}${extra > 0 ? ` + ${extra} ${extra === 1 ? "file" : "files"}` : ""} · ${escape(formatBytes(item.bytes))} · v${Number(item.revision)} · updated by ${escape(labels[item.updatedBy] ?? item.updatedBy)} ${escape(relativeTime(item.updatedAt).replace(/^Just now$/, "just now"))}</div><div class="artifact-line">${artifactReviews(item)}</div>${published}<details class="artifact-files"><summary>${(item.files?.length ?? 1) === 1 ? "1 file" : `${item.files.length} files`} · ${escape(item.preview?.available ? "Preview available" : item.preview?.reason ?? "No shared preview.")}</summary><code class="artifact-path">${escape(item.path)}</code><ul>${files}</ul><button type="button" data-copy-path="${escape(item.id)}">Copy path</button></details></article>`;
+}
+function renderDeliverables(room, setup) {
+  const panel = $("#deliverables");
+  const items = room.artifacts ?? [];
+  panel.hidden = setup || !items.length;
+  if (panel.hidden) return;
+  const ready = items.filter((item) => item.ready).length;
+  const attention = items.filter((item) => item.availability !== "current").length;
+  // Newly finished work opens the panel; otherwise it keeps the person's choice for this room.
+  const seen = state.readySeen[room.name];
+  state.readySeen[room.name] = ready;
+  if (seen !== undefined && ready > seen) storageSet(`semaphore:deliverables:${room.name}`, "open");
+  // Small or short windows start collapsed so the conversation keeps its room.
+  const saved = storageGet(`semaphore:deliverables:${room.name}`);
+  const open = saved ? saved === "open" : matchMedia("(min-width: 761px) and (min-height: 700px)").matches;
+  const summary =
+    items.length === 1
+      ? artifactStatus(items[0])[1]
+      : `${ready} of ${items.length} ready${attention ? ` · ${attention} ${attention === 1 ? "needs" : "need"} a look` : ""}`;
+  panel.innerHTML = `<button type="button" class="deliverables-toggle" aria-expanded="${open}" aria-controls="deliverables-list"><span class="deliverables-label">Deliverables</span><span class="deliverables-summary">${escape(summary)}</span><span class="deliverables-chevron" aria-hidden="true">${open ? "▾" : "▸"}</span></button><div id="deliverables-list" class="deliverables-list"${open ? "" : " hidden"}>${items.map(artifactCard).join("")}</div>`;
 }
 
 function renderLimit(room, setup) {
@@ -834,6 +902,24 @@ $("#room-list").addEventListener("click", (event) => {
 $("#manage-connections").addEventListener("click", connections);
 $("#connection-guide").addEventListener("click", (event) => {
   if (event.target.closest("button")) connections();
+});
+$("#deliverables").addEventListener("click", async (event) => {
+  const room = state.room;
+  if (!room) return;
+  if (event.target.closest(".deliverables-toggle")) {
+    const open = $(".deliverables-toggle").getAttribute("aria-expanded") === "true";
+    storageSet(`semaphore:deliverables:${room.name}`, open ? "closed" : "open");
+    return renderDeliverables(room, false);
+  }
+  const button = event.target.closest("[data-copy-path]");
+  const item = button && (room.artifacts ?? []).find((artifact) => artifact.id === button.dataset.copyPath);
+  if (!item) return;
+  try {
+    await copyText(item.path);
+    toast("Path copied. Open it from Finder or your editor.");
+  } catch {
+    toast("Select the path above and copy it.");
+  }
 });
 $("#state-banner").addEventListener("click", (event) => {
   const button = event.target.closest("[data-action]");

@@ -739,9 +739,42 @@ test('deliverables stay visible after handing off to the human without another n
   const summary = (await f.request('/api/rooms')).body.rooms.find(item => item.name === room.name);
   assert.equal(detail.owner, 'human'); assert.equal(detail.artifacts[0].ready, true);
   assert.deepEqual(summary.deliverables, { total: 1, ready: 1 });
+  assert.equal(summary.artifacts, undefined, "polling summaries don't transfer file manifests and review histories");
   assert.equal(f.calls.length, 1, 'recording completion never wakes another model');
   fs.writeFileSync(file, '<h1>An unregistered change</h1>');
   detail = (await f.request(`/api/rooms/${room.name}`)).body.room;
   assert.equal(detail.artifacts[0].availability, 'changed');
   assert.equal(detail.deliverables.ready, 0);
+});
+
+test('preview URLs require the control token and same origin, select a registered revision, and use another origin', async t => {
+  const f = await fixture(t), room = await f.create('Preview access'); f.bind(room.name);
+  await f.request(`/api/rooms/${room.name}/messages`, { method: 'POST', body: {text:'Make a page',to:'astra',clientId:'preview-human'} });
+  const store = new RoomStore(f.root, room.name); store.acquire();
+  let artifact, source;
+  try {
+    const app = new Semaphore(store, {}), turnId = app.room.pending.id; app.receive(turnId, 'astra');
+    source = path.join(store.workspace, 'index.html'); fs.writeFileSync(source, '<h1>Shared preview</h1>');
+    artifact = app.registerArtifact({turnId,speaker:'astra',file:source}).artifact;
+  } finally { store.release(); }
+  const route = `/api/rooms/${room.name}/artifacts/${artifact.id}/preview`;
+  assert.equal((await fetch(f.url + route, {method:'POST',headers:{Origin:f.url}})).status, 401);
+  assert.equal((await f.request(route, {method:'POST',body:{},headers:{Origin:'null'}})).status, 403);
+  assert.equal((await f.request(route, {method:'POST',body:{file:'/etc/passwd'}})).status, 400);
+  const issued = await f.request(route, {method:'POST',body:{}});
+  assert.equal(issued.status, 200);
+  assert.notEqual(new URL(issued.body.url).origin, f.url);
+  assert.equal(issued.body.revision, 1); assert.equal(issued.body.sha256, artifact.sha256);
+  assert.ok(Date.parse(issued.body.expiresAt) > Date.now());
+  assert.equal((await f.request(`/api/rooms/${room.name}`)).body.room.artifacts[0].preview.available, true);
+  for (const origin of [new URL(issued.body.url).origin, 'null']) {
+    assert.equal((await f.request('/api/rooms', {headers:{Origin:origin}})).status, 403);
+    assert.equal((await f.request(`/api/rooms/${room.name}/take`, {method:'POST',body:{},headers:{Origin:origin}})).status, 403);
+  }
+  const html = await (await fetch(issued.body.url)).text();
+  const controlToken = f.html.match(/name="semaphore-token" content="([a-f0-9]+)"/)[1];
+  assert.ok(!html.includes(controlToken));
+  fs.writeFileSync(source, '<h1>Unregistered edit</h1>');
+  assert.equal((await f.request(route, {method:'POST',body:{}})).status, 409);
+  assert.equal((await f.request(`/api/rooms/${room.name}`)).body.room.artifacts[0].preview.available, false);
 });
