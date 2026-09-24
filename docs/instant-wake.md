@@ -1,6 +1,6 @@
 # Instant wake for Astra
 
-Enabled locally on 24 September 2026 after joint review and Illiana's explicit authorization. The first automatic room turn reached this same native Astra chat after it ended its previous turn, with no foreground listener. No second process resumed the existing native chat. Hidden-chat delivery and a subsequent idle restart remain rollout checks.
+Enabled locally on 24 September 2026 after joint review and Illiana's explicit authorization. Both engineers approve commit `70593a2`. Automatic room turns reached this same native Astra chat from idle, including after a ChatGPT restart and while its chat was off screen, with no foreground listener. No second process resumed the existing native chat.
 
 ## Desktop connection and switch
 
@@ -14,7 +14,7 @@ This differs from the initial proposal. Read-only inspection of this app build f
 - `CODEX_APP_SERVER_WS_URL` explicitly selects the WebSocket connector before that branch. A `ws+unix://localhost/...:/rpc` URL uses the private socket directly and avoids the connector's remote proxy path. The Unix transport was tested with the bundled engine and compression disabled.
 - The standalone binary is `0.152.1`; the bundled/tested binary is `0.154.0-alpha.6.2`. Using the bundle keeps the desktop and engine aligned.
 
-These are experimental integration details, not a public stability guarantee. Native shell tools worked in the first automatically delivered turn. No approval was requested under this chat's existing full-permission setting, so this does not establish native permission-dialog behavior. Hidden-chat behavior and an additional idle restart remain rollout checks.
+These are experimental integration details, not a public stability guarantee. Native shell tools worked in both automatically delivered turns. No approval was requested under this chat's existing full-permission setting, so this does not establish native permission-dialog behavior. Ordinary idle wake, an idle ChatGPT restart and delivery to an off-screen chat passed the live rollout checks.
 
 The switch refuses to overwrite foreign connection settings or login items. Failed startup rolls back its own setup. Disabling removes its environment setting immediately; if ChatGPT might still be attached, the engine stays until the deliberate restart. That restart stops the login item and reopens ChatGPT on its normal private engine. Process inspection can prove a private engine exists; absence of that child is reported as unknown, never as proof of shared attachment.
 
@@ -44,7 +44,13 @@ When automatic wake is confirmed, Astra ends its native turn after passing the s
 
 Claude enabled the switch and restarted ChatGPT. The shared bundled engine was PID 99808. The interrupted listener left the first bootstrap notice paused in the native queue; Claude explicitly started that sole bootstrap notice once. Astra rejoined from the existing native chat, verified the engine through process ancestry, and ended its turn. The next room notice (`d4c04d91-e0b7-498d-b951-8833f5cb53a9`) then started automatically, and Astra received it and used native tools. Its diagnostics still reported engine 99808. This is evidence for ordinary idle wake, not automatic recovery from every kind of interruption.
 
-## Authorized rollout
+### Restart and off-screen round
+
+With Astra idle, Claude used the switch's normal restart route. ChatGPT quit politely and reopened as PID 8770; shared engine PID 99808 remained running and the same Astra task stayed loaded. Claude then switched the app to its blank new-chat view without sending a message. The next room notice (`7bf05883-6d01-4b55-bb16-3b1d6f882626`) arrived automatically in the existing task. Astra received it, ran native tools, and independently confirmed desktop PID 8770 and shared engine PID 99808. Both engineers signed off on the local rollout.
+
+This room is connected and automatic. The existing Astra seat in Illiana's other room still needs a native rejoin; verification is specific to each chat. Approval dialogs remain untested in the native desktop, and an interrupted native turn can still require Send as described above. To roll back, use **Setup & connections → turn instant wake off → Restart ChatGPT**.
+
+## Rollout procedure (completed for this room)
 
 1. Finish both engineers' review and commit. Restart Semaphore's background service so it loads this implementation.
 2. Claude holds the stick for activation; no room may have a received Astra turn during restart. Claude, outside ChatGPT, enables wake and restarts ChatGPT using the reviewed switch. The human already authorized this; do not ask again.

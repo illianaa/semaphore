@@ -50,4 +50,4 @@ Final cleanup includes the 18-slide proposal deck and its editable sources under
 
 Astra now uses an event-only foreground listener with no default five-minute timer. This removes repetitive timeout messages, but does not make the native task idle or promise zero host polling. See [Codex waiting behavior](codex-waiting.md).
 
-Optional shared-runtime wake is enabled locally, and the first automatic native Astra turn passed. Interrupted native turns retain their queued notice and can require pressing Send. See [instant wake](instant-wake.md) for evidence and remaining rollout checks.
+Optional shared-runtime wake is enabled locally and approved by both engineers. Automatic native Astra delivery passed from idle, after a ChatGPT restart and while the chat was off screen. Interrupted native turns retain their queued notice and can require pressing Send; native approval dialogs were not exercised under the task's full-permission setting. See [instant wake](instant-wake.md) for evidence and the per-chat reconnect requirement.
