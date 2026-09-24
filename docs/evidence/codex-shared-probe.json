@@ -1,0 +1,152 @@
+{
+  "version": "codex-cli 0.154.0-alpha.6.2",
+  "transport": "private Unix socket; desktop not attached",
+  "checks": [
+    {
+      "check": "same server",
+      "processes": [
+        {
+          "id": 82817,
+          "residentMemoryBytes": 94797824,
+          "physicalFootprintBytes": 33031224
+        },
+        {
+          "id": 82817,
+          "residentMemoryBytes": 95059968,
+          "physicalFootprintBytes": 33113144
+        }
+      ]
+    },
+    {
+      "check": "visible to second client",
+      "found": true
+    },
+    {
+      "check": "wake without resume while viewer owns loaded thread",
+      "result": {
+        "status": "completed",
+        "text": [
+          "semaphore-shared-first"
+        ],
+        "viewerEvents": [
+          "thread/settings/updated",
+          "thread/status/changed",
+          "turn/started",
+          "mcpServer/startupStatus/updated",
+          "item/started",
+          "item/completed",
+          "item/agentMessage/delta",
+          "thread/tokenUsage/updated",
+          "turn/completed"
+        ],
+        "wakeEvents": [
+          "thread/status/changed"
+        ],
+        "viewerRequests": [],
+        "wakeRequests": []
+      }
+    },
+    {
+      "check": "approval routing with wake client unsubscribed",
+      "result": {
+        "status": "completed",
+        "text": [
+          "approval-declined"
+        ],
+        "viewerEvents": [
+          "thread/status/changed",
+          "turn/started",
+          "item/started",
+          "item/completed",
+          "serverRequest/resolved",
+          "thread/tokenUsage/updated",
+          "item/agentMessage/delta",
+          "turn/completed"
+        ],
+        "wakeEvents": [
+          "thread/status/changed"
+        ],
+        "viewerRequests": [
+          "item/commandExecution/requestApproval"
+        ],
+        "wakeRequests": []
+      }
+    },
+    {
+      "check": "resume rejoins same loaded thread",
+      "sameId": true,
+      "loadedCopies": 1
+    },
+    {
+      "check": "approval routing with both clients subscribed",
+      "result": {
+        "status": "completed",
+        "text": [
+          "approval-declined"
+        ],
+        "viewerEvents": [
+          "thread/status/changed",
+          "turn/started",
+          "item/started",
+          "item/completed",
+          "serverRequest/resolved",
+          "thread/tokenUsage/updated",
+          "item/agentMessage/delta",
+          "turn/completed"
+        ],
+        "wakeEvents": [
+          "thread/status/changed",
+          "turn/started",
+          "item/started",
+          "item/completed",
+          "serverRequest/resolved",
+          "thread/tokenUsage/updated",
+          "item/agentMessage/delta",
+          "turn/completed"
+        ],
+        "viewerRequests": [
+          "item/commandExecution/requestApproval"
+        ],
+        "wakeRequests": [
+          "item/commandExecution/requestApproval"
+        ]
+      }
+    },
+    {
+      "check": "restart leaves test thread unloaded",
+      "found": false
+    },
+    {
+      "check": "wake unloaded thread without resume",
+      "error": "thread not found: 01a0d48e-12d1-7e61-9fe6-b45c070e4873"
+    },
+    {
+      "check": "wake after viewing client restores thread",
+      "result": {
+        "status": "completed",
+        "text": [
+          "semaphore-shared-restored"
+        ],
+        "viewerEvents": [
+          "thread/goal/cleared",
+          "thread/status/changed",
+          "turn/started",
+          "mcpServer/startupStatus/updated",
+          "item/started",
+          "item/completed",
+          "item/agentMessage/delta",
+          "thread/tokenUsage/updated",
+          "turn/completed"
+        ],
+        "wakeEvents": [
+          "thread/goal/cleared",
+          "thread/status/changed"
+        ],
+        "viewerRequests": [],
+        "wakeRequests": []
+      }
+    }
+  ],
+  "threadId": "01a0d48e-12d1-7e61-9fe6-b45c070e4873",
+  "testThreadArchived": true
+}
