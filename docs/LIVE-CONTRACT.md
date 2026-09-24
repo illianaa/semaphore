@@ -13,7 +13,7 @@ Use `await store.acquire({ waitMs: 5000 })` around each short mutation command, 
 The room has one pending turn:
 
 ```text
-{ id, speaker, through, at, state, receipt, receivedAt? }
+{ id, speaker, through, at, state, receipt, receivedAt?, runtime? }
 state = delivering | awaiting-reply | uncertain
 ```
 
@@ -57,6 +57,13 @@ Existing `thinking`, `message`, and `notice` events remain. Live delivery adds `
 
 `app.receive(turnId, speaker)` validates the exact pending ID, owner, speaker and `awaiting-reply` state, then persists `receivedAt`. Repeated acknowledgment is idempotent. It never adds a message, moves a delivery cursor, spends the turn budget or dispatches another turn. The CLI derives identity from the native environment before calling it, then removes only that turn's inbox wake-up copy.
 
+`app.receive(turnId, speaker, revision, { compact, seenThrough })` extends this for human input. A `revision` must equal the pending `reviewThrough` set by a review-required reply, and acknowledges human messages through it. A compact receipt succeeds only when `seenThrough` equals the current acknowledged boundary, no newer human message exists and no `revision` is given. Otherwise it records the newer boundary as `reviewThrough`, marks nothing read and returns `reviewRequired`; the CLI then prints the full turn, leaves the inbox copy in place and exits 3. Automatic wake notices carry no room body, so they always need a full receipt.
+
 Default live bindings use `astra-inbox` and `claude-inbox`. The create-if-absent delivery ledger rejects conflicting reuse of an ID. A CLI listener returns an open turn without consuming it until acknowledgment, drops canceled/completed turns, and leaves another session's mail untouched. A timeout does not discard mail. Listener PID metadata is advisory, not acknowledgment.
 
 Astra listens in its native task's foreground and renews the bounded wait; Claude uses a background task. After a handoff, a resumed task checks `stick` and follows the appropriate listening instruction before any further work. `codex-queue` is an explicit manual compatibility option, never an automatic fallback.
+## Runtime and local folder context
+
+Every full turn and compact receipt names the absolute shared room workspace and the producing runtime's captured build/protocol. Listener output separately identifies the reading process. Native joins and successful receives record their runtime; a later receive reports a changed or previously unknown build without changing the turn ID or redelivering it. `/health` reports the server's captured identity. See [release staging and cutovers](releases.md).
+
+Human messages are records attributed by Semaphore, including explicit native-chat relay labels. AI text remains collaborator input. Neither a record nor an AI's claim of approval replaces native-host authorization checks. Invitations carry the recorded opening and selected participants when available; long openings are visibly excerpted and always direct a full receive before work.

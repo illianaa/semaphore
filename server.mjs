@@ -14,6 +14,7 @@ import { queueHumanInput, queuedInputs, inputMessages } from "./lib/inputs.mjs";
 import { wakeStatus, enableWake, disableWake, restartChatGPT } from "./lib/wake.mjs";
 import { WakePump } from "./lib/wake-delivery.mjs";
 import { diagnose } from "./lib/doctor.mjs";
+import { RUNTIME } from './lib/build-info.mjs';
 
 const SPEAKERS = ["astra", "claude"];
 const MAX_BODY = 80_000;
@@ -301,7 +302,7 @@ export function createAppServer({
         return;
       }
       if (req.method === "GET" && url.pathname === "/health")
-        return json(200, { ok: true, app: "semaphore", pid: process.pid });
+        return json(200, { ok: true, app: "semaphore", pid: process.pid, runtime: RUNTIME });
       const supplied = req.headers["x-semaphore-token"];
       if (
         typeof supplied !== "string" ||

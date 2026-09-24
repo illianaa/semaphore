@@ -53,11 +53,13 @@ async function api(route, options = {}) {
 
 let toastTimer;
 
+// Where each AI works, and where it asks the person for approval.
+const hostApp = (speaker) => (speaker === "astra" ? "ChatGPT" : "the Claude app");
 // Queue acceptance is distinct from acknowledgment by the bound native chat.
 function pendingDetail(pending, room) {
   const who = labels[pending.speaker];
   if (pending.state === "delivering") return "sending";
-  if (pending.progress === "received") return "received";
+  if (pending.progress === "received") return `working in ${hostApp(pending.speaker)}`;
   if (pending.wake?.status === "uncertain") return "wake status uncertain · check Astra’s chat";
   if (pending.wake?.status === "needs-send") return "wake queued in Astra’s chat · press Send there";
   const seat = room.connections[pending.speaker];
@@ -450,7 +452,7 @@ function composerHint(room, mode) {
   if (mode === "interject")
     return room.pending.state === "uncertain"
       ? "Your message is saved until the conversation continues."
-      : `${labels[room.pending.speaker]} has the stick and will read your message before replying.`;
+      : `${labels[room.pending.speaker]} will read your message before replying. Approvals for ${labels[room.pending.speaker]} happen in ${hostApp(room.pending.speaker)}.`;
   if (mode === "wait")
     return "Your draft is saved here until the stick comes back to you.";
   if (mode === "message" && !room.connections[state.recipient].connected)
@@ -557,13 +559,43 @@ async function refresh() {
   }
 }
 
-async function selectRoom(name) {
+// The address bar names the open conversation. "push" adds a Back/Forward step, "replace"
+// corrects the address in place, and "none" means the address already matches.
+function setRoute(hash, mode) {
+  const url = `/${location.search}${hash ? `#${encodeURIComponent(hash)}` : ""}`;
+  if (mode === "none" || `${location.pathname}${location.search}${location.hash}` === url) return;
+  if (mode === "push") history.pushState(null, "", url);
+  else history.replaceState(null, "", url);
+}
+function routeTarget() {
+  try {
+    return decodeURIComponent(location.hash.slice(1));
+  } catch {
+    return "";
+  }
+}
+// Follows a pasted link, an edited address or Back/Forward to the room it names.
+async function followRoute() {
+  const target = routeTarget();
+  if (location.hash.length > 1 && !target) {
+    toast("That link isn’t a conversation address.");
+    return showHome(undefined, { route: "replace" });
+  }
+  if (target === (state.selected ?? "")) return;
+  if (!target) return showHome(undefined, { route: "none" });
+  if (!state.rooms.some((room) => room.name === target)) await refresh();
+  if (state.rooms.some((room) => room.name === target))
+    return selectRoom(target, { route: "none" });
+  toast("That conversation wasn’t found. The link may be incomplete or the conversation removed.");
+  showHome(undefined, { route: "replace" });
+}
+async function selectRoom(name, { route = "push" } = {}) {
   if (state.selected)
     storageSet(`semaphore:draft:${state.selected}`, $("#message").value);
   state.selected = name;
   state.room = null;
   storageSet("semaphore:last-room", name);
-  history.replaceState(null, "", `/${location.search}#${encodeURIComponent(name)}`);
+  setRoute(name, route);
   $("#message").value = storageGet(`semaphore:draft:${name}`) || "";
   state.recipient = rememberedRecipient(name);
   $("#sidebar").classList.remove("open");
@@ -596,13 +628,13 @@ async function selectRoom(name) {
 }
 
 // Home is where a new conversation starts: one message, who joins, who replies first.
-function showHome(prefill) {
+function showHome(prefill, { route = "push" } = {}) {
   if (state.selected)
     storageSet(`semaphore:draft:${state.selected}`, $("#message").value);
   state.selected = null;
   state.room = null;
   storageSet("semaphore:last-room", "");
-  history.replaceState(null, "", `/${location.search}`);
+  setRoute("", route);
   $("#welcome").hidden = false;
   $("#conversation").hidden = true;
   $("#top-title").textContent = "New conversation";
@@ -1071,13 +1103,17 @@ document.addEventListener("keydown", (event) => {
   }
 });
 await refresh();
-let initial;
-try {
-  initial = decodeURIComponent(location.hash.slice(1));
-} catch {}
-initial ||= storageGet("semaphore:last-room");
-if (state.rooms.some((room) => room.name === initial)) await selectRoom(initial);
-else showHome();
+const linked = routeTarget();
+const initial = linked || storageGet("semaphore:last-room");
+if (state.rooms.some((room) => room.name === initial))
+  await selectRoom(initial, { route: "replace" });
+else {
+  if (linked)
+    toast("That conversation wasn’t found. The link may be incomplete or the conversation removed.");
+  showHome(undefined, { route: "replace" });
+}
+addEventListener("popstate", followRoute);
+addEventListener("hashchange", followRoute);
 let refreshing = false;
 setInterval(async () => {
   if (document.hidden || refreshing) return;

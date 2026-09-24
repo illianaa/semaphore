@@ -17,6 +17,7 @@ const OTHER = "99999999-8888-4777-8666-555555555555";
 const ASTRA = { CODEX_THREAD_ID: THREAD };
 const CLAUDE = { CLAUDE_CODE_SESSION_ID: SESSION };
 const turnIn = (text) => text.match(/--turn ([A-Za-z0-9_-]+)/)?.[1];
+const withoutRuntime = ({ joinedRuntime, lastReceivedRuntime, ...seat }) => seat;
 
 // Runs the real CLI against a temporary root. A fake codex records every queued message, and a
 // fake claude on PATH proves that no headless Claude session is ever started for a live room.
@@ -220,7 +221,7 @@ test("acceptance flow: human via Astra, Astra → Claude → Astra → human, al
   );
   assert.equal(final.owner, "human");
   assert.equal(final.pending, null);
-  assert.deepEqual(final.participants.astra, {
+  assert.deepEqual(withoutRuntime(final.participants.astra), {
     transport: "astra-inbox",
     id: THREAD,
     seen: 4,
@@ -345,7 +346,7 @@ test("join binds only from inside the chat, is idempotent, and needs --rebind wi
     0,
   );
   const saved = room("room");
-  assert.deepEqual(saved.participants.claude, {
+  assert.deepEqual(withoutRuntime(saved.participants.claude), {
     transport: "claude-inbox",
     id: OTHER,
     seen: 0,
@@ -457,7 +458,7 @@ test("new starts a live conversation whose empty seats each chat can join; rooms
     ),
   );
   assert.equal(run(["join", name, "--as", "claude"], CLAUDE).code, 0);
-  assert.deepEqual(room(name).participants.claude, {
+  assert.deepEqual(withoutRuntime(room(name).participants.claude), {
     transport: "claude-inbox",
     id: SESSION,
     seen: 0,

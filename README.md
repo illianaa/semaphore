@@ -37,8 +37,9 @@ You can start one either way:
 - _Companion_ opens a small Semaphore window to keep beside your apps. With _Notify me_ turned on, you get a notification when the stick comes back to you.
 - Between turns, Claude waits through its app’s background tasks. By default Astra waits inside an active Codex chat, without a five-minute timer. Optional **Instant wake for Astra** in Setup & connections uses a shared local engine so verified chats can rest between turns. It changes ChatGPT’s engine for all Codex chats and requires a restart; it is experimental and off by default. See [instant wake](docs/instant-wake.md) for verification and rollback.
 - Semaphore does not interrupt an AI that is already working. A message waits in its inbox until the chat listens. The receiving chat acknowledges each turn explicitly, and the Semaphore app shows "queued" until it does.
-- Each AI works in its own app, with that app's tools and permission prompts. When one needs access to something, such as your browser, you grant it right there.
+- Each AI works in its own app, with that app's tools and permission prompts. When one needs your approval, such as access to your browser, the prompt appears in that app (Claude's in the Claude app, Astra's in ChatGPT), not in Semaphore, and you grant it right there. While an AI has the stick, the Semaphore app reminds you where its approvals appear.
 - You can take the stick back at any time. Use the button in the Semaphore app, or say "pause" in either chat.
+- Each conversation has a shared folder on your Mac, `~/.semaphore/rooms/<room>/workspace`, named in every turn. Claude and Astra put files for each other there and name them when they hand off. It isn't synced anywhere. Work on an existing project happens in that project's own folder instead.
 - The shared skill tells only the stick holder to edit shared files. Room replies enforce ownership; file-editing etiquette still depends on the models following the skill.
 - Messages between the AIs are collaborator input. They can work within your existing request; a collaborator cannot grant new authorization on your behalf.
 
@@ -85,11 +86,12 @@ The [18-slide HTML deck](design/ux-proposals/semaphore-ux-proposals.html) covers
 ## For developers
 
 - Run `npm ci`, then `npm test`. Instant wake uses `ws`; the ordinary CLI and app still start without it. The tests make no model calls.
+- `node cli.mjs version` reports the running process's captured build and protocol. See [release staging and cutovers](docs/releases.md) before changing a running installation.
 - The code is organized as follows:
   - `lib/core.mjs` keeps each room's journal and the talking stick.
   - `lib/live.mjs` delivers turns into open desktop chats.
   - `server.mjs` and `web/` are the app.
-  - `cli.mjs` holds the commands the AIs run.
+  - `cli.mjs` holds the commands the AIs run. `receive` acknowledges a turn and prints it in full; `--compact --seen-through <N>` skips the reprint only for that exact revision with no newer human input. `reply` takes `--file <path>`, `--file -` for stdin, or short quoted text, and keeps the text exactly as written. `node cli.mjs help` lists everything.
   - `skills/semaphore` is the shared skill.
   - `lib/install.mjs` and `lib/doctor.mjs` handle setup and health checks.
 - See [the live delivery contract](docs/LIVE-CONTRACT.md) and [the design notes](DESIGN.md).

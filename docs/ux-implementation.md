@@ -6,7 +6,7 @@ Implemented jointly by Claude (design and UI) and Astra (backend and coordinatio
 
 - The home screen starts with the actual request, selected participants and first speaker. `POST /api/rooms/start` commits these together. A request ID identifies the room, so concurrent or lost-response retries return one room and never redispatch.
 - The guided start shows real native bindings. Its saved opening goes out once all selected participants join; additional thoughts can be sent during setup.
-- Invitations use one line when the installed skill supports `SEMAPHORE_CONNECT_V1`, with a full-text fallback. Both preserve the executable, room and explicit root.
+- Invitations use a compact connection command when the installed skill supports `SEMAPHORE_CONNECT_V1`, with a full-text fallback. Both preserve the executable, room and explicit root. The field-report update adds the recorded opening context and selected participants, visibly excerpting long openings.
 - From a native chat, `loop-in --as <caller> --to <other> --file <request> --request-id <id>` atomically creates the room, binds the verified caller and saves the opening with relay provenance. It returns room and invitation links. The first turn defaults to the caller for a context summary; `--first` can select the other participant. The other app still needs one invitation send.
 
 ## Human input and turn ownership

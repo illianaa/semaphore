@@ -30,6 +30,7 @@ import { diagnose } from "./lib/doctor.mjs";
 import { readWakeSettings, wakePaths } from "./lib/wake.mjs";
 import { WakeClient, verifyNativeSeat, sameRuntime } from "./lib/codex-runtime.mjs";
 import { cancelQueuedWake } from "./lib/wake-delivery.mjs";
+import { RUNTIME, formatRuntime, runtimeIdentity, runtimeChange, sameBuild } from './lib/build-info.mjs';
 import {
   DEFAULT_PORT,
   SERVICE_LABEL,
@@ -72,6 +73,7 @@ const help = `Semaphore — you, Astra, and Claude, one speaker at a time.
 
 Setting up (Claude or Astra runs these for you):
   node cli.mjs doctor                       Check this computer's setup
+  node cli.mjs version                      Show this process's captured runtime identity
   node cli.mjs install [--yes]              List, then make, the setup changes
   node cli.mjs uninstall [--yes]            Remove Semaphore; conversations are kept
   node cli.mjs open                         Open the Semaphore app
@@ -365,6 +367,7 @@ function native(room, store) {
 }
 
 function status(room, store) {
+  console.log(`CLI runtime: ${formatRuntime()}`);
   console.log(
     `Room ${room.name} “${room.title || room.name}” · stick: ${room.owner} · model turns ${room.autoTurns ?? 0}${room.maxTurns === null ? " (no limit)" : `/${room.maxTurns ?? 4}`}`,
   );
@@ -451,11 +454,14 @@ async function join(app) {
     values.manual ? { transport: "codex-queue" } : {},
   );
   const participant = app.room.participants[speaker];
+  console.log(`Join runtime: ${formatRuntime()}`);
   if (
     participant.transport === binding.transport &&
     participant.id === binding.id
   ) {
     console.log(`This chat is already ${speaker} in ${app.room.name}.`);
+    participant.joinedRuntime ??= runtimeIdentity();
+    app.save();
     await refreshWakeSeat(app, speaker);
     return;
   }
@@ -503,9 +509,9 @@ async function join(app) {
     }),
   });
   // A newly bound chat has seen none of the room, so its first turn carries the whole transcript.
-  for (const key of ["model", "actualModel", "started", "wakeVerification", "wakeAutomatic", "wakeError"])
+  for (const key of ["model", "actualModel", "started", "wakeVerification", "wakeAutomatic", "wakeError", "joinedRuntime", "lastReceivedRuntime"])
     delete participant[key];
-  Object.assign(participant, { ...binding, seen: 0 });
+  Object.assign(participant, { ...binding, seen: 0, joinedRuntime: runtimeIdentity() });
   app.save();
   console.log(
     `Joined ${app.room.name} as ${speaker} (${binding.transport} ${binding.id}).`,
@@ -683,7 +689,7 @@ async function listenForTurn(room, store) {
       isOpen,
       stopWhen,
     });
-    for (const item of items) console.log(`${item.prompt}\n`);
+    for (const item of items) console.log(`Listener runtime: ${formatRuntime()}${item.runtime ? '' : '\nThe saved envelope was produced by an unstamped release.'}\n${item.prompt}\n`);
     if (items.length) return;
     const again = listenCommand(speaker, room.name);
     if (disconnected) {
@@ -733,8 +739,10 @@ async function main() {
     "uninstall",
     "open",
     "wake",
+    "version",
   ];
   if (!commands.includes(command)) throw new Error(help);
+  if (command === "version") return console.log(JSON.stringify(RUNTIME, null, 2));
   // Read-only: instant wake is turned on and off from the Semaphore app, by the person.
   if (command === "wake") {
     const { wakeStatus } = await import("./lib/wake.mjs");
@@ -845,6 +853,11 @@ async function main() {
     if (command === "receive") {
       if (!caller)
         throw new Error("Receive must run inside the chat bound to this room.");
+      const participant = semaphore.room.participants[caller];
+      const change = runtimeChange(participant);
+      const producer = semaphore.room.pending?.runtime;
+      const runtimeNotice = [change, producer && !sameBuild(producer)
+        ? `This saved turn was produced by ${formatRuntime(producer)}. Its turn ID and receipt remain unchanged.` : ''].filter(Boolean).join('\n');
       const turn = semaphore.receive(values.turn, caller, values.revision === undefined ? undefined : Number(values.revision), {
         compact: values.compact && !values.show,
         seenThrough: values["seen-through"] === undefined ? undefined : Number(values["seen-through"]),
@@ -852,7 +865,11 @@ async function main() {
       if (turn.reviewRequired) {
         console.log("Compact receipt was not accepted. Read the full turn below, then run its receive command. New input has not been marked read.");
         process.exitCode = 3;
-      } else acknowledgeDelivery({ roomDir: store.dir, speaker: caller, turnId: turn.id });
+      } else {
+        acknowledgeDelivery({ roomDir: store.dir, speaker: caller, turnId: turn.id });
+        participant.lastReceivedRuntime = runtimeIdentity();
+        semaphore.save();
+      }
       await refreshWakeSeat(semaphore, caller);
       console.log(
         liveEnvelope(
@@ -862,7 +879,7 @@ async function main() {
             turn,
             prompt: "",
           },
-          { root, compact: turn.compact === true },
+          { root, compact: turn.compact === true, runtimeNotice },
         ),
       );
       return;

@@ -885,6 +885,11 @@ textarea {
   margin: 8px 4px 0;
   line-height: 1.6;
 }
+/* The status hint wraps; the keyboard hint stays on one line. */
+.composer-caption > span:last-child {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .composer-caption kbd {
   font-size: 11px;
   background: #eef1e7;
