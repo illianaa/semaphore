@@ -49,6 +49,11 @@ test('wake saves intent before enqueue and starts only its own queue entry, once
   };
   await wakePending(f.store,f.options); await wakePending(f.store,f.options);
   assert.equal(f.native.started,1);assert.equal(f.store.read().pending.wake.status,'sent');
+  const observed = f.store.read().pending.wake.startedObservedAt;
+  assert.ok(Number.isFinite(Date.parse(observed)));
+  await wakePending(f.store,f.options);
+  assert.equal(f.store.read().pending.wake.startedObservedAt, observed);
+  assert.equal(f.store.read().pending.receivedAt, null, 'host discovery never acknowledges a native turn');
   assert.equal(f.native.calls.filter(call=>call.method==='thread/queue/add').length,1);
   assert.ok(f.native.calls.every(call=>!['thread/resume','turn/start','thread/queue/start'].includes(call.method)));
   assert.match(f.native.calls.find(call=>call.method==='thread/queue/add').params.input[0].text,/receive room .*--turn room-turn/);

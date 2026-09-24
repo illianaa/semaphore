@@ -18,6 +18,8 @@ import { RUNTIME } from './lib/build-info.mjs';
 import { statusNote } from './lib/status-note.mjs';
 import { artifactView, artifactViews } from './lib/artifacts.mjs';
 import { createPreviewServer, previewAvailability } from './lib/preview.mjs';
+import { titleText } from './lib/titles.mjs';
+import { timingView, timingReport } from './lib/timing.mjs';
 
 const SPEAKERS = ["astra", "claude"];
 const MAX_BODY = 80_000;
@@ -107,6 +109,7 @@ export function createAppServer({
     return {
       name: room.name,
       title: room.title || room.name,
+      titleSource: room.titleSource ?? "existing",
       createdAt: room.createdAt,
       owner: room.owner,
       canInterject: !!room.pending || room.opening?.state === "waiting",
@@ -120,6 +123,7 @@ export function createAppServer({
             state: room.pending.state,
             at: room.pending.at,
             wake: room.pending.wake ?? null,
+            timing: timingView(room, store.dir),
             ...(room.pending.state === "awaiting-reply"
               ? {
                   progress: deliveryProgress({
@@ -370,15 +374,7 @@ export function createAppServer({
         return json(200, { rooms: listRooms() });
       if (req.method === "POST" && url.pathname === "/api/rooms") {
         const input = await body(req);
-        if (
-          typeof input.title !== "string" ||
-          !input.title.trim() ||
-          input.title.trim().length > 100
-        )
-          throw error(
-            400,
-            "Give the conversation a title of 1–100 characters.",
-          );
+        try { titleText(input.title); } catch (err) { throw error(400, err.message); }
         const { room, store } = createLiveRoom(root, input.title);
         return json(201, { room: view(room, store) });
       }
@@ -401,11 +397,15 @@ export function createAppServer({
         return json(200, await previews.issue(room.name, artifactView(artifact)));
       }
       const match =
-        /^\/api\/rooms\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(?:\/(messages|opening|take|recover|pass|invite|unlock|limit)(?:\/(astra|claude))?)?$/.exec(
+        /^\/api\/rooms\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(?:\/(messages|opening|take|recover|pass|invite|unlock|limit|title|timings)(?:\/(astra|claude))?)?$/.exec(
           url.pathname,
         );
       if (!match) throw error(404, "Not found.");
       const [, name, action, speaker] = match;
+      if (req.method === "GET" && action === "timings") {
+        const { room, store } = readRoom(name);
+        return json(200, timingReport(room, store.dir));
+      }
       if (req.method === "GET" && !action) {
         const { room, store } = readRoom(name);
         return json(200, { room: view(room, store) });
@@ -419,10 +419,18 @@ export function createAppServer({
       }
       if (
         req.method !== "POST" ||
-        !["messages", "opening", "take", "recover", "pass", "unlock", "limit"].includes(action)
+        !["messages", "opening", "take", "recover", "pass", "unlock", "limit", "title"].includes(action)
       )
         throw error(405, "Method not allowed.");
       const input = await body(req);
+      if (action === "title") {
+        try { titleText(input?.title); } catch (err) { throw error(400, err.message); }
+        if (active.get(name)) {
+          const app = active.get(name);
+          app.setTitle(input.title);
+          return json(200, { room: view(app.room, app.store) });
+        }
+      }
       if (action === "unlock") {
         const { store } = readRoom(name);
         if (store.lockStatus().state !== "stale")
@@ -490,6 +498,7 @@ export function createAppServer({
         }
         if (action === "take") app.takeStick();
         if (action === "limit") app.setTurnLimit(input.maxTurns);
+        if (action === "title") app.setTitle(input.title);
         if (action === "recover") {
           if (input.acknowledged !== true)
             throw error(

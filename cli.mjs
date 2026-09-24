@@ -33,6 +33,7 @@ import { cancelQueuedWake } from "./lib/wake-delivery.mjs";
 import { RUNTIME, formatRuntime, runtimeIdentity, runtimeChange, sameBuild } from './lib/build-info.mjs';
 import { statusNote } from './lib/status-note.mjs';
 import { artifactViews, artifactView } from './lib/artifacts.mjs';
+import { recordListenerObservation, timingReport, timingView } from './lib/timing.mjs';
 import {
   DEFAULT_PORT,
   SERVICE_LABEL,
@@ -94,6 +95,8 @@ Setting up (Claude or Astra runs these for you):
 
 Conversations for live desktop chats:
   node cli.mjs new "<title>"                Start a conversation
+  node cli.mjs title <room> "<title>" --turn <id>  First AI's one-time name; human renames need no --turn
+  node cli.mjs timings <room>              Delivery stages, distributions and failure counts (JSON)
   node cli.mjs rooms                        List conversations
   node cli.mjs invite <room> --to astra|claude [--folder <path>]   Link and text that bring an AI in
 
@@ -410,6 +413,7 @@ function status(room, store) {
     );
   }
   const pending = room.pending;
+  if (pending) console.log(`Timing: ${JSON.stringify(timingView(room, store.dir))}`);
   if (pending)
     console.log(
       `Pending: turn ${pending.id} for ${pending.speaker} · ${pending.state ?? "uncertain"}${pending.receipt ? ` via ${pending.receipt.transport}` : ""}`,
@@ -720,6 +724,7 @@ async function listenForTurn(room, store) {
       timeoutMs: seconds ? seconds * 1000 : undefined,
       isOpen,
       stopWhen,
+      onObserved: item => { if (isOpen(item)) recordListenerObservation(store.dir, item); },
     });
     for (const item of items) console.log(`Listener runtime: ${formatRuntime()}${item.runtime ? '' : '\nThe saved envelope was produced by an unstamped release.'}\n${item.prompt}\n`);
     if (items.length) return;
@@ -764,6 +769,8 @@ async function main() {
     "receive",
     "note",
     "artifact",
+    "title",
+    "timings",
     "new",
     "loop-in",
     "rooms",
@@ -791,6 +798,7 @@ async function main() {
   if (command === "new") return newRoom();
   if (command === "loop-in") return loopIn();
   const store = new RoomStore(root, name);
+  if (command === "timings") return console.log(JSON.stringify(timingReport(store.read(), store.dir), null, 2));
   if (command === "artifact" && words[0] === "list") {
     console.log(JSON.stringify({ artifacts: artifactViews(store.read()) }, null, 2));
     return;
@@ -920,6 +928,13 @@ async function main() {
           { root, compact: turn.compact === true, runtimeNotice },
         ),
       );
+      return;
+    }
+    if (command === "title") {
+      if (nativeChat() && (!caller || (values.as && values.as !== caller)))
+        throw new Error("Name the room from its bound native chat, or rename it in the Semaphore app.");
+      const result = semaphore.setTitle(readMessage(), { speaker: caller ?? "human", turnId: values.turn });
+      console.log(JSON.stringify(result));
       return;
     }
     if (command === "artifact") {

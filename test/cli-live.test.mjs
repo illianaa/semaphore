@@ -1037,3 +1037,38 @@ test('artifact commands require this received turn and leave conversation delive
   assert.equal(f.queued().length, 0);
   assert.equal(f.claudeCalled(), false);
 });
+
+test('title suggestion authenticates the first received native turn and preserves human renames', t => {
+  const f=setup(t);
+  const started=f.run(['loop-in','--as','astra','--to','claude','--first','claude','--file',f.write('name.md','A long opening that needs a short name'),'--request-id','title-opening-123'],ASTRA);
+  const room=started.out.match(/in (room-[a-f0-9]+)\./)[1];
+  f.run(['join',room,'--as','claude'],CLAUDE);
+  const id=f.room(room).pending.id, args=['title',room,'A concise 🌱 name','--turn',id];
+  assert.equal(f.run(args,CLAUDE).code,1);
+  f.run(['receive',room,'--turn',id],CLAUDE);
+  assert.equal(f.run(args,{CLAUDE_CODE_SESSION_ID:OTHER}).code,1);
+  assert.equal(f.run(args,ASTRA).code,1);
+  const named=f.run(args,CLAUDE); assert.equal(named.code,0,named.err);
+  assert.equal(f.room(room).title,'A concise 🌱 name');
+  assert.equal(JSON.parse(f.run(args,CLAUDE).out).duplicate,true);
+  assert.equal(f.run(['title',room,'My chosen name']).code,0);
+  assert.equal(f.run(args,CLAUDE).code,1);
+  assert.equal(f.room(room).title,'My chosen name'); assert.equal(f.room(room).messages.length,1);
+});
+
+test('CLI listener records observation without receiving and timings retain it after the reply', t => {
+  const f=setup(t); joinBoth(f.run);
+  f.run(['send','room','--to','claude','Timing probe']);
+  const id=f.room('room').pending.id;
+  const listened=f.run(['listen','room','--timeout','1'],CLAUDE); assert.equal(listened.code,0,listened.err);
+  let report=JSON.parse(f.run(['timings','room']).out), first=report.samples[0].listenerObservedAt;
+  assert.ok(first); assert.equal(report.samples[0].acknowledgedAt,null);
+  assert.equal(f.room('room').pending.receivedAt,undefined); assert.equal(f.room('room').messages[0].readAt,undefined);
+  f.run(['listen','room','--timeout','1'],CLAUDE);
+  assert.equal(JSON.parse(f.run(['timings','room']).out).samples[0].listenerObservedAt,first);
+  f.run(['receive','room','--turn',id],CLAUDE);
+  f.run(['reply','room','--turn',id,'--next','human','Finished'],CLAUDE);
+  report=JSON.parse(f.run(['timings','room']).out);
+  assert.equal(report.samples[0].listenerObservedAt,first); assert.ok(report.samples[0].acknowledgedAt);
+  assert.ok(report.samples[0].repliedAt); assert.equal(report.groups[0].turns,1);
+});

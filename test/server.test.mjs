@@ -778,3 +778,39 @@ test('preview URLs require the control token and same origin, select a registere
   assert.equal((await f.request(route, {method:'POST',body:{}})).status, 409);
   assert.equal((await f.request(`/api/rooms/${room.name}`)).body.room.artifacts[0].preview.available, false);
 });
+
+test('renaming persists without sending or changing the stick, and timing details need authentication', async t => {
+  const f=await fixture(t),room=await f.create('Chosen title');f.bind(room.name);
+  await f.request(`/api/rooms/${room.name}/messages`,{method:'POST',body:{text:'Begin',to:'astra',clientId:'rename-start-123'}});
+  const before=(await f.request(`/api/rooms/${room.name}`)).body.room;
+  const response=await f.request(`/api/rooms/${room.name}/title`,{method:'POST',body:{title:'  A <name> & 🌱  '}});
+  assert.equal(response.status,200); assert.equal(response.body.room.title,'A <name> & 🌱');
+  assert.equal(response.body.room.titleSource,'human'); assert.equal(response.body.room.owner,before.owner);
+  assert.equal(response.body.room.pending.id,before.pending.id); assert.equal(response.body.room.messageCount,1);
+  assert.equal(f.calls.length,1);
+  assert.equal((await f.request('/api/rooms')).body.rooms[0].title,'A <name> & 🌱');
+  for(const title of ['',null,'x'.repeat(101)]) assert.equal((await f.request(`/api/rooms/${room.name}/title`,{method:'POST',body:{title}})).status,400);
+  const route=`/api/rooms/${room.name}/timings`;
+  assert.equal((await fetch(f.url+route)).status,401);
+  const timings=await f.request(route);assert.equal(timings.status,200);
+  assert.equal(timings.body.samples[0].turnId,before.pending.id);
+  assert.ok(response.body.room.pending.timing.queuedAt);
+  assert.equal(response.body.room.pending.timing.acknowledgedAt,null);
+});
+
+test('human rename during an active delivery is retained when the delivery finishes', async t => {
+  let entered,release;
+  const started=new Promise(resolve=>entered=resolve);
+  const f=await fixture(t,{transports:{astra:{kind:'astra-inbox',deliver:context=>new Promise(resolve=>{
+    entered();release=()=>resolve({status:'queued',transport:'astra-inbox',turnId:context.turn.id,at:new Date().toISOString()});
+  })}}});
+  const room=await f.create('Original');f.bind(room.name);
+  const sending=f.request(`/api/rooms/${room.name}/messages`,{method:'POST',body:{text:'Begin',to:'astra',clientId:'busy-rename-123'}});
+  await started;
+  try {
+    const renamed=await f.request(`/api/rooms/${room.name}/title`,{method:'POST',body:{title:'Renamed while busy'}});
+    assert.equal(renamed.status,200);assert.equal(renamed.body.room.title,'Renamed while busy');
+  } finally { release(); }
+  assert.equal((await sending).body.room.title,'Renamed while busy');
+  assert.equal((await f.request(`/api/rooms/${room.name}`)).body.room.title,'Renamed while busy');
+});
