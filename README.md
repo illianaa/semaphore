@@ -78,6 +78,10 @@ The doctor checks what it can. The new-chat links were checked against the apps'
 
 The Claude new-session link is also covered by [Anthropic's documentation](https://support.claude.com/en/articles/14729294-open-claude-desktop-with-a-link). If a desktop update changes link behavior, copy the invitation into a native chat instead. Semaphore uses the model selected in each native chat; “Astra” is the Codex participant's name, not a forced model setting.
 
+## UX proposal deck
+
+The [18-slide HTML deck](design/ux-proposals/semaphore-ux-proposals.html) covers the three proposals and what shipped. Open it in a browser; the editable source and builder are alongside it. See [implementation notes](docs/ux-implementation.md) for validation and native integration limits.
+
 ## For developers
 
 - Run `npm test`. There are no dependencies, and the tests make no model calls.

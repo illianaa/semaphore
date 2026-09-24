@@ -1,0 +1,74 @@
+{
+  "v": 4,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-09-23T21:03:54Z"
+  },
+  "title": "Semaphore UX proposals",
+  "cover": "cover",
+  "order": [
+    "cover",
+    "heard",
+    "journey",
+    "friction",
+    "principles",
+    "glance",
+    "p1-start",
+    "p1-type",
+    "p1-plan",
+    "p2-start",
+    "p2-chat",
+    "p2-plan",
+    "p3-mock",
+    "p3-plan",
+    "compare",
+    "path",
+    "decide",
+    "shipped"
+  ],
+  "sections": {
+    "s1": {
+      "description": "Where things stand: what you told us and how starting works today",
+      "start": "cover"
+    },
+    "s2": {
+      "description": "The principles behind every proposal, and the three proposals at a glance",
+      "start": "principles"
+    },
+    "s3": {
+      "description": "Proposal 1, Polish: a guided start and a message box that feels familiar",
+      "start": "p1-start"
+    },
+    "s4": {
+      "description": "Proposal 2, One message to start: Semaphore gathers the group for you",
+      "start": "p2-start"
+    },
+    "s5": {
+      "description": "Proposal 3, Lives in your apps: start from any chat, after a short feasibility test",
+      "start": "p3-mock"
+    },
+    "s6": {
+      "description": "Side-by-side comparison, our recommendation and the decisions we need from you",
+      "start": "compare"
+    },
+    "s7": {
+      "description": "Where it landed: what shipped after you chose to build all three",
+      "start": "shipped"
+    }
+  },
+  "faces": {
+    "newsreader": {
+      "family": "Newsreader",
+      "href": "https://fonts.googleapis.com/css2?family=Newsreader:wght@400;500;600&display=swap"
+    },
+    "inter": {
+      "family": "Inter",
+      "href": "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    },
+    "jetbrains-mono": {
+      "family": "JetBrains Mono",
+      "href": "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+    }
+  },
+  "designSystems": []
+}

@@ -1652,3 +1652,6 @@ textarea {
   font-size: 12px;
   color: #6a7464;
 }
+.sidebar-label {
+  white-space: nowrap;
+}

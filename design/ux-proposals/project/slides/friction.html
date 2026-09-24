@@ -1,0 +1,76 @@
+<section id="friction" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">How it works today</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">Most of the friction lives in two places</h2>
+  </div>
+  <div style="display:flex; flex-direction:row; gap:48px; align-items:start">
+    <div style="width:760px; display:flex; flex-direction:column; gap:20px">
+      <h3 style="font-size:40px; font-weight:600; line-height:1.2; color:#2b342f">The invitation</h3>
+      <p style="font-size:30px; line-height:1.4; color:#515c54">About 1,300–1,500 characters of commands and rules land in each AI's chat.</p>
+      <div style="position:relative; height:400px; overflow:hidden; background:#fffefa; border:1px solid #e1e5da; border-radius:20px; padding:28px 32px; display:flex; flex-direction:column; gap:14px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:24px; line-height:1.5; color:#2b342f">Join my Semaphore group chat “test chat” as Claude. I’m asking you to connect this chat to it.</p>
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:24px; line-height:1.5; color:#515c54">1. Run: node '…/semaphore/cli.mjs' join room-a6ee5d38-1d6 --root '…/.semaphore/rooms' --as claude</p>
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:24px; line-height:1.5; color:#515c54">2. Start this as a background task so each new turn wakes you, and start it again before ending each turn: node '…/semaphore/cli.mjs' listen room-a6ee5d38-1d6 --root '…/.semaphore/rooms'</p>
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:24px; line-height:1.5; color:#515c54">3. Each turn shows the new messages, a receive command to run first, and the exact reply command.</p>
+        <div style="position:absolute; left:0px; bottom:0px; width:760px; height:150px; background:linear-gradient(180deg, rgba(255,254,250,0) 0%, #fffefa 80%)"></div>
+      </div>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:20px">
+      <h3 style="font-size:40px; font-weight:600; line-height:1.2; color:#2b342f">The message box</h3>
+      <p style="font-size:30px; line-height:1.4; color:#515c54">Where you spend the most time.</p>
+      <div style="display:flex; flex-direction:column; gap:14px">
+        <div style="display:flex; flex-direction:row; align-items:center; gap:12px">
+          <p style="font-size:24px; color:#6a746b">● Claude has the stick · waiting for a reply</p>
+          <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">6</p></div>
+        </div>
+        <div style="background:#fffefa; border:1px solid #dce3d0; border-radius:16px; padding:22px 26px; display:flex; flex-direction:column; gap:18px">
+          <div style="display:flex; flex-direction:row; align-items:center; gap:12px">
+            <p style="font-size:24px; color:#6a746b">Bring a thought to the conversation…</p>
+            <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">1</p></div>
+            <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">2</p></div>
+          </div>
+          <div style="display:flex; flex-direction:row; align-items:center; justify-content:space-between">
+            <div style="display:flex; flex-direction:row; align-items:center; gap:10px">
+              <p style="font-size:24px; color:#6a746b">Reply first</p>
+              <p style="font-size:24px; color:#3f6a4f; background:#e9efdd; padding:4px 14px; border-radius:10px">✳ Astra</p>
+              <p style="font-size:24px; color:#8f5539; padding:4px 10px">✺ Claude</p>
+              <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">4</p></div>
+            </div>
+            <div style="display:flex; flex-direction:row; align-items:center; gap:10px">
+              <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">3</p></div>
+              <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">5</p></div>
+              <div style="width:52px; height:52px; border-radius:12px; background:#c4cfbd"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px">
+        <div style="display:flex; flex-direction:row; align-items:start; gap:12px">
+          <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">1</p></div>
+          <p style="font-size:24px; line-height:1.35; color:#2b342f; flex:1">Text is 12px; the hint below it is 8px</p>
+        </div>
+        <div style="display:flex; flex-direction:row; align-items:start; gap:12px">
+          <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">2</p></div>
+          <p style="font-size:24px; line-height:1.35; color:#2b342f; flex:1">Enter adds a line; only ⌘ + Enter sends</p>
+        </div>
+        <div style="display:flex; flex-direction:row; align-items:start; gap:12px">
+          <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">3</p></div>
+          <p style="font-size:24px; line-height:1.35; color:#2b342f; flex:1">The box doesn't grow as you type</p>
+        </div>
+        <div style="display:flex; flex-direction:row; align-items:start; gap:12px">
+          <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">4</p></div>
+          <p style="font-size:24px; line-height:1.35; color:#2b342f; flex:1">“Reply first” resets to Astra on reload</p>
+        </div>
+        <div style="display:flex; flex-direction:row; align-items:start; gap:12px">
+          <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">5</p></div>
+          <p style="font-size:24px; line-height:1.35; color:#2b342f; flex:1">Send is off while an AI has the stick</p>
+        </div>
+        <div style="display:flex; flex-direction:row; align-items:start; gap:12px">
+          <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">6</p></div>
+          <p style="font-size:24px; line-height:1.35; color:#2b342f; flex:1">Whose turn it is: one small grey line</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Semaphore · three ways forward</p><p style="font-size:24px; color:#6a746b">4</p></div>
+</section>

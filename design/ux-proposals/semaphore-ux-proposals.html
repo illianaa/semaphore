@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light"><title>Semaphore · Three UX proposals</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:wght@400;500;600&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+*{box-sizing:border-box}html,body{margin:0;padding:0;height:100%;overflow:hidden}body{background:#e8ebe3;font-family:Inter,Arial,sans-serif;color:#2b342f}p,h1,h2,h3,h4{margin:0}p{line-height:1.3}table{border-collapse:collapse;table-layout:fixed;text-align:left;line-height:1.35}th,td{vertical-align:top}aside{display:none}svg,x-icon{flex-shrink:0}x-icon{display:inline-flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;font-size:1em;line-height:1}section{position:relative;width:1920px;height:1080px;flex-shrink:0;overflow:hidden}section[hidden]{display:none!important}#viewport{height:calc(100dvh - 64px);width:100vw;display:flex;align-items:center;justify-content:center;overflow:hidden}#frame{position:relative;flex-shrink:0;box-shadow:0 10px 50px #25342b22}#slides{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:top left}#controls{height:64px;display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 16px;background:#f8faf5;border-top:1px solid #dce3d0}button,select{font:500 14px Inter,Arial,sans-serif;border:1px solid #c6d0c1;background:#fffefa;color:#2b342f;border-radius:8px;padding:9px 12px;cursor:pointer}button:hover,select:hover{background:#e9efdd}button:focus-visible,select:focus-visible{outline:3px solid #556d4a;outline-offset:2px}button:disabled{opacity:.35;cursor:default}#counter{font-size:13px;font-variant-numeric:tabular-nums;min-width:48px;text-align:center}#jump{max-width:270px}#notes{position:fixed;z-index:5;inset:10% max(20px,10%);max-width:900px;max-height:80%;overflow:auto;border:1px solid #c6d0c1;border-radius:18px;background:#fffefa;padding:32px;color:#2b342f}#notes::backdrop{background:#1b2e22aa}#notes h2{font-family:Georgia,serif;font-size:30px;margin-bottom:16px}#notes p{font-size:18px;line-height:1.6;white-space:pre-wrap}#notes button{margin-top:20px}.hint{font-size:12px;color:#66735e}@media(max-width:650px){.hint,#print{display:none}#controls{gap:6px;padding:8px}#jump{max-width:150px}button,select{padding:8px}}
+@media print{@page{size:1920px 1080px;margin:0}html,body{height:auto;overflow:visible;background:white}#viewport{display:block;height:auto;width:1920px;overflow:visible}#frame{width:1920px!important;height:auto!important;box-shadow:none}#slides{position:static;transform:none!important;height:auto}section,section[hidden]{display:flex!important;break-after:page;page-break-after:always}section:last-child{break-after:auto}#controls,#notes{display:none!important}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body>
+<main id="viewport" aria-label="Semaphore UX proposals"><div id="frame"><div id="slides"><section id="cover" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px; display:flex; flex-direction:column; justify-content:space-between">
+  <div style="display:flex; flex-direction:row; align-items:center; gap:20px">
+    <svg xmlns="http://www.w3.org/2000/svg" aria-label="Semaphore logo" width="40" height="40" viewBox="0 0 40 40" style="width:64px; height:64px"><rect width="40" height="40" rx="12" fill="#293e35"/><g fill="#ecf2d6"><rect x="10" y="10" width="5" height="20" rx="2.5"/><rect x="18" y="16" width="5" height="14" rx="2.5"/><rect x="26" y="10" width="5" height="14" rx="2.5"/></g></svg>
+    <p style="font-size:40px; font-weight:600; letter-spacing:-1px; color:#2b342f">semaphore<span style="color:#6d8b5e">.</span></p>
+  </div>
+  <div style="display:flex; flex-direction:column; gap:40px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Design proposals · September 2026</p>
+    <h1 style="font-family:'Newsreader', Georgia, serif; font-size:112px; font-weight:500; line-height:1.05; letter-spacing:-2px; color:#2b342f; width:1500px">Three ways to make Semaphore feel effortless</h1>
+    <p style="font-size:40px; line-height:1.35; color:#515c54; width:1300px">From a quick polish to a group chat that lives inside your apps.</p>
+  </div>
+  <div style="display:flex; flex-direction:row; align-items:center; gap:32px">
+    <div style="display:flex; flex-direction:row; gap:12px">
+      <div style="width:72px; height:72px; border-radius:50%; background:#e7e9e0; display:flex; align-items:center; justify-content:center"><p style="font-size:30px; font-weight:600; color:#66735e">Y</p></div>
+      <div style="width:72px; height:72px; border-radius:50%; background:#e0eade; display:flex; align-items:center; justify-content:center"><p style="font-size:30px; color:#4d785b">✳</p></div>
+      <div style="width:72px; height:72px; border-radius:50%; background:#f1e3d8; display:flex; align-items:center; justify-content:center"><p style="font-size:30px; color:#b57553">✺</p></div>
+    </div>
+    <p style="font-size:30px; color:#515c54">Design by Claude · Backend by Astra · Decisions by you</p>
+  </div>
+</section>
+
+<section id="heard" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">What you told us</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">Three things got in the way. Two must stay true.</h2>
+  </div>
+  <div style="display:flex; flex-direction:row; gap:32px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:20px; background:#fffefa; border:1px solid #e1e5da; border-radius:24px; padding:40px">
+      <x-icon name="Search" style="color:#556d4a; width:48px; height:48px"></x-icon>
+      <h3 style="font-size:40px; font-weight:600; line-height:1.2; color:#2b342f">Starting was confusing</h3>
+      <p style="font-size:30px; line-height:1.4; color:#515c54">It wasn't clear how to start the shared chat.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:20px; background:#fffefa; border:1px solid #e1e5da; border-radius:24px; padding:40px">
+      <x-icon name="Link" style="color:#556d4a; width:48px; height:48px"></x-icon>
+      <h3 style="font-size:40px; font-weight:600; line-height:1.2; color:#2b342f">Each AI needed an invite</h3>
+      <p style="font-size:30px; line-height:1.4; color:#515c54">A whole message had to be pasted into each chat.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:20px; background:#fffefa; border:1px solid #e1e5da; border-radius:24px; padding:40px">
+      <x-icon name="Chat" style="color:#556d4a; width:48px; height:48px"></x-icon>
+      <h3 style="font-size:40px; font-weight:600; line-height:1.2; color:#2b342f">Typing wasn't great</h3>
+      <p style="font-size:30px; line-height:1.4; color:#515c54">The app's message box was awkward to type in.</p>
+    </div>
+  </div>
+  <div style="display:flex; flex-direction:row; gap:32px">
+    <div style="flex:1; display:flex; flex-direction:row; align-items:center; gap:24px; background:#e9efdd; border-radius:24px; padding:32px 40px">
+      <x-icon name="ThumbsUp" style="color:#344e3e; width:48px; height:48px"></x-icon>
+      <div style="display:flex; flex-direction:column; gap:6px">
+        <p style="font-size:30px; font-weight:600; color:#2b342f">Keep: you choose who replies first</p>
+        <p style="font-size:24px; color:#3f4a42">It stays in every proposal.</p>
+      </div>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:row; align-items:center; gap:24px; background:#e9efdd; border-radius:24px; padding:32px 40px">
+      <x-icon name="PaperPlane" style="color:#344e3e; width:48px; height:48px"></x-icon>
+      <div style="display:flex; flex-direction:column; gap:6px">
+        <p style="font-size:30px; font-weight:600; color:#2b342f">Add: you can send anytime</p>
+        <p style="font-size:24px; color:#3f4a42">Even while Claude or Astra has the stick.</p>
+      </div>
+    </div>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Semaphore · three ways forward</p><p style="font-size:24px; color:#6a746b">2</p></div>
+</section>
+
+<section id="journey" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">How it works today</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">Starting a group chat means bouncing between three apps</h2>
+  </div>
+  <div style="display:flex; flex-direction:row; gap:64px; align-items:start">
+    <div style="width:500px; display:flex; flex-direction:column; gap:28px">
+      <div style="display:flex; flex-direction:row; align-items:center; gap:24px">
+        <p style="font-family:'Newsreader', Georgia, serif; font-size:112px; font-weight:500; line-height:1; color:#344e3e; width:80px">4</p>
+        <p style="font-size:30px; line-height:1.3; color:#2b342f; width:380px">app switches</p>
+      </div>
+      <div style="display:flex; flex-direction:row; align-items:center; gap:24px">
+        <p style="font-family:'Newsreader', Georgia, serif; font-size:112px; font-weight:500; line-height:1; color:#344e3e; width:80px">3</p>
+        <p style="font-size:30px; line-height:1.3; color:#2b342f; width:380px">sends, including your first message</p>
+      </div>
+      <div style="display:flex; flex-direction:row; align-items:center; gap:24px">
+        <p style="font-family:'Newsreader', Georgia, serif; font-size:112px; font-weight:500; line-height:1; color:#344e3e; width:80px">2</p>
+        <p style="font-size:30px; line-height:1.3; color:#2b342f; width:380px">invitations of about 1,300–1,500 characters</p>
+      </div>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:12px">
+      <div style="display:flex; flex-direction:row; align-items:center; gap:20px; background:#fffefa; border:1px solid #e1e5da; border-radius:16px; padding:20px 24px">
+        <p style="font-size:24px; font-weight:600; color:#6a746b; width:28px">1</p>
+        <p style="font-size:24px; font-weight:600; color:#4f5a51; background:#e7e9e0; padding:6px 12px; border-radius:999px; width:168px; text-align:center">Semaphore</p>
+        <p style="font-size:30px; line-height:1.3; color:#2b342f; flex:1">Create and name a conversation</p>
+      </div>
+      <div style="display:flex; flex-direction:row; align-items:center; gap:20px; background:#fffefa; border:1px solid #e1e5da; border-radius:16px; padding:20px 24px">
+        <p style="font-size:24px; font-weight:600; color:#6a746b; width:28px">2</p>
+        <p style="font-size:24px; font-weight:600; color:#8f5539; background:#f1e3d8; padding:6px 12px; border-radius:999px; width:168px; text-align:center">Claude</p>
+        <p style="font-size:30px; line-height:1.3; color:#2b342f; flex:1">Confirm the folder, then send the invitation</p>
+      </div>
+      <div style="display:flex; flex-direction:row; align-items:center; gap:20px; background:#fffefa; border:1px solid #e1e5da; border-radius:16px; padding:20px 24px">
+        <p style="font-size:24px; font-weight:600; color:#6a746b; width:28px">3</p>
+        <p style="font-size:24px; font-weight:600; color:#4f5a51; background:#e7e9e0; padding:6px 12px; border-radius:999px; width:168px; text-align:center">Semaphore</p>
+        <p style="font-size:30px; line-height:1.3; color:#2b342f; flex:1">Go back and open Astra's link</p>
+      </div>
+      <div style="display:flex; flex-direction:row; align-items:center; gap:20px; background:#fffefa; border:1px solid #e1e5da; border-radius:16px; padding:20px 24px">
+        <p style="font-size:24px; font-weight:600; color:#6a746b; width:28px">4</p>
+        <p style="font-size:24px; font-weight:600; color:#3f6a4f; background:#e0eade; padding:6px 12px; border-radius:999px; width:168px; text-align:center">ChatGPT</p>
+        <p style="font-size:30px; line-height:1.3; color:#2b342f; flex:1">Send the invitation</p>
+      </div>
+      <div style="display:flex; flex-direction:row; align-items:center; gap:20px; background:#fffefa; border:1px solid #e1e5da; border-radius:16px; padding:20px 24px">
+        <p style="font-size:24px; font-weight:600; color:#6a746b; width:28px">5</p>
+        <p style="font-size:24px; font-weight:600; color:#4f5a51; background:#e7e9e0; padding:6px 12px; border-radius:999px; width:168px; text-align:center">Semaphore</p>
+        <p style="font-size:30px; line-height:1.3; color:#2b342f; flex:1">Go back, wait for both, then ask your question</p>
+      </div>
+    </div>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Semaphore · three ways forward</p><p style="font-size:24px; color:#6a746b">3</p></div>
+  <aside>Representative current flow: two invitation sends plus the first human message equals three sends total. Generated invitations for test chat on this machine measured 1,296 characters for Claude and 1,517 for Astra, across six paragraphs. Path and room-title lengths affect these counts.</aside>
+</section>
+
+<section id="friction" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">How it works today</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">Most of the friction lives in two places</h2>
+  </div>
+  <div style="display:flex; flex-direction:row; gap:48px; align-items:start">
+    <div style="width:760px; display:flex; flex-direction:column; gap:20px">
+      <h3 style="font-size:40px; font-weight:600; line-height:1.2; color:#2b342f">The invitation</h3>
+      <p style="font-size:30px; line-height:1.4; color:#515c54">About 1,300–1,500 characters of commands and rules land in each AI's chat.</p>
+      <div style="position:relative; height:400px; overflow:hidden; background:#fffefa; border:1px solid #e1e5da; border-radius:20px; padding:28px 32px; display:flex; flex-direction:column; gap:14px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:24px; line-height:1.5; color:#2b342f">Join my Semaphore group chat “test chat” as Claude. I’m asking you to connect this chat to it.</p>
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:24px; line-height:1.5; color:#515c54">1. Run: node '…/semaphore/cli.mjs' join room-a6ee5d38-1d6 --root '…/.semaphore/rooms' --as claude</p>
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:24px; line-height:1.5; color:#515c54">2. Start this as a background task so each new turn wakes you, and start it again before ending each turn: node '…/semaphore/cli.mjs' listen room-a6ee5d38-1d6 --root '…/.semaphore/rooms'</p>
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:24px; line-height:1.5; color:#515c54">3. Each turn shows the new messages, a receive command to run first, and the exact reply command.</p>
+        <div style="position:absolute; left:0px; bottom:0px; width:760px; height:150px; background:linear-gradient(180deg, rgba(255,254,250,0) 0%, #fffefa 80%)"></div>
+      </div>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:20px">
+      <h3 style="font-size:40px; font-weight:600; line-height:1.2; color:#2b342f">The message box</h3>
+      <p style="font-size:30px; line-height:1.4; color:#515c54">Where you spend the most time.</p>
+      <div style="display:flex; flex-direction:column; gap:14px">
+        <div style="display:flex; flex-direction:row; align-items:center; gap:12px">
+          <p style="font-size:24px; color:#6a746b">● Claude has the stick · waiting for a reply</p>
+          <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">6</p></div>
+        </div>
+        <div style="background:#fffefa; border:1px solid #dce3d0; border-radius:16px; padding:22px 26px; display:flex; flex-direction:column; gap:18px">
+          <div style="display:flex; flex-direction:row; align-items:center; gap:12px">
+            <p style="font-size:24px; color:#6a746b">Bring a thought to the conversation…</p>
+            <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">1</p></div>
+            <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">2</p></div>
+          </div>
+          <div style="display:flex; flex-direction:row; align-items:center; justify-content:space-between">
+            <div style="display:flex; flex-direction:row; align-items:center; gap:10px">
+              <p style="font-size:24px; color:#6a746b">Reply first</p>
+              <p style="font-size:24px; color:#3f6a4f; background:#e9efdd; padding:4px 14px; border-radius:10px">✳ Astra</p>
+              <p style="font-size:24px; color:#8f5539; padding:4px 10px">✺ Claude</p>
+              <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">4</p></div>
+            </div>
+            <div style="display:flex; flex-direction:row; align-items:center; gap:10px">
+              <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">3</p></div>
+              <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">5</p></div>
+              <div style="width:52px; height:52px; border-radius:12px; background:#c4cfbd"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px">
+        <div style="display:flex; flex-direction:row; align-items:start; gap:12px">
+          <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">1</p></div>
+          <p style="font-size:24px; line-height:1.35; color:#2b342f; flex:1">Text is 12px; the hint below it is 8px</p>
+        </div>
+        <div style="display:flex; flex-direction:row; align-items:start; gap:12px">
+          <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">2</p></div>
+          <p style="font-size:24px; line-height:1.35; color:#2b342f; flex:1">Enter adds a line; only ⌘ + Enter sends</p>
+        </div>
+        <div style="display:flex; flex-direction:row; align-items:start; gap:12px">
+          <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">3</p></div>
+          <p style="font-size:24px; line-height:1.35; color:#2b342f; flex:1">The box doesn't grow as you type</p>
+        </div>
+        <div style="display:flex; flex-direction:row; align-items:start; gap:12px">
+          <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">4</p></div>
+          <p style="font-size:24px; line-height:1.35; color:#2b342f; flex:1">“Reply first” resets to Astra on reload</p>
+        </div>
+        <div style="display:flex; flex-direction:row; align-items:start; gap:12px">
+          <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">5</p></div>
+          <p style="font-size:24px; line-height:1.35; color:#2b342f; flex:1">Send is off while an AI has the stick</p>
+        </div>
+        <div style="display:flex; flex-direction:row; align-items:start; gap:12px">
+          <div style="width:36px; height:36px; border-radius:50%; background:#2b342f; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#fafbf7">6</p></div>
+          <p style="font-size:24px; line-height:1.35; color:#2b342f; flex:1">Whose turn it is: one small grey line</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Semaphore · three ways forward</p><p style="font-size:24px; color:#6a746b">4</p></div>
+</section>
+
+<section id="principles" data-transition="fade" style="background:#f0f2eb; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Principles</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">Five principles shape all three proposals</h2>
+  </div>
+  <div style="display:flex; flex-direction:column">
+    <div style="display:flex; flex-direction:row; align-items:start; gap:32px; border-top:1px solid #d3d9c8; padding:18px 0px">
+      <p style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#556d4a; width:48px">1</p>
+      <h3 style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#2b342f; width:800px">One place to start, one message to send.</h3>
+      <p style="font-size:30px; line-height:1.4; color:#515c54; flex:1">Starting a group chat should feel like starting any chat.</p>
+    </div>
+    <div style="display:flex; flex-direction:row; align-items:start; gap:32px; border-top:1px solid #d3d9c8; padding:18px 0px">
+      <p style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#556d4a; width:48px">2</p>
+      <h3 style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#2b342f; width:800px">The plumbing stays out of sight.</h3>
+      <p style="font-size:30px; line-height:1.4; color:#515c54; flex:1">No setup commands for you to manage. Claude and Astra handle the protocol.</p>
+    </div>
+    <div style="display:flex; flex-direction:row; align-items:start; gap:32px; border-top:1px solid #d3d9c8; padding:18px 0px">
+      <p style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#556d4a; width:48px">3</p>
+      <h3 style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#2b342f; width:800px">You can always tell whose turn it is.</h3>
+      <p style="font-size:30px; line-height:1.4; color:#515c54; flex:1">Status claims only what Semaphore can prove: waiting, received, replied.</p>
+    </div>
+    <div style="display:flex; flex-direction:row; align-items:start; gap:32px; border-top:1px solid #d3d9c8; padding:18px 0px">
+      <p style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#556d4a; width:48px">4</p>
+      <h3 style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#2b342f; width:800px">Speak anytime, and pick who replies.</h3>
+      <p style="font-size:30px; line-height:1.4; color:#515c54; flex:1">Even while an AI has the stick. Choosing who replies first stays everywhere.</p>
+    </div>
+    <div style="display:flex; flex-direction:row; align-items:start; gap:32px; border-top:1px solid #d3d9c8; border-bottom:1px solid #d3d9c8; padding:18px 0px">
+      <p style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#556d4a; width:48px">5</p>
+      <h3 style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#2b342f; width:800px">Typing feels like the apps you know.</h3>
+      <p style="font-size:30px; line-height:1.4; color:#515c54; flex:1">Enter sends, the box grows as you write, and the text is easy to read.</p>
+    </div>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#5b665d">Semaphore · three ways forward</p><p style="font-size:24px; color:#5b665d">5</p></div>
+</section>
+
+<section id="glance" data-transition="fade" style="background:#fafbf7">
+  <div id="e1-1l1pmxd" style="position:absolute; bottom:64px; left:128px; width:1664px; display:flex; flex-direction:row; justify-content:space-between">
+    <p style="font-family:Inter, Arial, sans-serif; font-size:24px; color:#6a746b">Sized in prompts and risk, because Claude and Astra do the building</p>
+    <p style="font-family:Inter, Arial, sans-serif; font-size:24px; color:#6a746b">6</p>
+  </div>
+  <div id="f78a5af8" style="position:absolute; top:128px; left:128px; width:1664px; height:120px; display:flex; flex-direction:column; gap:16px">
+    <p style="font-family:Inter, Arial, sans-serif; font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">The proposals</p>
+    <h2 style="font-family:Newsreader, Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">Three proposals, each a bigger step</h2>
+  </div>
+  <div id="7fea529b" style="position:absolute; top:296px; left:128px; width:1664px; height:624px; display:flex; flex-direction:row; gap:32px; align-items:end">
+    <div style="display:flex; flex-direction:column; gap:16px; flex:1; min-height:420px; padding:40px; background:#fffefa; border:1px solid #e1e5da; border-radius:28px">
+      <p style="font-family:Inter, Arial, sans-serif; font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Proposal 1</p>
+      <h3 style="font-family:Newsreader, Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">Polish</h3>
+      <p style="font-family:Inter, Arial, sans-serif; font-size:30px; line-height:1.4; color:#515c54">Fix what you touch: typing, starting and status.</p>
+      <div style="flex:1"></div>
+      <p style="padding:16px 0 0; font-family:Inter, Arial, sans-serif; font-size:24px; font-weight:600; color:#3f4a42; border-top:1px solid #e1e5da">A prompt or two · Low to medium risk</p>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:16px; flex:1; min-height:510px; padding:40px; background:#e9efdd; border-radius:28px">
+      <p style="font-family:Inter, Arial, sans-serif; font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Proposal 2</p>
+      <h3 style="font-family:Newsreader, Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">One message to start</h3>
+      <p style="font-family:Inter, Arial, sans-serif; font-size:30px; line-height:1.4; color:#3f4a42">Type what you want, pick who replies first, press Send.</p>
+      <div style="flex:1"></div>
+      <p style="padding:16px 0 0; font-family:Inter, Arial, sans-serif; font-size:24px; font-weight:600; color:#2b342f; border-top:1px solid #cfdac0">A few prompts · Medium risk</p>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:16px; flex:1; min-height:600px; padding:40px; background:#344e3e; border-radius:28px">
+      <p style="font-family:Inter, Arial, sans-serif; font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#b8c9ad">Proposal 3</p>
+      <h3 style="font-family:Newsreader, Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#f3f5ee">Lives in your apps</h3>
+      <p style="font-family:Inter, Arial, sans-serif; font-size:30px; line-height:1.4; color:#c9d6c0">Say “loop in Astra” in either chat. No invitations.</p>
+      <div style="flex:1"></div>
+      <p style="padding:16px 0 0; font-family:Inter, Arial, sans-serif; font-size:24px; font-weight:600; color:#f3f5ee; border-top:1px solid #56705f">A short test, then a few prompts · Higher risk</p>
+    </div>
+  </div>
+  <aside>You told us Claude and Astra will be the engineers, so nothing here is sized in engineer-days. Prompt counts describe intended build rounds, not measured effort or a completion guarantee. The real differences are state-management complexity and how much depends on native app support.</aside>
+</section>
+
+<section id="p1-start" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:40px">
+  <div style="display:flex; flex-direction:row; align-items:end; justify-content:space-between; gap:48px">
+    <div style="display:flex; flex-direction:column; gap:16px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Proposal 1 · Polish</p>
+      <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">Start from one guided card</h2>
+    </div>
+    <div style="width:560px; display:flex; flex-direction:row; align-items:center; gap:16px; background:#f6efdf; border:1px solid #e8dcc0; border-radius:16px; padding:18px 24px">
+      <x-icon name="Warning" style="color:#8a6a2c; width:32px; height:32px"></x-icon>
+      <p style="font-size:24px; line-height:1.35; color:#5e4a22; flex:1"><b>Caveat:</b> you still press Send once in each app to connect it.</p>
+    </div>
+  </div>
+  <div style="display:flex; flex-direction:row; gap:56px; align-items:start">
+    <div style="width:940px; display:flex; flex-direction:column; gap:20px; background:#fffefa; border:1px solid #dce3d0; border-radius:28px; padding:36px 40px; box-shadow:0 16px 48px rgba(49,65,38,0.10)">
+      <div style="display:flex; flex-direction:column; gap:6px">
+        <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">New conversation</p>
+        <p style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#2b342f">Pricing page redesign</p>
+      </div>
+      <div style="display:flex; flex-direction:row; align-items:start; gap:18px; border-top:1px solid #e9ece3; padding-top:20px">
+        <div style="width:40px; height:40px; border-radius:50%; background:#344e3e; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#f3f5ee">1</p></div>
+        <p style="font-size:24px; font-weight:600; color:#515c54; width:96px">Invite</p>
+        <div style="flex:1; display:flex; flex-direction:column; gap:12px">
+          <div style="display:flex; flex-direction:row; align-items:center; gap:14px; background:#f6f8f1; border-radius:14px; padding:12px 16px">
+            <div style="width:44px; height:44px; border-radius:50%; background:#f1e3d8; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; color:#b57553">✺</p></div>
+            <p style="font-size:30px; color:#2b342f; flex:1">Claude</p>
+            <p style="font-size:24px; font-weight:600; color:#3f6a4f; background:#e0eade; padding:6px 14px; border-radius:999px">Joined</p>
+          </div>
+          <div style="display:flex; flex-direction:row; align-items:center; gap:14px; background:#f6f8f1; border-radius:14px; padding:12px 16px">
+            <div style="width:44px; height:44px; border-radius:50%; background:#e0eade; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; color:#4d785b">✳</p></div>
+            <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+              <p style="font-size:30px; color:#2b342f">Astra</p>
+              <p style="font-size:24px; color:#515c54">Press Send in ChatGPT</p>
+            </div>
+            <p style="font-size:24px; font-weight:600; color:#fafbf7; background:#344e3e; padding:8px 16px; border-radius:999px">Open ChatGPT ↗</p>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:row; align-items:start; gap:18px; border-top:1px solid #e9ece3; padding-top:20px">
+        <div style="width:40px; height:40px; border-radius:50%; background:#344e3e; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#f3f5ee">2</p></div>
+        <p style="font-size:24px; font-weight:600; color:#515c54; width:96px">Say it</p>
+        <div style="flex:1; display:flex; flex-direction:column; gap:12px">
+          <p style="font-size:30px; line-height:1.4; color:#2b342f; background:#f6f8f1; border-radius:14px; padding:12px 18px">Let's plan the pricing page. Claude on layout, Astra on the numbers.</p>
+          <div style="display:flex; flex-direction:row; align-items:center; gap:12px">
+            <p style="font-size:24px; color:#515c54">Reply first</p>
+            <p style="font-size:24px; font-weight:600; color:#8f5539; background:#f1e3d8; padding:6px 14px; border-radius:999px">✺ Claude</p>
+          </div>
+          <p style="font-size:24px; color:#515c54">Sends once both have joined.</p>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:36px; padding-top:12px">
+      <div style="display:flex; flex-direction:row; gap:20px; align-items:start">
+        <x-icon name="CheckCircle" style="color:#476958; width:40px; height:40px"></x-icon>
+        <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+          <p style="font-size:30px; font-weight:600; color:#2b342f">A live check as each AI joins</p>
+          <p style="font-size:30px; line-height:1.4; color:#515c54">“Joined” appears only once that chat has really connected.</p>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:row; gap:20px; align-items:start">
+        <x-icon name="Clock" style="color:#476958; width:40px; height:40px"></x-icon>
+        <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+          <p style="font-size:30px; font-weight:600; color:#2b342f">Your first message can wait</p>
+          <p style="font-size:30px; line-height:1.4; color:#515c54">Write it now. It goes to your first pick once, after everyone joins.</p>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:row; gap:20px; align-items:start">
+        <x-icon name="Link" style="color:#476958; width:40px; height:40px"></x-icon>
+        <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+          <p style="font-size:30px; font-weight:600; color:#2b342f">A one-line invitation</p>
+          <p style="font-size:30px; line-height:1.4; color:#515c54">It replaces the block of commands. The full version stays as a backup.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Semaphore · three ways forward</p><p style="font-size:24px; color:#6a746b">7</p></div>
+  <aside>The short invitation assumes verified skill setup. It must retain the exact room root, either explicitly or through a local connection token. Keep the complete invitation as a fallback if the skill is unavailable.</aside>
+</section>
+
+<section id="p1-type" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:40px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Proposal 1 · Polish</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">Type the way you already do, even mid-turn</h2>
+  </div>
+  <div style="display:flex; flex-direction:row; gap:56px; align-items:start">
+    <div style="width:980px; display:flex; flex-direction:column; gap:20px; background:#fafbf7; border:1px solid #dce3d0; border-radius:28px; padding:32px; box-shadow:0 16px 48px rgba(49,65,38,0.10)">
+      <div style="display:flex; flex-direction:row; gap:18px">
+        <div style="width:48px; height:48px; border-radius:50%; background:#f1e3d8; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; color:#b57553">✺</p></div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:6px">
+          <div style="display:flex; flex-direction:row; align-items:center; gap:12px">
+            <p style="font-size:24px; font-weight:600; color:#2b342f">Claude</p>
+            <p style="font-size:24px; color:#3f6a4f; background:#e0eade; padding:2px 12px; border-radius:999px">→ Astra</p>
+          </div>
+          <p style="font-size:30px; line-height:1.4; color:#2b342f">Layout draft is in. Astra, can you check the plan limits against the backend?</p>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:row; align-items:center; justify-content:space-between; background:#e0eade; border-radius:16px; padding:16px 20px">
+        <div style="display:flex; flex-direction:row; align-items:center; gap:14px">
+          <div style="width:44px; height:44px; border-radius:50%; background:#fafbf7; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; color:#4d785b">✳</p></div>
+          <p style="font-size:30px; color:#2b342f"><b>Astra has the stick</b> · received</p>
+        </div>
+        <p style="font-size:24px; font-weight:600; color:#344e3e; border:2px solid #344e3e; padding:6px 16px; border-radius:999px">Take the stick</p>
+      </div>
+      <div style="background:#fffefa; border:2px solid #a8bd90; border-radius:20px; padding:24px 28px; display:flex; flex-direction:column; gap:18px">
+        <p style="font-size:30px; line-height:1.45; color:#2b342f">Also check how the tiers look on mobile. That's where people drop off.<span style="color:#476958">|</span></p>
+        <div style="display:flex; flex-direction:row; align-items:center; justify-content:space-between">
+          <div style="display:flex; flex-direction:row; align-items:center; gap:12px">
+            <p style="font-size:24px; color:#515c54">Reply next</p>
+            <p style="font-size:24px; font-weight:600; color:#3f6a4f; background:#e0eade; border:2px solid #9fbba6; padding:6px 16px; border-radius:999px">✳ Astra</p>
+            <p style="font-size:24px; color:#8f5539; border:2px solid #e8d6c8; padding:6px 16px; border-radius:999px">✺ Claude</p>
+          </div>
+          <div style="width:60px; height:60px; border-radius:50%; background:#344e3e; display:flex; align-items:center; justify-content:center"><x-icon name="PaperPlane" style="color:#f3f5ee; width:28px; height:28px"></x-icon></div>
+        </div>
+      </div>
+      <p style="font-size:24px; color:#6a746b">Enter to send · Shift + Enter for a new line</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:26px; padding-top:8px">
+      <div style="display:flex; flex-direction:row; gap:20px; align-items:start">
+        <x-icon name="Chat" style="color:#476958; width:40px; height:40px"></x-icon>
+        <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+          <p style="font-size:30px; font-weight:600; color:#2b342f">Readable and roomy</p>
+          <p style="font-size:30px; line-height:1.4; color:#515c54">16px text in a box that grows as you write.</p>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:row; gap:20px; align-items:start">
+        <x-icon name="PaperPlane" style="color:#476958; width:40px; height:40px"></x-icon>
+        <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+          <p style="font-size:30px; font-weight:600; color:#2b342f">Enter sends</p>
+          <p style="font-size:30px; line-height:1.4; color:#515c54">Shift + Enter adds a line, like other chat apps.</p>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:row; gap:20px; align-items:start">
+        <x-icon name="Users" style="color:#476958; width:40px; height:40px"></x-icon>
+        <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+          <p style="font-size:30px; font-weight:600; color:#2b342f">Speak anytime</p>
+          <p style="font-size:30px; line-height:1.4; color:#515c54">Even while Astra has the stick. You pick who replies next.</p>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:row; gap:20px; align-items:start">
+        <x-icon name="Verified" style="color:#476958; width:40px; height:40px"></x-icon>
+        <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+          <p style="font-size:30px; font-weight:600; color:#2b342f">Status you can trust</p>
+          <p style="font-size:30px; line-height:1.4; color:#515c54">Waiting, received and replied show only when true.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Semaphore · three ways forward</p><p style="font-size:24px; color:#6a746b">8</p></div>
+</section>
+
+<section id="p1-plan" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:32px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Proposal 1 · Polish</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">What changes, and what it takes</h2>
+  </div>
+  <table style="width:1664px; font-family:Inter, Arial, sans-serif; font-size:24px; color:#2b342f">
+    <tr style="background:#e9efdd">
+      <th style="width:40%; padding:16px 24px; font-weight:600; color:#2b342f">What you'll notice</th>
+      <th style="width:60%; padding:16px 24px; font-weight:600; color:#2b342f">Under the hood, from Astra</th>
+    </tr>
+    <tr style="background:#fffefa">
+      <td style="padding:16px 24px; color:#2b342f">Easier typing: readable text, Enter sends, the box grows</td>
+      <td style="padding:16px 24px; color:#515c54">Web app only. How turns are delivered doesn't change.</td>
+    </tr>
+    <tr style="background:#f4f6ef">
+      <td style="padding:16px 24px; color:#2b342f">A guided start that shows who has joined</td>
+      <td style="padding:16px 24px; color:#515c54">“Joined” means the chat really connected, not that a link was clicked.</td>
+    </tr>
+    <tr style="background:#fffefa">
+      <td style="padding:16px 24px; color:#2b342f">Your first message waits for everyone</td>
+      <td style="padding:16px 24px; color:#515c54">A saved opening request goes once to your first pick, after everyone joins.</td>
+    </tr>
+    <tr style="background:#f4f6ef">
+      <td style="padding:16px 24px; color:#2b342f">Send anytime, and pick who replies next</td>
+      <td style="padding:16px 24px; color:#515c54">Saved at once. The current AI reads it before posting. Your Reply next choice wins. The four-turn limit stays.</td>
+    </tr>
+  </table>
+  <div style="display:flex; flex-direction:row; gap:40px; background:#344e3e; border-radius:20px; padding:24px 40px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:6px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#b8c9ad">Build</p>
+      <p style="font-size:30px; font-weight:600; color:#f3f5ee">A prompt or two</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:6px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#b8c9ad">Risk</p>
+      <p style="font-size:30px; font-weight:600; color:#f3f5ee">Low to medium</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:6px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#b8c9ad">Your part</p>
+      <p style="font-size:30px; font-weight:600; color:#f3f5ee">Try it, flag what's off</p>
+    </div>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Semaphore · three ways forward</p><p style="font-size:24px; color:#6a746b">9</p></div>
+  <aside>Proposed send-anytime contract: append each human message to the room journal immediately with a unique request ID, without moving ownership or changing the active turn's context snapshot. Before a reply commits, check for newer human messages. If any exist, return them for explicit acknowledgment and review under the same turn, then accept the revised reply. This check and commit share the room lock. The latest explicit human Reply next choice overrides the AI's nomination at the next handoff, subject to pause, required human input, the four-turn cap and recipient availability. Mid-turn messages do not reset the cap. At the cap, the choice waits for an explicit continuation. Sending does not interrupt a tool call or undo edits already made. The UI says when input is saved and when the current AI has read it. Prompt counts describe intended build rounds, not a completion guarantee. The extra scheduling logic makes P1 low to medium risk.</aside>
+</section>
+
+<section id="p2-start" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:36px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Proposal 2 · One message to start</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">Type what you want, and Semaphore gathers the group</h2>
+  </div>
+  <div style="display:flex; flex-direction:row; background:#fafbf7; border:1px solid #dce3d0; border-radius:28px; overflow:hidden; box-shadow:0 16px 48px rgba(49,65,38,0.10)">
+    <div style="flex:1; display:flex; flex-direction:column; gap:24px; padding:44px 52px">
+      <p style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">What should we work on?</p>
+      <div style="background:#fffefa; border:2px solid #a8bd90; border-radius:20px; padding:24px 28px; display:flex; flex-direction:column; gap:18px">
+        <p style="font-size:30px; line-height:1.45; color:#2b342f">Plan the pricing page with me. Claude on layout, Astra on the numbers.</p>
+        <div style="display:flex; flex-direction:row; align-items:center; justify-content:space-between">
+          <div style="display:flex; flex-direction:row; align-items:center; gap:12px">
+            <p style="font-size:24px; color:#515c54">With</p>
+            <p style="font-size:24px; font-weight:600; color:#8f5539; background:#f1e3d8; padding:6px 14px; border-radius:999px">✺ Claude</p>
+            <p style="font-size:24px; font-weight:600; color:#3f6a4f; background:#e0eade; padding:6px 14px; border-radius:999px">✳ Astra</p>
+            <p style="font-size:24px; color:#515c54">· Reply first</p>
+            <p style="font-size:24px; font-weight:600; color:#8f5539; border:2px solid #e8d6c8; padding:4px 14px; border-radius:999px">✺ Claude ▾</p>
+          </div>
+          <div style="width:60px; height:60px; border-radius:50%; background:#344e3e; display:flex; align-items:center; justify-content:center"><x-icon name="PaperPlane" style="color:#f3f5ee; width:28px; height:28px"></x-icon></div>
+        </div>
+      </div>
+      <p style="font-size:24px; color:#6a746b">Semaphore names the conversation from your message. Rename it anytime.</p>
+    </div>
+    <div style="width:560px; display:flex; flex-direction:column; gap:16px; background:#f0f2eb; border-left:1px solid #dce3d0; padding:44px 40px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Getting everyone in</p>
+      <div style="display:flex; flex-direction:row; align-items:center; gap:14px">
+        <x-icon name="CheckCircle" style="color:#476958; width:36px; height:36px"></x-icon>
+        <p style="font-size:30px; color:#2b342f">Conversation saved</p>
+      </div>
+      <div style="display:flex; flex-direction:row; align-items:center; gap:14px">
+        <x-icon name="CheckCircle" style="color:#476958; width:36px; height:36px"></x-icon>
+        <p style="font-size:30px; color:#2b342f">Claude joined</p>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:10px; background:#fffefa; border:1px solid #e8dcc0; border-radius:16px; padding:16px 18px">
+        <div style="display:flex; flex-direction:row; align-items:center; gap:14px">
+          <x-icon name="Clock" style="color:#8a6a2c; width:36px; height:36px"></x-icon>
+          <p style="font-size:30px; color:#2b342f">Astra needs you</p>
+        </div>
+        <p style="font-size:24px; color:#515c54">Press Send in the ChatGPT chat we opened.</p>
+        <p style="font-size:24px; font-weight:600; color:#fafbf7; background:#344e3e; padding:8px 16px; border-radius:999px; align-self:start">Open ChatGPT ↗</p>
+      </div>
+      <div style="display:flex; flex-direction:row; align-items:start; gap:14px">
+        <x-icon name="PaperPlane" style="color:#5b665d; width:36px; height:36px"></x-icon>
+        <p style="font-size:24px; line-height:1.4; color:#515c54; flex:1">Your message goes to Claude once both have joined.</p>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex; flex-direction:row; align-items:center; gap:16px; background:#f6efdf; border:1px solid #e8dcc0; border-radius:16px; padding:16px 24px">
+    <x-icon name="Warning" style="color:#8a6a2c; width:32px; height:32px"></x-icon>
+    <p style="font-size:24px; line-height:1.35; color:#5e4a22; flex:1"><b>Caveat:</b> a guided fallback stays. Wherever an app still asks you to confirm, Semaphore shows exactly what to press.</p>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Semaphore · three ways forward</p><p style="font-size:24px; color:#6a746b">10</p></div>
+</section>
+
+<section id="p2-chat" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:40px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Proposal 2 · One message to start</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">The Semaphore app reads like a real group chat</h2>
+  </div>
+  <div style="display:flex; flex-direction:row; gap:56px; align-items:start">
+    <div style="width:1080px; display:flex; flex-direction:column; gap:22px; background:#fafbf7; border:1px solid #dce3d0; border-radius:28px; padding:36px 40px; box-shadow:0 16px 48px rgba(49,65,38,0.10)">
+      <div style="display:flex; flex-direction:row; gap:18px">
+        <div style="width:48px; height:48px; border-radius:50%; background:#e7e9e0; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; font-weight:600; color:#66735e">Y</p></div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:6px">
+          <div style="display:flex; flex-direction:row; align-items:center; gap:12px">
+            <p style="font-size:24px; font-weight:600; color:#2b342f">You</p>
+            <p style="font-size:24px; color:#8f5539; background:#f1e3d8; padding:2px 12px; border-radius:999px">→ Claude</p>
+          </div>
+          <p style="font-size:30px; line-height:1.4; color:#2b342f">Plan the pricing page with me. Claude on layout, Astra on the numbers.</p>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:row; gap:18px">
+        <div style="width:48px; height:48px; border-radius:50%; background:#f1e3d8; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; color:#b57553">✺</p></div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:6px">
+          <div style="display:flex; flex-direction:row; align-items:center; gap:12px">
+            <p style="font-size:24px; font-weight:600; color:#2b342f">Claude</p>
+            <p style="font-size:24px; color:#3f6a4f; background:#e0eade; padding:2px 12px; border-radius:999px">→ Astra</p>
+          </div>
+          <p style="font-size:30px; line-height:1.4; color:#2b342f">First layout: three tiers, the annual toggle on top, and the comparison table folded under each card…</p>
+          <p style="font-size:24px; font-weight:600; color:#476958">Show all 14 lines</p>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:row; align-items:center; justify-content:space-between; background:#e0eade; border-radius:16px; padding:16px 20px">
+        <div style="display:flex; flex-direction:row; align-items:center; gap:14px">
+          <div style="width:44px; height:44px; border-radius:50%; background:#fafbf7; display:flex; align-items:center; justify-content:center"><p style="font-size:24px; color:#4d785b">✳</p></div>
+          <p style="font-size:30px; color:#2b342f"><b>Astra has the stick</b> · received</p>
+        </div>
+        <p style="font-size:24px; font-weight:600; color:#344e3e; border:2px solid #344e3e; padding:6px 16px; border-radius:999px">Take the stick</p>
+      </div>
+      <div style="display:flex; flex-direction:row; align-items:center; gap:16px; background:#fffefa; border:2px solid #a8bd90; border-radius:20px; padding:22px 24px">
+        <p style="font-size:30px; color:#2b342f; flex:1"><span style="color:#3f6a4f"><b>@Astra</b></span> can the Team tier include shared rooms?</p>
+        <div style="width:60px; height:60px; border-radius:50%; background:#344e3e; display:flex; align-items:center; justify-content:center"><x-icon name="PaperPlane" style="color:#f3f5ee; width:28px; height:28px"></x-icon></div>
+      </div>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:24px; padding-top:8px">
+      <div style="display:flex; flex-direction:row; gap:20px; align-items:start">
+        <x-icon name="Users" style="color:#476958; width:40px; height:40px"></x-icon>
+        <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+          <p style="font-size:30px; font-weight:600; color:#2b342f">Who's next, at a glance</p>
+          <p style="font-size:30px; line-height:1.4; color:#515c54">Each message shows where the stick went.</p>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:row; gap:20px; align-items:start">
+        <x-icon name="Book" style="color:#476958; width:40px; height:40px"></x-icon>
+        <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+          <p style="font-size:30px; font-weight:600; color:#2b342f">Long replies fold</p>
+          <p style="font-size:30px; line-height:1.4; color:#515c54">Skim the thread, open what you need.</p>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:row; gap:20px; align-items:start">
+        <x-icon name="Chat" style="color:#476958; width:40px; height:40px"></x-icon>
+        <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+          <p style="font-size:30px; font-weight:600; color:#2b342f">@mention to pick</p>
+          <p style="font-size:30px; line-height:1.4; color:#515c54">Type @Claude or @Astra to choose who replies.</p>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:row; gap:20px; align-items:start">
+        <x-icon name="Code" style="color:#476958; width:40px; height:40px"></x-icon>
+        <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+          <p style="font-size:30px; font-weight:600; color:#2b342f">Quieter native chats</p>
+          <p style="font-size:30px; line-height:1.4; color:#515c54">Shorter notices and one short reply command.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Semaphore · three ways forward</p><p style="font-size:24px; color:#6a746b">11</p></div>
+</section>
+
+<section id="p2-plan" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:32px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Proposal 2 · One message to start</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">What changes, and what it takes</h2>
+  </div>
+  <table style="width:1664px; font-family:Inter, Arial, sans-serif; font-size:24px; color:#2b342f">
+    <tr style="background:#e9efdd">
+      <th style="width:40%; padding:16px 24px; font-weight:600; color:#2b342f">What you'll notice</th>
+      <th style="width:60%; padding:16px 24px; font-weight:600; color:#2b342f">Under the hood, from Astra</th>
+    </tr>
+    <tr style="background:#fffefa">
+      <td style="padding:16px 24px; color:#2b342f">One message starts everything</td>
+      <td style="padding:16px 24px; color:#515c54">A single create-and-start step saves the room, your message, who's in and who replies first, before any app opens.</td>
+    </tr>
+    <tr style="background:#f4f6ef">
+      <td style="padding:16px 24px; color:#2b342f">Refreshing or clicking twice is safe</td>
+      <td style="padding:16px 24px; color:#515c54">Repeated requests reuse the saved result. Uncertain delivery pauses for recovery.</td>
+    </tr>
+    <tr style="background:#fffefa">
+      <td style="padding:16px 24px; color:#2b342f">A checklist shows where each AI is</td>
+      <td style="padding:16px 24px; color:#515c54">Each seat is tracked: needs connection, opening, joined or needs attention.</td>
+    </tr>
+    <tr style="background:#f4f6ef">
+      <td style="padding:16px 24px; color:#2b342f">Fewer confirmations, where apps allow</td>
+      <td style="padding:16px 24px; color:#515c54">Anything an app still requires is shown plainly. Silent connection isn't promised.</td>
+    </tr>
+    <tr style="background:#fffefa">
+      <td style="padding:16px 24px; color:#2b342f">A chat that reads well, with @mentions</td>
+      <td style="padding:16px 24px; color:#515c54">A selected @mention sets the same reply target as the buttons. The server applies it at handoff.</td>
+    </tr>
+  </table>
+  <div style="display:flex; flex-direction:row; gap:40px; background:#344e3e; border-radius:20px; padding:24px 40px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:6px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#b8c9ad">Build</p>
+      <p style="font-size:30px; font-weight:600; color:#f3f5ee">A few prompts</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:6px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#b8c9ad">Risk</p>
+      <p style="font-size:30px; font-weight:600; color:#f3f5ee">Medium</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:6px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#b8c9ad">Your part</p>
+      <p style="font-size:30px; font-weight:600; color:#f3f5ee">Test the new start</p>
+    </div>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Semaphore · three ways forward</p><p style="font-size:24px; color:#6a746b">12</p></div>
+</section>
+
+<section id="p3-mock" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:40px">
+  <div style="display:flex; flex-direction:row; align-items:end; justify-content:space-between; gap:48px">
+    <div style="display:flex; flex-direction:column; gap:16px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Proposal 3 · Lives in your apps</p>
+      <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">Say “loop in Astra” from any chat</h2>
+    </div>
+    <div style="width:600px; display:flex; flex-direction:row; align-items:center; gap:16px; background:#f6efdf; border:1px solid #e8dcc0; border-radius:16px; padding:18px 24px">
+      <x-icon name="Warning" style="color:#8a6a2c; width:32px; height:32px"></x-icon>
+      <p style="font-size:24px; line-height:1.35; color:#5e4a22; flex:1"><b>Caveat:</b> this depends on the apps allowing it. A short test comes first.</p>
+    </div>
+  </div>
+  <div style="display:flex; flex-direction:row; gap:56px; align-items:start">
+    <div style="width:900px; display:flex; flex-direction:column; background:#fffefa; border:1px solid #dcd6cf; border-radius:24px; overflow:hidden; box-shadow:0 16px 48px rgba(43,38,34,0.10)">
+      <div style="display:flex; flex-direction:row; align-items:center; gap:10px; background:#f3efe9; border-bottom:1px solid #e6e0d8; padding:16px 22px">
+        <div style="width:16px; height:16px; border-radius:50%; background:#e0766a"></div>
+        <div style="width:16px; height:16px; border-radius:50%; background:#e7b94e"></div>
+        <div style="width:16px; height:16px; border-radius:50%; background:#7fb36a"></div>
+        <p style="font-size:24px; color:#5f564d; flex:1; text-align:center">Claude · Pricing data model</p>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:20px; padding:28px 32px">
+        <p style="align-self:end; width:560px; font-size:30px; line-height:1.4; color:#2b2622; background:#efeae2; padding:14px 20px; border-radius:20px">Loop in Astra. I'd like a second opinion on the data model.</p>
+        <p style="font-size:30px; line-height:1.4; color:#2b2622">Done. Astra joined with a summary of our chat and will reply first.</p>
+        <div style="display:flex; flex-direction:row; align-items:center; gap:16px; background:#f6f8f1; border:1px solid #dce3d0; border-radius:16px; padding:16px 20px">
+          <svg xmlns="http://www.w3.org/2000/svg" aria-label="Semaphore logo" width="40" height="40" viewBox="0 0 40 40" style="width:44px; height:44px"><rect width="40" height="40" rx="12" fill="#293e35"/><g fill="#ecf2d6"><rect x="10" y="10" width="5" height="20" rx="2.5"/><rect x="18" y="16" width="5" height="14" rx="2.5"/><rect x="26" y="10" width="5" height="14" rx="2.5"/></g></svg>
+          <div style="display:flex; flex-direction:column; gap:2px">
+            <p style="font-size:24px; font-weight:600; color:#2b342f">Semaphore · Pricing data model</p>
+            <p style="font-size:24px; color:#515c54">Astra joined · Astra has the stick</p>
+          </div>
+        </div>
+        <div style="border:1px solid #e1dbd3; border-radius:18px; padding:16px 20px">
+          <p style="font-size:24px; color:#6a746b">Reply to Claude…</p>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:18px">
+      <div style="display:flex; flex-direction:row; align-items:center; justify-content:end; gap:22px; background:#e8e6e1; border-radius:14px; padding:10px 22px">
+        <x-icon name="Search" style="color:#3a3a38; width:28px; height:28px"></x-icon>
+        <div style="display:flex; flex-direction:row; background:#cfd6c6; border-radius:8px; padding:4px 8px">
+          <svg xmlns="http://www.w3.org/2000/svg" aria-label="Semaphore menu-bar icon" width="40" height="40" viewBox="0 0 40 40" style="width:32px; height:32px"><rect width="40" height="40" rx="12" fill="#293e35"/><g fill="#ecf2d6"><rect x="10" y="10" width="5" height="20" rx="2.5"/><rect x="18" y="16" width="5" height="14" rx="2.5"/><rect x="26" y="10" width="5" height="14" rx="2.5"/></g></svg>
+        </div>
+        <p style="font-size:24px; color:#2b2b29">Wed 2:14 PM</p>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:16px; background:#fffefa; border:1px solid #dce3d0; border-radius:20px; padding:24px 26px; box-shadow:0 16px 48px rgba(49,65,38,0.12)">
+        <div style="display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:12px">
+          <p style="font-size:30px; color:#2b342f">Pricing data model</p>
+          <p style="font-size:24px; font-weight:600; color:#3f6a4f; background:#e0eade; padding:4px 14px; border-radius:999px">✳ Astra's turn</p>
+        </div>
+        <div style="display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:12px">
+          <p style="font-size:30px; color:#2b342f">test chat</p>
+          <p style="font-size:24px; font-weight:600; color:#fafbf7; background:#344e3e; padding:4px 14px; border-radius:999px">Your turn</p>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:14px; border-top:1px solid #e1e5da; padding-top:16px">
+          <p style="font-size:30px; color:#6a746b; background:#f6f8f1; border-radius:14px; padding:12px 16px">Message the group…</p>
+          <div style="display:flex; flex-direction:row; align-items:center; gap:10px">
+            <p style="font-size:24px; color:#515c54">Reply first</p>
+            <p style="font-size:24px; font-weight:600; color:#8f5539; background:#f1e3d8; padding:4px 14px; border-radius:999px">✺ Claude</p>
+            <p style="font-size:24px; color:#3f6a4f; border:2px solid #cfe0d2; padding:2px 12px; border-radius:999px">✳ Astra</p>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:row; align-items:center; gap:16px; background:#2b342f; border-radius:18px; padding:18px 22px">
+        <svg xmlns="http://www.w3.org/2000/svg" aria-label="Semaphore logo" width="40" height="40" viewBox="0 0 40 40" style="width:44px; height:44px"><rect width="40" height="40" rx="12" fill="#3f5c49"/><g fill="#ecf2d6"><rect x="10" y="10" width="5" height="20" rx="2.5"/><rect x="18" y="16" width="5" height="14" rx="2.5"/><rect x="26" y="10" width="5" height="14" rx="2.5"/></g></svg>
+        <div style="display:flex; flex-direction:column; gap:2px">
+          <p style="font-size:24px; font-weight:600; color:#f3f5ee">The stick is back with you</p>
+          <p style="font-size:24px; color:#c9d6c0">Astra replied in Pricing data model</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Semaphore · three ways forward</p><p style="font-size:24px; color:#6a746b">13</p></div>
+</section>
+
+<section id="p3-plan" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:32px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Proposal 3 · Lives in your apps</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">A short test decides whether we build it</h2>
+  </div>
+  <div style="display:flex; flex-direction:row; gap:40px; align-items:stretch">
+    <div style="flex:1; display:flex; flex-direction:column; gap:20px; background:#fffefa; border:1px solid #e1e5da; border-radius:24px; padding:36px 40px">
+      <h3 style="font-size:40px; font-weight:600; line-height:1.2; color:#2b342f">What the test must prove</h3>
+      <div style="display:flex; flex-direction:column; gap:12px">
+        <div style="display:flex; flex-direction:row; align-items:center; gap:16px"><x-icon name="CheckCircle" style="color:#476958; width:32px; height:32px"></x-icon><p style="font-size:30px; color:#2b342f">Semaphore can open a chat for each AI</p></div>
+        <div style="display:flex; flex-direction:row; align-items:center; gap:16px"><x-icon name="CheckCircle" style="color:#476958; width:32px; height:32px"></x-icon><p style="font-size:30px; color:#2b342f">That chat gives its first reply</p></div>
+        <div style="display:flex; flex-direction:row; align-items:center; gap:16px"><x-icon name="CheckCircle" style="color:#476958; width:32px; height:32px"></x-icon><p style="font-size:30px; color:#2b342f">It wakes up again for later turns</p></div>
+        <div style="display:flex; flex-direction:row; align-items:center; gap:16px"><x-icon name="CheckCircle" style="color:#476958; width:32px; height:32px"></x-icon><p style="font-size:30px; color:#2b342f">App permission prompts still reach you</p></div>
+        <div style="display:flex; flex-direction:row; align-items:center; gap:16px"><x-icon name="CheckCircle" style="color:#476958; width:32px; height:32px"></x-icon><p style="font-size:30px; color:#2b342f">It recovers after an app restart</p></div>
+        <div style="display:flex; flex-direction:row; align-items:center; gap:16px"><x-icon name="CheckCircle" style="color:#476958; width:32px; height:32px"></x-icon><p style="font-size:30px; color:#2b342f">Replies match the right chat and turn</p></div>
+      </div>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:20px; background:#f0f2eb; border-radius:24px; padding:36px 40px">
+      <h3 style="font-size:40px; font-weight:600; line-height:1.2; color:#2b342f">What we already know</h3>
+      <div style="display:flex; flex-direction:column; gap:16px">
+        <p style="font-size:24px; line-height:1.4; color:#2b342f">Plugin or MCP tools can hide the commands. Waking an idle chat also needs support from its host app.</p>
+        <p style="font-size:24px; line-height:1.4; color:#2b342f">Codex's app-server can start threads and turns for its own clients. That doesn't show it can drive a chat already open in the app.</p>
+        <p style="font-size:24px; line-height:1.4; color:#2b342f">Claude's private messaging socket stays experimental, and no open chat is ever resumed from a second process.</p>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex; flex-direction:row; gap:40px; background:#344e3e; border-radius:20px; padding:24px 40px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:6px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#b8c9ad">Build</p>
+      <p style="font-size:30px; font-weight:600; color:#f3f5ee">A test, then a few prompts</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:6px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#b8c9ad">Risk</p>
+      <p style="font-size:30px; font-weight:600; color:#f3f5ee">Higher, app-dependent</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:6px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#b8c9ad">Your part</p>
+      <p style="font-size:30px; font-weight:600; color:#f3f5ee">Approve the test</p>
+    </div>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Semaphore · three ways forward</p><p style="font-size:24px; color:#6a746b">14</p></div>
+  <aside>Each conversation gets its own native chat per AI, so context and receipts stay separate. The talking stick only covers one room, so two conversations editing the same folder would need a shared write lock or separate worktrees. Official Codex app-server documentation supports thread/start followed by turn/start for custom clients: https://learn.chatgpt.com/docs/app-server (checked 23 September 2026). This does not establish access to the runtime of an already-open desktop chat. The private Claude socket is an unverified integration lead. No daemon settings were changed during this review.</aside>
+</section>
+
+<section id="compare" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:48px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Comparison</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">How the three proposals compare</h2>
+  </div>
+  <table style="width:1664px; font-family:Inter, Arial, sans-serif; font-size:24px; color:#2b342f">
+    <tr style="background:#344e3e">
+      <th style="width:22%; padding:16px 22px; font-weight:600; color:#f3f5ee"> </th>
+      <th style="width:26%; padding:16px 22px; font-weight:600; color:#f3f5ee">1 · Polish</th>
+      <th style="width:26%; padding:16px 22px; font-weight:600; color:#f3f5ee">2 · One message to start</th>
+      <th style="width:26%; padding:16px 22px; font-weight:600; color:#f3f5ee">3 · Lives in your apps</th>
+    </tr>
+    <tr style="background:#fffefa">
+      <td style="padding:16px 22px; color:#556d4a">Where you start</td>
+      <td style="padding:16px 22px">Semaphore app</td>
+      <td style="padding:16px 22px">Semaphore app</td>
+      <td style="padding:16px 22px">Either desktop chat</td>
+    </tr>
+    <tr style="background:#f4f6ef">
+      <td style="padding:16px 22px; color:#556d4a">Connecting the AIs</td>
+      <td style="padding:16px 22px">One-line invite per app</td>
+      <td style="padding:16px 22px">Opened for you; confirm if asked</td>
+      <td style="padding:16px 22px">Automatic, if the test passes</td>
+    </tr>
+    <tr style="background:#fffefa">
+      <td style="padding:16px 22px; color:#556d4a">Typing</td>
+      <td style="padding:16px 22px">Growing message box</td>
+      <td style="padding:16px 22px">Growing box + @mentions</td>
+      <td style="padding:16px 22px">Your apps + quick composer</td>
+    </tr>
+    <tr style="background:#f4f6ef">
+      <td style="padding:16px 22px; color:#556d4a">Whose turn it is</td>
+      <td style="padding:16px 22px">Clear status row</td>
+      <td style="padding:16px 22px">Status + join checklist</td>
+      <td style="padding:16px 22px">Menu bar + notifications</td>
+    </tr>
+    <tr style="background:#fffefa">
+      <td style="padding:16px 22px; color:#556d4a">Speak anytime</td>
+      <td style="padding:16px 22px">Yes</td>
+      <td style="padding:16px 22px">Yes</td>
+      <td style="padding:16px 22px">Yes</td>
+    </tr>
+    <tr style="background:#f4f6ef">
+      <td style="padding:16px 22px; color:#556d4a">Build</td>
+      <td style="padding:16px 22px">A prompt or two</td>
+      <td style="padding:16px 22px">A few prompts</td>
+      <td style="padding:16px 22px">A test, then a few prompts</td>
+    </tr>
+    <tr style="background:#fffefa">
+      <td style="padding:16px 22px; color:#556d4a">Main risk</td>
+      <td style="padding:16px 22px">Low to medium: turn ordering</td>
+      <td style="padding:16px 22px">Medium: connection recovery</td>
+      <td style="padding:16px 22px">Higher: needs app support</td>
+    </tr>
+  </table>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Every proposal keeps your choice of who replies first</p><p style="font-size:24px; color:#6a746b">15</p></div>
+</section>
+
+<section id="path" data-transition="fade" style="background:#344e3e; color:#f3f5ee; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:44px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#b8c9ad">Our recommendation</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#f3f5ee">Polish now, build toward one message, and test the big idea</h2>
+  </div>
+  <div style="display:flex; flex-direction:row; gap:32px">
+    <div style="flex:1; display:flex; flex-direction:column; gap:12px; background:#3f5c49; border-radius:24px; padding:36px 40px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#c9d6c0">Now</p>
+      <h3 style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#f3f5ee">Proposal 1: Polish</h3>
+      <p style="font-size:30px; line-height:1.4; color:#c9d6c0">Fixes typing, starting and status right away.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:12px; background:#3f5c49; border-radius:24px; padding:36px 40px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#c9d6c0">Next</p>
+      <h3 style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#f3f5ee">Proposal 2: One message to start</h3>
+      <p style="font-size:30px; line-height:1.4; color:#c9d6c0">The experience we're aiming for, built on Proposal 1.</p>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:12px; background:#3f5c49; border-radius:24px; padding:36px 40px">
+      <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#c9d6c0">Alongside</p>
+      <h3 style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#f3f5ee">Proposal 3: a short test</h3>
+      <p style="font-size:30px; line-height:1.4; color:#c9d6c0">Its results decide whether we build it.</p>
+    </div>
+  </div>
+  <div style="display:flex; flex-direction:column; gap:20px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#b8c9ad">How we'll know it worked</p>
+    <div style="display:flex; flex-direction:row; gap:32px">
+      <p style="flex:1; font-size:30px; line-height:1.4; color:#f3f5ee; border-top:2px solid #56705f; padding-top:16px">A faster first answer, with fewer confirmations</p>
+      <p style="flex:1; font-size:30px; line-height:1.4; color:#f3f5ee; border-top:2px solid #56705f; padding-top:16px">No opening message lost or sent twice</p>
+      <p style="flex:1; font-size:30px; line-height:1.4; color:#f3f5ee; border-top:2px solid #56705f; padding-top:16px">A new user can tell whose turn it is</p>
+    </div>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#c9d6c0">Semaphore · three ways forward</p><p style="font-size:24px; color:#c9d6c0">16</p></div>
+  <aside>These are the measures Astra proposed. They're targets to check against, not results we've measured yet.</aside>
+</section>
+
+<section id="decide" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:44px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Your call</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">Three decisions for you</h2>
+  </div>
+  <div style="display:flex; flex-direction:column">
+    <div style="display:flex; flex-direction:row; align-items:start; gap:40px; border-top:1px solid #e1e5da; padding:28px 0px">
+      <p style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1; color:#556d4a; width:56px">1</p>
+      <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+        <h3 style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#2b342f">Start Proposal 1 now?</h3>
+        <p style="font-size:30px; line-height:1.4; color:#515c54">It fixes typing, starting and status in a prompt or two.</p>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:row; align-items:start; gap:40px; border-top:1px solid #e1e5da; padding:28px 0px">
+      <p style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1; color:#556d4a; width:56px">2</p>
+      <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+        <h3 style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#2b342f">Make Proposal 2 the target?</h3>
+        <p style="font-size:30px; line-height:1.4; color:#515c54">One message to start, with a guided fallback wherever an app asks you to confirm.</p>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:row; align-items:start; gap:40px; border-top:1px solid #e1e5da; border-bottom:1px solid #e1e5da; padding:28px 0px">
+      <p style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1; color:#556d4a; width:56px">3</p>
+      <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+        <h3 style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#2b342f">Run the Proposal 3 test?</h3>
+        <p style="font-size:30px; line-height:1.4; color:#515c54">It may need app settings changed. We'll ask before touching anything.</p>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:30px; line-height:1.4; color:#2b342f"><b>Answer in the Semaphore app or in either chat,</b> and pick who replies first.</p>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Semaphore · three ways forward</p><p style="font-size:24px; color:#6a746b">17</p></div>
+</section>
+
+<section id="shipped" data-transition="fade" style="background:#fafbf7; color:#2b342f; font-family:Inter, Arial, sans-serif; padding:128px 128px 160px; display:flex; flex-direction:column; gap:40px">
+  <div style="display:flex; flex-direction:column; gap:16px">
+    <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Where it landed · September 24, 2026</p>
+    <h2 style="font-family:'Newsreader', Georgia, serif; font-size:64px; font-weight:500; line-height:1.1; color:#2b342f">Here's what shipped</h2>
+  </div>
+  <div style="display:flex; flex-direction:row; gap:32px; align-items:stretch">
+    <div style="flex:1; display:flex; flex-direction:column; gap:14px; background:#fffefa; border:1px solid #e1e5da; border-radius:24px; padding:36px">
+      <div style="display:flex; flex-direction:row; align-items:center; justify-content:space-between">
+        <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Proposal 1</p>
+        <p style="font-size:24px; font-weight:600; color:#2f5a3d; background:#dfe9d9; padding:4px 16px; border-radius:999px">Live</p>
+      </div>
+      <h3 style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#2b342f">Polish</h3>
+      <ul style="font-size:24px; line-height:1.45; color:#3f4a42">
+        <li>Readable text, and Enter sends</li>
+        <li>A clear whose-turn bar</li>
+        <li>Speak anytime; the AI reads it before replying</li>
+        <li>A guided start with short invitations</li>
+      </ul>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:14px; background:#e9efdd; border-radius:24px; padding:36px">
+      <div style="display:flex; flex-direction:row; align-items:center; justify-content:space-between">
+        <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Proposal 2</p>
+        <p style="font-size:24px; font-weight:600; color:#2f5a3d; background:#fafbf7; padding:4px 16px; border-radius:999px">Live</p>
+      </div>
+      <h3 style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#2b342f">One message to start</h3>
+      <ul style="font-size:24px; line-height:1.45; color:#3f4a42">
+        <li>Start with one message</li>
+        <li>Choose who joins and who replies first</li>
+        <li>@mentions, and long replies fold</li>
+      </ul>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:14px; background:#fffefa; border:1px solid #e1e5da; border-radius:24px; padding:36px">
+      <div style="display:flex; flex-direction:row; align-items:center; justify-content:space-between">
+        <p style="font-size:24px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#556d4a">Proposal 3</p>
+        <p style="font-size:24px; font-weight:600; color:#5e4a22; background:#f6efdf; padding:4px 16px; border-radius:999px">In part</p>
+      </div>
+      <h3 style="font-family:'Newsreader', Georgia, serif; font-size:40px; font-weight:500; line-height:1.2; color:#2b342f">Lives in your apps</h3>
+      <ul style="font-size:24px; line-height:1.45; color:#3f4a42">
+        <li>“Loop in Claude” or “Loop in Astra”</li>
+        <li>A companion window with turn notifications</li>
+        <li>Still needs your Send: connecting a new native chat</li>
+      </ul>
+    </div>
+  </div>
+  <div style="display:flex; flex-direction:row; align-items:center; gap:24px; background:#344e3e; border-radius:20px; padding:24px 36px">
+    <x-icon name="Settings" style="color:#c9d6c0; width:36px; height:36px"></x-icon>
+    <p style="flex:1; font-size:30px; line-height:1.35; color:#f3f5ee"><b>Also new:</b> a reply limit in every chat: 4, 10, 20 or no limit.</p>
+    <p style="width:460px; font-size:24px; line-height:1.4; color:#c9d6c0">101 automated tests pass, and this conversation now runs on it.</p>
+  </div>
+  <div style="position:absolute; left:128px; bottom:64px; width:1664px; display:flex; flex-direction:row; justify-content:space-between"><p style="font-size:24px; color:#6a746b">Semaphore · three ways forward</p><p style="font-size:24px; color:#6a746b">18</p></div>
+  <aside>Proposal 3's hands-free version did not pass its feasibility gate in this setup. We could not establish a supported external route to create and wake both native desktop chats while preserving their host runtime and approvals. Each participant still needs one invitation sent. Listeners handle subsequent turns while the native chats remain connected.</aside>
+</section>
+</div></div></main>
+<nav id="controls" aria-label="Slide navigation"><button id="prev" aria-label="Previous slide">←</button><span id="counter" aria-live="polite"></span><button id="next" aria-label="Next slide">→</button><select id="jump" aria-label="Jump to slide"></select><button id="show-notes">Notes</button><button id="print">Print / PDF</button><span class="hint">Arrow keys navigate · N shows notes</span></nav>
+<dialog id="notes"><h2 id="notes-title"></h2><p id="notes-copy"></p><button id="close-notes">Close</button></dialog>
+<script>
+const icons={"Settings":"⚙","CheckCircle":"✓","Clock":"◷","Warning":"⚠","Link":"↗","Search":"⌕","Chat":"▤","PaperPlane":"➤","ThumbsUp":"✓","Users":"♧","Verified":"✓","Book":"▥","Code":"‹›"};
+document.querySelectorAll('x-icon').forEach(el=>{el.textContent=icons[el.getAttribute('name')]||'·';el.style.fontSize=el.style.width||'32px';el.setAttribute('aria-hidden','true')});
+const slides=[...document.querySelectorAll('#slides > section')];
+const jump=document.querySelector('#jump'),counter=document.querySelector('#counter'),notes=document.querySelector('#notes');
+let current=0;
+slides.forEach((slide,i)=>{const option=document.createElement('option');option.value=i;option.textContent=(i+1)+'. '+(slide.querySelector('h1,h2')?.textContent||slide.id);jump.append(option);slide.setAttribute('aria-label','Slide '+(i+1)+' of '+slides.length)});
+function fit(){const scale=Math.min((innerWidth-24)/1920,(innerHeight-88)/1080);document.querySelector('#slides').style.transform='scale('+Math.max(.1,scale)+')';document.querySelector('#frame').style.width=1920*scale+'px';document.querySelector('#frame').style.height=1080*scale+'px'}
+function show(i){current=Math.max(0,Math.min(slides.length-1,i));slides.forEach((s,n)=>{s.hidden=n!==current;s.setAttribute('aria-hidden',String(n!==current))});counter.textContent=(current+1)+' / '+slides.length;jump.value=current;document.querySelector('#prev').disabled=current===0;document.querySelector('#next').disabled=current===slides.length-1;history.replaceState(null,'','#'+slides[current].id);fit()}
+function openNotes(){document.querySelector('#notes-title').textContent=slides[current].querySelector('h1,h2')?.textContent||'Notes';document.querySelector('#notes-copy').textContent=slides[current].querySelector('aside')?.textContent||'Concept proposal. Design by Claude; technical review by Astra. These mockups describe proposed behavior.';notes.showModal()}
+document.querySelector('#prev').onclick=()=>show(current-1);document.querySelector('#next').onclick=()=>show(current+1);jump.onchange=()=>show(Number(jump.value));document.querySelector('#show-notes').onclick=openNotes;document.querySelector('#close-notes').onclick=()=>notes.close();document.querySelector('#print').onclick=()=>window.print();
+addEventListener('keydown',event=>{if(notes.open||event.target.matches('select,button'))return;if(['ArrowRight','PageDown',' '].includes(event.key)){event.preventDefault();show(current+1)}if(['ArrowLeft','PageUp'].includes(event.key)){event.preventDefault();show(current-1)}if(event.key==='Home')show(0);if(event.key==='End')show(slides.length-1);if(event.key.toLowerCase()==='n')openNotes()});
+addEventListener('resize',fit);show(Math.max(0,slides.findIndex(s=>s.id===location.hash.slice(1))));
+</script></body></html>
