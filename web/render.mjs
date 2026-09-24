@@ -20,7 +20,8 @@ export function formatMessage(text) {
   const inline = (value) =>
     escape(value)
       .replace(/`([^`\n]+)`/g, "<code>$1</code>")
-      .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+      .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|\s)@(Claude|Astra)\b/g, '$1<span class="mention">@$2</span>');
   return parts
     .map((part, index) => {
       if (index % 2)

@@ -9,7 +9,8 @@ import { RoomStore, Semaphore } from "./lib/core.mjs";
 import { liveTransport, liveEnvelope, listenerStatus, deliveryProgress, LIVE_TRANSPORTS, INBOX_TRANSPORTS } from "./lib/live.mjs";
 import { projectDir, defaultRoomRoot } from "./lib/paths.mjs";
 import { buildInvite } from "./lib/invite.mjs";
-import { createLiveRoom } from "./lib/rooms.mjs";
+import { createLiveRoom, createStartedRoom } from "./lib/rooms.mjs";
+import { queueHumanInput, queuedInputs, inputMessages } from "./lib/inputs.mjs";
 import { diagnose } from "./lib/doctor.mjs";
 
 const SPEAKERS = ["astra", "claude"];
@@ -34,6 +35,9 @@ export function createAppServer({
     ["/icon.svg", ["icon.svg", "image/svg+xml"]],
   ]);
   const active = new Map();
+  const flushing = new Set();
+  const flushTimers = new Set();
+  let closing = false;
   let port;
   diagnosticsProvider ??= () => diagnose({ port, root });
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
@@ -54,6 +58,11 @@ export function createAppServer({
   }
 
   function view(room, store, { summary = false } = {}) {
+    // Queued human input is already durable even while a foreign CLI owns the
+    // room lock. Display it immediately and deduplicate against the main journal.
+    const queued = inputMessages(room, queuedInputs(store.dir));
+    room = { ...room, messages: [...room.messages, ...queued],
+      ...(queued.length ? { replyNext: { to: queued.at(-1).next, seq: queued.at(-1).seq } } : {}) };
     const connections = Object.fromEntries(
       SPEAKERS.map((speaker) => {
         const p = room.participants[speaker];
@@ -82,6 +91,10 @@ export function createAppServer({
       title: room.title || room.name,
       createdAt: room.createdAt,
       owner: room.owner,
+      canInterject: !!room.pending || room.opening?.state === "waiting",
+      opening: room.opening ?? null,
+      members: room.members ?? SPEAKERS,
+      replyNext: room.replyNext ?? null,
       pending: room.pending
         ? {
             id: room.pending.id,
@@ -102,9 +115,10 @@ export function createAppServer({
       connections,
       lock: store.lockStatus(),
       autoTurns: room.autoTurns ?? 0,
-      maxTurns: room.maxTurns ?? 4,
+      maxTurns: room.maxTurns === undefined ? 4 : room.maxTurns,
+      turnLimit: room.turnLimit === undefined ? 4 : room.turnLimit,
       messageCount: room.messages.length,
-      updatedAt: room.events.at(-1)?.at || last?.at || room.createdAt,
+      updatedAt: [room.events.at(-1)?.at, last?.at, room.createdAt].filter(Boolean).sort().at(-1),
       lastMessage: last
         ? { speaker: last.speaker, text: last.text.slice(0, 140), at: last.at }
         : null,
@@ -139,9 +153,9 @@ export function createAppServer({
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
-  async function mutate(name, action) {
+  async function mutate(name, action, { waitMs = 5000 } = {}) {
     const { store } = readRoom(name);
-    await store.acquire({ waitMs: 5000 });
+    await store.acquire({ waitMs });
     let app;
     try {
       const saved = store.read();
@@ -170,6 +184,28 @@ export function createAppServer({
       active.delete(name);
       store.release();
     }
+  }
+
+  function flushLater(name) {
+    if (flushing.has(name) || closing) return;
+    flushing.add(name);
+    const timer = setTimeout(async () => {
+      flushTimers.delete(timer);
+      try {
+        await mutate(name, () => {}, { waitMs: 0 }); // Constructor drains the input journal.
+      } catch (err) {
+        let stillActive = false;
+        try { stillActive = readRoom(name).store.lockStatus().state === "active"; } catch {}
+        if (err.code === "ROOM_LOCKED" && !closing && stillActive) {
+          flushing.delete(name);
+          flushLater(name);
+          return;
+        }
+      }
+      flushing.delete(name);
+    }, 100);
+    timer.unref();
+    flushTimers.add(timer);
   }
 
   async function body(req) {
@@ -286,8 +322,15 @@ export function createAppServer({
         const { room, store } = createLiveRoom(root, input.title);
         return json(201, { room: view(room, store) });
       }
+      if (req.method === "POST" && url.pathname === "/api/rooms/start") {
+        const input = await body(req);
+        try {
+          const { room, store, duplicate } = await createStartedRoom(root, input);
+          return json(duplicate ? 200 : 201, { room: view(room, store), duplicate });
+        } catch (err) { err.status ??= err.code === "ROOM_LOCKED" ? 423 : 409; throw err; }
+      }
       const match =
-        /^\/api\/rooms\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(?:\/(messages|take|recover|pass|invite|unlock)(?:\/(astra|claude))?)?$/.exec(
+        /^\/api\/rooms\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(?:\/(messages|opening|take|recover|pass|invite|unlock|limit)(?:\/(astra|claude))?)?$/.exec(
           url.pathname,
         );
       if (!match) throw error(404, "Not found.");
@@ -305,7 +348,7 @@ export function createAppServer({
       }
       if (
         req.method !== "POST" ||
-        !["messages", "take", "recover", "pass", "unlock"].includes(action)
+        !["messages", "opening", "take", "recover", "pass", "unlock", "limit"].includes(action)
       )
         throw error(405, "Method not allowed.");
       const input = await body(req);
@@ -319,7 +362,7 @@ export function createAppServer({
         store.unlock();
         return json(200, { room: await mutate(name, () => {}) });
       }
-      if (action === "messages") {
+      if (["messages", "opening"].includes(action)) {
         assertSpeaker(input.to);
         if (
           typeof input.text !== "string" ||
@@ -334,6 +377,28 @@ export function createAppServer({
           throw error(400, "A message request ID is required.");
       }
       if (action === "pass") assertSpeaker(input.to);
+      if (
+        action === "limit" &&
+        input.maxTurns !== null &&
+        !(Number.isInteger(input.maxTurns) && input.maxTurns >= 1 && input.maxTurns <= 20)
+      )
+        throw error(400, "Choose a limit of 1 to 20 replies, or no limit.");
+      // A delivery running in this server holds the room; change its limit in place.
+      if (action === "limit" && active.get(name)) {
+        const app = active.get(name);
+        app.setTurnLimit(input.maxTurns);
+        return json(200, { room: view(app.room, app.store) });
+      }
+      if (action === "messages" && active.get(name)?.room.pending) {
+        const app = active.get(name);
+        try {
+          await app.send(input.text, input.to, { clientId: input.clientId });
+        } catch (err) {
+          err.room = view(app.room, app.store);
+          throw err;
+        }
+        return json(200, { room: view(app.room, app.store) });
+      }
       // Abort an in-flight delivery in this server immediately, while its process
       // still owns the lock. The existing handler persists the uncertain outcome.
       if (action === "take" && active.get(name)?.running) {
@@ -341,16 +406,19 @@ export function createAppServer({
         app.takeStick();
         return json(200, { room: view(app.room, app.store) });
       }
-      const room = await mutate(name, async (app) => {
+      const change = async (app) => {
         if (action === "messages") {
-          assertLive(app, input.to);
+          if (!app.room.pending && app.room.opening?.state !== "waiting") assertLive(app, input.to);
           await app.send(input.text, input.to, { clientId: input.clientId });
         }
+        if (action === "opening")
+          await app.setOpening(input.text, input.to, { clientId: input.clientId, members: input.members });
         if (action === "pass") {
           assertLive(app, input.to);
           await app.pass(input.to);
         }
         if (action === "take") app.takeStick();
+        if (action === "limit") app.setTurnLimit(input.maxTurns);
         if (action === "recover") {
           if (input.acknowledged !== true)
             throw error(
@@ -359,7 +427,19 @@ export function createAppServer({
             );
           app.recover();
         }
-      });
+      };
+      let room;
+      try {
+        room = await mutate(name, change, { waitMs: action === "messages" ? 0 : 5000 });
+      } catch (err) {
+        if (action !== "messages" || err.code !== "ROOM_LOCKED") throw err;
+        const { room: saved, store } = readRoom(name);
+        if (Object.values(saved.participants).some((p) => p.transport === "headless")) throw err;
+        try { queueHumanInput(store, input); }
+        catch (error) { error.status = 409; throw error; }
+        flushLater(name);
+        return json(202, { room: view(store.read(), store), saved: true });
+      }
       return json(200, { room });
     } catch (err) {
       if (!res.headersSent)
@@ -397,6 +477,8 @@ export function createAppServer({
       return `http://127.0.0.1:${port}`;
     },
     async close() {
+      closing = true;
+      for (const timer of flushTimers) clearTimeout(timer);
       for (const app of active.values()) if (app.running) app.takeStick();
       server.closeIdleConnections();
       await new Promise((resolve) => server.close(resolve));

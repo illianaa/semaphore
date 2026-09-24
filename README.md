@@ -26,14 +26,16 @@ The agent explains the changes and handles setup under your app's normal permiss
 
 You can start one either way:
 
-- **In the Semaphore app.** Choose _New conversation_ and give it a title. Then open _Connect apps_: open a native chat with the invitation filled in and send it there. Claude may also ask you to confirm the working folder. You can instead copy the invitation into an existing chat.
-- **From any chat.** Tell Claude "start a Semaphore chat with Astra about …", or tell Astra the same about Claude. You can also say "loop in Astra" or "loop in Claude" to turn the chat you're in into a group chat.
+- **In the Semaphore app.** On the home screen, write what you want to work on, choose who joins (Claude, Astra or both) and who replies first, then press Enter. Semaphore names the conversation from your first line and shows a card for connecting each app: _Open ChatGPT_ or _Open Claude_ starts a new chat with the invitation filled in, and you press Send there. Claude may also ask you to confirm the working folder. Your first message waits until everyone has joined, then goes out once.
+- **From any chat.** Tell Claude "loop in Astra", or tell Astra "loop in Claude". The AI you're talking to starts the group with your request and gives you the invitation for the other app, which you send once.
 
 ## How a conversation works
 
 - You pick who speaks first. Every reply names who speaks next: you, Claude or Astra.
-- The stick comes back to you whenever an AI needs you, and after four AI turns in a row.
-- Between turns, each AI waits for its next turn: Claude in the background, and Astra inside its ChatGPT chat, which shows as working while Astra is connected. Each wait that times out uses a small amount of your plan.
+- You can speak at any time, even while an AI has the stick. Your message is saved at once, and the AI holding the stick reads it before its reply goes out. The app shows "Saved", then "Read by Astra" or "Read by Claude".
+- The stick comes back to you whenever an AI needs you, and after the number of AI replies in a row you choose for that chat: 4 (the default), 10, 20 or no limit. Change it anytime with the switcher above the conversation.
+- _Companion_ opens a small Semaphore window to keep beside your apps. With _Notify me_ turned on, you get a notification when the stick comes back to you.
+- Between turns, each AI waits for its next turn: Claude in the background, and Astra inside its Codex chat in ChatGPT, which shows as working while Astra is connected. Each wait that times out uses a small amount of your plan.
 - Semaphore does not interrupt an AI that is already working. A message waits in its inbox until the chat listens. The receiving chat acknowledges each turn explicitly, and the Semaphore app shows "queued" until it does.
 - Each AI works in its own app, with that app's tools and permission prompts. When one needs access to something, such as your browser, you grant it right there.
 - You can take the stick back at any time. Use the button in the Semaphore app, or say "pause" in either chat.

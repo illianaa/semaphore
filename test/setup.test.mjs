@@ -77,7 +77,7 @@ const offline = (home) => ({
 test("invitations prefill new chats with the verified links and stand alone in existing chats", () => {
   const room = { name: "room-abc", title: "Release “plan”" };
   const root = "/Users/me/It's here/rooms";
-  const astra = buildInvite({ root, room, speaker: "astra" });
+  const astra = buildInvite({ root, room, speaker: "astra", skillAvailable: false });
   const url = new URL(astra.url);
   assert.equal(
     `${url.protocol}//${url.host}${url.pathname}`,
@@ -106,6 +106,7 @@ test("invitations prefill new chats with the verified links and stand alone in e
     room,
     speaker: "claude",
     workspace: "/Users/me/project",
+    skillAvailable: false,
   });
   const link = new URL(claude.url);
   assert.equal(

@@ -63,7 +63,20 @@
             <span>Workspace</span><span aria-hidden="true">/</span
             ><strong id="top-title">Home</strong>
           </div>
-          <span class="local-pill"><span></span> Local &amp; private</span>
+          <div class="topbar-actions">
+            <button type="button" class="subtle-button" id="notify" hidden>
+              Notify me
+            </button>
+            <button
+              type="button"
+              class="subtle-button"
+              id="open-companion"
+              title="A small Semaphore window to keep beside your apps"
+            >
+              Companion <span aria-hidden="true">↗</span>
+            </button>
+            <span class="local-pill"><span></span> Local &amp; private</span>
+          </div>
         </header>
         <div id="offline" class="offline" role="status" hidden>
           Connection lost. Your draft is safe. Reconnecting…
@@ -75,30 +88,94 @@
               ><span class="avatar astra">✳</span
               ><span class="avatar claude">✺</span>
             </div>
-            <div class="eyebrow">BETTER TOGETHER</div>
-            <h1>Great minds.<br />Same conversation.</h1>
+            <div class="eyebrow">ONE MESSAGE TO START</div>
+            <h1>What should we work on?</h1>
             <p>
-              You, Astra, and Claude. A shared space to think,<br
-                class="desktop-break"
-              />
-              build, and find the ideas you wouldn’t find alone.
+              Tell Claude and Astra what you need. Semaphore saves it, helps you
+              connect both apps, and sends it once they’ve joined.
             </p>
-            <button id="welcome-new" class="primary-button">
-              Start a conversation <span aria-hidden="true">↗</span>
-            </button>
+            <form id="start-form" class="composer start-composer">
+              <label class="sr-only" for="start-message"
+                >What should we work on?</label
+              ><textarea
+                id="start-message"
+                placeholder="Describe an idea, a question, or something to build…"
+                rows="3"
+                maxlength="64000"
+              ></textarea>
+              <div class="composer-bottom">
+                <div class="start-options">
+                  <div
+                    class="recipient-picker"
+                    role="group"
+                    aria-label="Who joins"
+                  >
+                    <span>With</span
+                    ><button
+                      type="button"
+                      class="recipient selected"
+                      data-member="claude"
+                      aria-pressed="true"
+                    >
+                      <span class="mini-claude">✺</span> Claude</button
+                    ><button
+                      type="button"
+                      class="recipient selected"
+                      data-member="astra"
+                      aria-pressed="true"
+                    >
+                      <span class="mini-astra">✳</span> Astra
+                    </button>
+                  </div>
+                  <div
+                    class="recipient-picker"
+                    role="group"
+                    aria-label="Who replies first"
+                  >
+                    <span>Reply first</span
+                    ><button
+                      type="button"
+                      class="recipient"
+                      data-start-recipient="claude"
+                      aria-pressed="false"
+                    >
+                      <span class="mini-claude">✺</span> Claude</button
+                    ><button
+                      type="button"
+                      class="recipient"
+                      data-start-recipient="astra"
+                      aria-pressed="false"
+                    >
+                      <span class="mini-astra">✳</span> Astra
+                    </button>
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  id="start-send"
+                  class="send-button"
+                  aria-label="Start the conversation"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 19V5m-6 6 6-6 6 6" />
+                  </svg>
+                </button>
+              </div>
+            </form>
             <div class="welcome-note">
-              Connected to the desktop apps you already love.
+              <kbd>Enter</kbd> to start · <kbd>Shift</kbd> + <kbd>Enter</kbd> for
+              a new line
             </div>
             <div class="starters">
-              <button data-starter="Explore a new idea">
+              <button type="button" data-starter="Let’s explore an idea together: ">
                 <span class="starter-icon">✦</span
                 ><strong>Explore an idea</strong
                 ><span>Two perspectives. New possibilities.</span></button
-              ><button data-starter="Build something together">
+              ><button type="button" data-starter="Let’s build something together: ">
                 <span class="starter-icon">⌘</span
                 ><strong>Build something</strong
                 ><span>From a first thought to a finished thing.</span></button
-              ><button data-starter="Get a second opinion">
+              ><button type="button" data-starter="I’d like a second opinion on ">
                 <span class="starter-icon">◎</span
                 ><strong>Get a second opinion</strong
                 ><span>Let another mind take a look.</span>
@@ -117,6 +194,12 @@
             </button>
           </div>
           <div class="members" id="members"></div>
+          <div
+            class="limit-switch"
+            id="limit-switch"
+            role="radiogroup"
+            aria-labelledby="limit-label"
+          ></div>
           <div id="connection-guide" class="connection-guide" hidden></div>
           <div id="state-banner" class="state-banner" role="status"></div>
           <div class="message-scroll" id="message-scroll">
@@ -134,7 +217,7 @@
               ></textarea>
               <div class="composer-bottom">
                 <div class="recipient-picker">
-                  <span>Reply first</span
+                  <span id="recipient-label">Reply first</span
                   ><button
                     type="button"
                     data-recipient="astra"
@@ -167,52 +250,12 @@
               <span id="composer-hint"
                 >One speaker at a time. You can take the stick whenever you
                 like.</span
-              ><span><kbd>⌘</kbd> <kbd>↵</kbd> to send</span>
+              ><span><kbd>Enter</kbd> to send · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line</span>
             </div>
           </div>
         </section>
       </main>
     </div>
-    <dialog id="new-dialog" class="dialog">
-      <form id="create-room">
-        <div class="dialog-heading">
-          <div class="dialog-icon">✦</div>
-          <button
-            type="button"
-            class="icon-button close-dialog"
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
-        <div class="eyebrow">A NEW SHARED SPACE</div>
-        <h2>What’s on your mind?</h2>
-        <p>
-          Give your conversation a name. Then invite Astra and Claude from their
-          desktop apps.
-        </p>
-        <label for="room-title">Conversation name</label
-        ><input
-          id="room-title"
-          name="title"
-          placeholder="The next big idea"
-          maxlength="100"
-          required
-          autocomplete="off"
-        />
-        <div class="dialog-note">
-          <span>✳</span><span>✺</span> Both models keep their tools and native
-          chat history.
-        </div>
-        <div class="dialog-actions">
-          <button type="button" class="subtle-button close-dialog">
-            Cancel</button
-          ><button type="submit" class="primary-button" id="create-button">
-            Create conversation <span>→</span>
-          </button>
-        </div>
-      </form>
-    </dialog>
     <dialog id="connect-dialog" class="dialog connect-dialog">
       <div class="dialog-heading">
         <div class="dialog-icon">↗</div>

@@ -76,7 +76,7 @@ async function fixture(t, options = {}) {
 test("web shell is available, uses restrictive headers, and never exposes raw room files", async (t) => {
   const f = await fixture(t);
   assert.equal(f.page.status, 200);
-  assert.match(f.html, /Great minds/);
+  assert.match(f.html, /What should we work on\?/);
   assert.match(
     f.page.headers.get("content-security-policy"),
     /frame-ancestors 'none'/,
@@ -367,6 +367,11 @@ test("browser recovery releases only a dead process lock and never redelivers a 
   fs.writeFileSync(store.lockFile, JSON.stringify({ pid: deadPid }));
   const route = `/api/rooms/${room.name}`;
   assert.equal((await f.request(route)).body.room.lock.state, "stale");
+  const savedInput = await f.request(route + "/messages", {
+    method: "POST", body: { text: "Keep this for when we resume", to: "claude", clientId: "stale-saved-input" },
+  });
+  assert.equal(savedInput.status, 202);
+  assert.equal(savedInput.body.room.messages.at(-1).queued, true);
   const recovered = await f.request(route + "/unlock", {
     method: "POST",
     body: {},
@@ -374,6 +379,9 @@ test("browser recovery releases only a dead process lock and never redelivers a 
   assert.equal(recovered.status, 200);
   assert.equal(recovered.body.room.pending.state, "uncertain");
   assert.equal(recovered.body.room.owner, "human");
+  assert.equal(recovered.body.room.messages.at(-1).text, "Keep this for when we resume");
+  assert.equal(recovered.body.room.messages.at(-1).queued, undefined);
+  assert.equal(recovered.body.room.messages.at(-1).readAt, undefined);
   assert.equal(fs.existsSync(store.lockFile), false);
   assert.equal(f.calls.length, 0);
   fs.writeFileSync(store.lockFile, JSON.stringify({ pid: process.pid }));
@@ -382,4 +390,177 @@ test("browser recovery releases only a dead process lock and never redelivers a 
     409,
   );
   assert.equal(fs.existsSync(store.lockFile), true);
+});
+
+test("HTTP saves interjections and an opening request before participants connect", async (t) => {
+  const f = await fixture(t);
+  const room = await f.create("Guided start");
+  const route = `/api/rooms/${room.name}`;
+  const payload = { text: "Help us design", to: "claude", clientId: "opening-http-1", members: ["astra", "claude"] };
+  const saved = await f.request(route + "/opening", { method: "POST", body: payload });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.room.opening.state, "waiting");
+  assert.equal(saved.body.room.messages.length, 1);
+  assert.equal(f.calls.length, 0);
+  const repeated = await f.request(route + "/opening", { method: "POST", body: payload });
+  assert.equal(repeated.body.room.messages.length, 1);
+  f.bind(room.name);
+  const { Semaphore } = await import("../lib/core.mjs");
+  const store = new RoomStore(f.root, room.name);
+  store.acquire();
+  const app = new Semaphore(store, { claude: { kind: "claude-inbox", deliver: async ({ turn }) => ({ status: "queued", transport: "claude-inbox", turnId: turn.id }) } });
+  await app.startOpening();
+  store.release();
+  const sent = await f.request(route + "/messages", { method: "POST", body: { text: "Also make it simple", to: "astra", clientId: "interject-http-1" } });
+  assert.equal(sent.status, 200);
+  assert.equal(sent.body.room.canInterject, true);
+  assert.equal(sent.body.room.owner, "claude");
+  assert.equal(sent.body.room.messages.at(-1).interjection, true);
+  assert.equal(sent.body.room.messages.at(-1).readAt, undefined);
+});
+
+test("human input saves while this server is still delivering the native turn", async (t) => {
+  let started, finish;
+  const began = new Promise((resolve) => { started = resolve; });
+  const gate = new Promise((resolve) => { finish = resolve; });
+  const f = await fixture(t, { transports: { astra: { kind: "astra-inbox", async deliver({ turn }) {
+    started(); await gate; return { status: "queued", transport: "astra-inbox", turnId: turn.id };
+  } } } });
+  const room = await f.create("In flight"); f.bind(room.name);
+  const route = `/api/rooms/${room.name}/messages`;
+  const first = f.request(route, { method: "POST", body: { text: "Start", to: "astra", clientId: "inflight-first" } });
+  await began;
+  try {
+    const limit = await f.request(`/api/rooms/${room.name}/limit`, { method: "POST", body: { maxTurns: 10 } });
+    assert.equal(limit.status, 200);
+    assert.equal(limit.body.room.maxTurns, 10);
+    const input = await f.request(route, { method: "POST", body: { text: "One more thing", to: "claude", clientId: "inflight-second" } });
+    assert.equal(input.status, 200);
+    assert.equal(input.body.room.owner, "astra");
+    assert.equal(input.body.room.messages.length, 2);
+    assert.equal(input.body.room.maxTurns, 10);
+  } finally { finish(); }
+  assert.equal((await first).status, 200);
+});
+
+test("one start request atomically saves the opening and survives concurrent retries and later joins", async (t) => {
+  const f = await fixture(t);
+  const input = { text: "Plan the welcome screen", to: "claude", members: ["claude", "astra"], clientId: "start-request-123" };
+  const [a, b] = await Promise.all([f.request("/api/rooms/start", { method: "POST", body: input }), f.request("/api/rooms/start", { method: "POST", body: input })]);
+  assert.deepEqual([a.status, b.status].sort(), [200, 201]);
+  assert.equal(a.body.room.name, b.body.room.name);
+  assert.equal(a.body.room.messages.length, 1);
+  assert.deepEqual(a.body.room.members, ["astra", "claude"]);
+  assert.equal(a.body.room.opening.state, "waiting");
+  assert.equal((await f.request("/api/rooms")).body.rooms.length, 1);
+  assert.equal((await f.request("/api/rooms/start", { method: "POST", body: { ...input, text: "Something different" } })).status, 409);
+  f.bind(a.body.room.name);
+  const { Semaphore } = await import("../lib/core.mjs");
+  const store = new RoomStore(f.root, a.body.room.name); store.acquire();
+  try {
+    const app = new Semaphore(store, { claude: { kind: "claude-inbox", async deliver({ turn }) { f.calls.push(turn); return { status: "queued", transport: "claude-inbox", turnId: turn.id }; } } });
+    await app.startOpening();
+  } finally { store.release(); }
+  const retry = await f.request("/api/rooms/start", { method: "POST", body: { ...input, members: ["astra", "claude"] } });
+  assert.equal(retry.status, 200);
+  assert.equal(retry.body.room.opening.state, "started");
+  assert.equal(f.calls.length, 1);
+  for (const bad of [{ ...input, clientId: "bad" }, { ...input, members: [] }, { ...input, text: " " }, { ...input, to: "human" }])
+    assert.equal((await f.request("/api/rooms/start", { method: "POST", body: bad })).status, 409);
+  assert.equal((await f.request("/api/rooms")).body.rooms.length, 1);
+});
+
+test("human context is saved during setup and travels in the first delivery", async (t) => {
+  const f = await fixture(t);
+  const start = await f.request("/api/rooms/start", { method: "POST", body: { text: "Design this", to: "claude", members: ["claude"], clientId: "setup-opening-123" } });
+  const route = `/api/rooms/${start.body.room.name}`;
+  const sent = await f.request(route + "/messages", { method: "POST", body: { text: "Also make it accessible", to: "claude", clientId: "setup-extra-123" } });
+  assert.equal(sent.status, 200);
+  assert.equal(sent.body.room.owner, "human");
+  assert.equal(sent.body.room.opening.to, "claude");
+  assert.equal(sent.body.room.canInterject, true);
+  assert.equal(sent.body.room.messages.length, 2);
+  assert.equal(f.calls.length, 0);
+  f.bind(start.body.room.name);
+  const { Semaphore } = await import("../lib/core.mjs");
+  const store = new RoomStore(f.root, start.body.room.name); store.acquire();
+  try {
+    const app = new Semaphore(store, { claude: { kind: "claude-inbox", async deliver({ turn, prompt }) {
+      assert.match(prompt, /Also make it accessible/);
+      return { status: "queued", transport: "claude-inbox", turnId: turn.id };
+    } } });
+    await app.startOpening();
+    assert.equal(app.room.pending.through, 2);
+    app.receive(app.room.pending.id, "claude");
+    assert.equal(app.room.messages[1].readBy, "claude");
+  } finally { store.release(); }
+});
+
+test("a foreign process cannot block human input or commit a reply without reading it", async (t) => {
+  const { spawn } = await import("node:child_process");
+  const { once } = await import("node:events");
+  const f = await fixture(t);
+  const room = await f.create("Foreign delivery"); f.bind(room.name);
+  const route = `/api/rooms/${room.name}`;
+  await f.request(route + "/messages", { method: "POST", body: { text: "Begin", to: "astra", clientId: "foreign-begin-123" } });
+  const source = `
+    import { RoomStore, Semaphore } from ${JSON.stringify(new URL("../lib/core.mjs", import.meta.url).href)};
+    const store = new RoomStore(process.argv[1], process.argv[2]); store.acquire();
+    const app = new Semaphore(store, {});
+    const turnId = app.room.pending.id;
+    app.receive(turnId, "astra");
+    process.on("message", async (message) => {
+      if (message.revision) app.receive(turnId, "astra", message.revision);
+      const result = await app.accept({ turnId, speaker: "astra", message: "Updated plan", next: "human" });
+      if (result.status === "accepted") store.release();
+      process.send({ status: result.status, revision: result.revision, room: result.room });
+    });
+    process.send({ ready: true });
+  `;
+  const child = spawn(process.execPath, ["--input-type=module", "-e", source, f.root, room.name], { stdio: ["ignore", "ignore", "pipe", "ipc"] });
+  let errors = ""; child.stderr.on("data", (chunk) => { errors += chunk; });
+  t.after(() => { child.kill(); });
+  const ready = await once(child, "message");
+  assert.equal(ready[0].ready, true, errors);
+  const input = { text: "Please include keyboard navigation", to: "claude", clientId: "foreign-extra-123" };
+  const sent = await f.request(route + "/messages", { method: "POST", body: input });
+  assert.equal(sent.status, 202);
+  assert.equal(sent.body.saved, true);
+  assert.equal(sent.body.room.owner, "astra");
+  assert.equal(sent.body.room.messages.at(-1).text, input.text);
+  assert.equal(sent.body.room.messages.at(-1).queued, true);
+  assert.equal((await f.request(route + "/messages", { method: "POST", body: input })).body.room.messages.length, 2);
+  const reviewed = once(child, "message"); child.send({ reply: true });
+  const [review] = await reviewed;
+  assert.equal(review.status, "review-required");
+  assert.equal(review.room.messages.length, 2);
+  assert.equal(review.room.owner, "astra");
+  const accepted = once(child, "message"); child.send({ revision: review.revision });
+  const [result] = await accepted;
+  assert.equal(result.status, "accepted");
+  assert.equal(result.room.messages.length, 3);
+  assert.equal(result.room.messages[1].readBy, "astra");
+  assert.equal(result.room.owner, "human");
+  assert.equal(result.room.autoTurns, 1);
+  assert.equal((await f.request(route)).body.room.messages.length, 3);
+});
+
+test("the app sets a conversation's reply limit, including no limit", async (t) => {
+  const f = await fixture(t);
+  const room = await f.create("Limits");
+  assert.equal(room.turnLimit, 4);
+  const route = `/api/rooms/${room.name}/limit`;
+  const ten = await f.request(route, { method: "POST", body: { maxTurns: 10 } });
+  assert.equal(ten.status, 200);
+  assert.equal(ten.body.room.turnLimit, 10);
+  const none = await f.request(route, { method: "POST", body: { maxTurns: null } });
+  assert.equal(none.body.room.turnLimit, null);
+  assert.equal(none.body.room.maxTurns, null);
+  for (const maxTurns of [0, 21, "4", 2.5])
+    assert.equal(
+      (await f.request(route, { method: "POST", body: { maxTurns } })).status,
+      400,
+    );
+  const read = await f.request(`/api/rooms/${room.name}`);
+  assert.equal(read.body.room.turnLimit, null);
 });

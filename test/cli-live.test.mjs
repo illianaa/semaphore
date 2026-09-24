@@ -463,7 +463,7 @@ test("new starts a live conversation whose empty seats each chat can join; rooms
   assert.match(
     invite.out,
     new RegExp(
-      `Or paste this into an existing Astra chat:\\n\\nJoin my Semaphore group chat “Release workshop” as Astra`,
+      `Or paste this into an existing Astra chat:\\n\\n(?:Join my Semaphore group chat “Release workshop” as Astra|Use the Semaphore skill to connect this chat as Astra)`,
     ),
   );
   assert.match(run(["new"]).err, /title of 1–100 characters/);
@@ -621,7 +621,8 @@ test("stick tells a resumed Astra to keep waiting in the foreground, and Claude 
   assert.equal(astra.code, 3);
   assert.match(astra.out, /Stay connected: wait for your turn by running this in the foreground: node .*listen room --root .* --as astra/);
   assert.doesNotMatch(astra.out, /end your turn/i);
-  assert.equal(run(["send", "room", "--to", "astra", "--file", write("x.txt", "x")]).code, 1, "Claude's turn is still pending");
+  assert.equal(run(["send", "room", "--to", "astra", "--file", write("x.txt", "x")]).code, 0, "human input saves while Claude holds the stick");
+  assert.equal(run(["stick", "room"], CLAUDE).code, 0, "sending does not take Claude's stick");
 });
 
 test("an old listener whose seat moves to another chat stops without taking that chat's messages", async (t) => {
@@ -638,4 +639,111 @@ test("an old listener whose seat moves to another chat stops without taking that
   assert.doesNotMatch(out, /For the new Astra chat/);
   assert.equal(inbox("room", "astra").length, 1, "the replacement chat's turn is still waiting");
   assert.match(run(["listen", "room", "--as", "astra", "--timeout", "2"], other).out, /For the new Astra chat/);
+});
+
+test("CLI rejects a stale answer until the new human input is explicitly received", (t) => {
+  const { run, write, room } = setup(t);
+  joinBoth(run);
+  run(["send", "room", "--to", "astra", "--file", write("first.txt", "Start")]);
+  const id = room("room").pending.id;
+  run(["receive", "room", "--turn", id], ASTRA);
+  run(["send", "room", "--to", "claude", "--file", write("more.txt", "Include recovery")]);
+  const command = ["reply", "room", "--turn", id, "--next", "astra", "--file", write("answer.txt", "Here is the revised plan")];
+  const review = run(command, ASTRA);
+  assert.equal(review.code, 3, review.err);
+  assert.match(review.out, /Your reply was not accepted/);
+  assert.match(review.out, /Include recovery/);
+  assert.match(review.out, /receive room --root .* --turn .* --revision 2/);
+  assert.equal(room("room").messages.length, 2);
+  const received = run(["receive", "room", "--turn", id, "--revision", "2"], ASTRA);
+  assert.equal(received.code, 0, received.err);
+  assert.equal(run(command, ASTRA).code, 0);
+  assert.equal(room("room").owner, "claude");
+  assert.equal(run(command, ASTRA).code, 0);
+  assert.equal(room("room").messages.length, 3);
+});
+
+test("the last CLI join starts the saved opening exactly once", async (t) => {
+  const { run, root, room, inbox } = setup(t);
+  const { RoomStore, Semaphore } = await import('../lib/core.mjs');
+  const name = run(["new", "Opening flow"]).out.match(/as room (room-[A-Za-z0-9-]+)\./)[1];
+  const store = new RoomStore(root, name);
+  store.acquire();
+  try {
+    const app = new Semaphore(store, {});
+    await app.setOpening("Plan our release", "claude", { clientId: "cli-opening-request", members: ["astra", "claude"] });
+  } finally { store.release(); }
+  const first = run(["join", name, "--as", "claude"], CLAUDE);
+  assert.equal(first.code, 0, first.err);
+  assert.equal(room(name).opening.state, "waiting");
+  const last = run(["join", name, "--as", "astra"], ASTRA);
+  assert.equal(last.code, 0, last.err);
+  assert.equal(room(name).opening.state, "started");
+  assert.equal(room(name).owner, "claude");
+  assert.equal(inbox(name).length, 1);
+  assert.equal(run(["join", name, "--as", "astra"], ASTRA).code, 0);
+  assert.equal(inbox(name).length, 1);
+  assert.match(run(["listen", name], CLAUDE).out, /Plan our release/);
+});
+
+test("loop-in creates a native group and opening atomically, without starting another chat process", (t) => {
+  const f = setup(t);
+  const file = f.write("opening.md", "Please invite Claude to review this plan");
+  const args = ["loop-in", "--as", "astra", "--to", "claude", "--first", "claude", "--file", file, "--request-id", "native-opening-123"];
+  const first = f.run(args, ASTRA);
+  assert.equal(first.code, 0, first.err);
+  const name = first.out.match(/in (room-[a-f0-9]+)\./)[1];
+  const saved = f.room(name);
+  assert.equal(saved.participants.astra.id, THREAD);
+  assert.equal(saved.participants.astra.transport, "astra-inbox");
+  assert.equal(saved.participants.claude.id, null);
+  assert.equal(saved.messages.length, 1);
+  assert.equal(saved.messages[0].via, "astra");
+  assert.equal(saved.opening.state, "waiting");
+  assert.equal(saved.owner, "human");
+  assert.equal(saved.pending, null);
+  assert.ok(first.out.includes(f.root));
+  assert.match(first.out, /claude:\/\//);
+  assert.equal(f.run(args, ASTRA).code, 0);
+  assert.equal(f.room(name).messages.length, 1);
+  assert.equal(fs.readdirSync(f.root).length, 1);
+  assert.match(f.run([...args.slice(0, -1), "different-request"], ASTRA).err, /already connected/);
+  assert.equal(fs.readdirSync(f.root).length, 1);
+  assert.equal(f.run(args, { CODEX_THREAD_ID: OTHER }).code, 1);
+  assert.equal(f.room(name).participants.astra.id, THREAD);
+  assert.equal(f.queued().length, 0);
+  assert.equal(f.claudeCalled(), false);
+  const joined = f.run(["join", name, "--as", "claude"], CLAUDE);
+  assert.equal(joined.code, 0, joined.err);
+  assert.equal(f.room(name).opening.state, "started");
+  const turnId = f.room(name).pending.id;
+  assert.equal(f.room(name).pending.speaker, "claude");
+  assert.equal(f.run(args, ASTRA).code, 0);
+  assert.equal(f.room(name).pending.id, turnId);
+  assert.equal(f.claudeCalled(), false);
+});
+
+test("loop-in refuses missing native identity before creating a room", (t) => {
+  const f = setup(t);
+  const file = f.write("opening.md", "A new group");
+  const result = f.run(["loop-in", "--as", "astra", "--to", "claude", "--file", file, "--request-id", "missing-native-123"]);
+  assert.equal(result.code, 1);
+  assert.equal(fs.existsSync(f.root), false);
+});
+
+test("loop-in from Claude defaults to a catch-up turn in the initiating native chat", (t) => {
+  const f = setup(t);
+  const file = f.write("opening.md", "Bring Astra into this discussion");
+  const started = f.run(["loop-in", "--as", "claude", "--to", "astra", "--file", file, "--request-id", "claude-native-start"], CLAUDE);
+  assert.equal(started.code, 0, started.err);
+  const name = started.out.match(/in (room-[a-f0-9]+)\./)[1];
+  assert.equal(f.room(name).opening.to, "claude");
+  assert.equal(f.room(name).messages[0].via, "claude");
+  assert.equal(f.room(name).participants.claude.id, SESSION);
+  const joined = f.run(["join", name, "--as", "astra"], ASTRA);
+  assert.equal(joined.code, 0, joined.err);
+  assert.equal(f.room(name).pending.speaker, "claude");
+  assert.equal(f.room(name).opening.state, "started");
+  assert.equal(f.inbox(name).length, 1);
+  assert.equal(f.claudeCalled(), false);
 });

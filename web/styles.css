@@ -24,7 +24,7 @@
 }
 body {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
 }
 button,
 input,
@@ -108,7 +108,7 @@ textarea {
   border-radius: 8px;
   padding: 12px;
   margin: 31px 0 19px;
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 550;
   box-shadow: 0 2px 3px #2036260c;
 }
@@ -118,7 +118,7 @@ textarea {
   line-height: 16px;
 }
 .new-room kbd {
-  font-size: 9px;
+  font-size: 12px;
   background: #ffffff12;
   padding: 3px 4px;
   border-radius: 3px;
@@ -147,7 +147,7 @@ textarea {
   outline: 0;
   width: 100%;
   min-width: 0;
-  font-size: 11px;
+  font-size: 14px;
 }
 .search input::placeholder {
   color: #8a9182;
@@ -157,14 +157,14 @@ textarea {
   justify-content: space-between;
   align-items: center;
   padding: 0 11px;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 650;
   letter-spacing: 1.2px;
   color: #7a8374;
   margin-bottom: 11px;
 }
 .sidebar-label > span {
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0;
   background: #e3e8da;
   border-radius: 4px;
@@ -204,7 +204,7 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 550;
 }
 .room-copy small {
@@ -213,7 +213,7 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
   margin-top: 5px;
-  font-size: 10px;
+  font-size: 13px;
   color: #818979;
 }
 .room-dot {
@@ -225,7 +225,7 @@ textarea {
   flex-shrink: 0;
 }
 .no-rooms {
-  font-size: 11px;
+  font-size: 14px;
   padding: 18px 11px;
   line-height: 1.7;
   color: #7e8876;
@@ -239,7 +239,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 10px;
+  font-size: 13px;
   color: #65775a;
   margin-bottom: 15px;
 }
@@ -258,7 +258,7 @@ textarea {
   background: none;
   border: 0;
   padding: 0;
-  font-size: 11px;
+  font-size: 14px;
   color: #616d5b;
 }
 .settings-button svg {
@@ -269,7 +269,7 @@ textarea {
   stroke-width: 1.5;
 }
 .sidebar-footnote {
-  font-size: 9px;
+  font-size: 12px;
   color: #9ba390;
   margin-top: 13px;
 }
@@ -293,7 +293,7 @@ textarea {
   display: flex;
   gap: 15px;
   align-items: center;
-  font-size: 11px;
+  font-size: 14px;
   min-width: 0;
 }
 .breadcrumb > span {
@@ -313,7 +313,7 @@ textarea {
   background: #f2f5eb;
   border-radius: 20px;
   padding: 6px 9px;
-  font-size: 9px;
+  font-size: 12px;
   color: #71815f;
   white-space: nowrap;
 }
@@ -361,7 +361,7 @@ textarea {
 .avatar.you {
   background: #e7e9e0;
   color: #74806b;
-  font-size: 12px;
+  font-size: 15px;
 }
 .hero-avatars .avatar.you {
   font-size: 14px;
@@ -376,7 +376,7 @@ textarea {
   color: #b57553;
 }
 .eyebrow {
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 1.5px;
   font-weight: 600;
   color: #8a937d;
@@ -391,7 +391,7 @@ textarea {
   color: #354538;
 }
 .welcome p {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.85;
   color: #848c7e;
   margin: 0;
@@ -406,7 +406,7 @@ textarea {
   padding: 12px 17px;
   background: var(--green);
   color: #f1f5e9;
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 550;
 }
 .primary-button > span {
@@ -416,7 +416,7 @@ textarea {
   margin-top: 29px;
 }
 .welcome-note {
-  font-size: 10px;
+  font-size: 13px;
   color: #9ca58f;
   margin-top: 14px;
 }
@@ -449,12 +449,12 @@ textarea {
 }
 .starters strong {
   display: block;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 550;
   margin-bottom: 6px;
 }
 .starters button > span:last-child {
-  font-size: 9px;
+  font-size: 12px;
   color: #929987;
   line-height: 1.6;
   display: block;
@@ -487,7 +487,7 @@ textarea {
   background: none;
   border: 0;
   padding: 7px 4px;
-  font-size: 10px;
+  font-size: 13px;
   color: #7b8870;
   white-space: nowrap;
 }
@@ -506,21 +506,21 @@ textarea {
   gap: 6px;
   background: #f4f6ef;
   border: 1px solid #e4e8dc;
-  padding: 4px 8px 4px 4px;
+  padding: 4px 10px 4px 4px;
   border-radius: 20px;
-  font-size: 10px;
+  font-size: 13px;
 }
 .member .avatar {
-  width: 21px;
-  height: 21px;
+  width: 24px;
+  height: 24px;
   font-size: 13px;
 }
 .member .avatar.you {
-  font-size: 8px;
+  font-size: 11px;
 }
 .member small {
-  font-size: 8px;
-  color: #8c957e;
+  font-size: 12px;
+  color: #6a7464;
   margin-left: 2px;
 }
 .member.holder {
@@ -546,40 +546,72 @@ textarea {
   margin-bottom: 16px;
 }
 .connection-guide strong {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
   display: block;
   margin-bottom: 5px;
 }
 .connection-guide p {
-  font-size: 10px;
+  font-size: 13px;
   color: #7e8a72;
   margin: 0;
   line-height: 1.6;
 }
 .connection-guide button {
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: 13px;
   border: 1px solid #d4dfc7;
   border-radius: 5px;
   background: #fdfef8;
   padding: 8px 11px;
 }
 .state-banner {
-  min-height: 34px;
-  padding: 8px 0;
-  border-top: 1px solid var(--line);
+  min-height: 48px;
+  margin: 2px 0 10px;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid #e3e8da;
+  border-radius: 14px;
+  background: #f3f6ee;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  font-size: 10px;
-  color: #89927d;
+  font-size: 14px;
+  color: #3f4a42;
+}
+.state-banner:empty {
+  display: none;
+}
+.state-banner[data-holder="astra"] {
+  background: #e8f0e6;
+  border-color: #d3e1d2;
+}
+.state-banner[data-holder="claude"] {
+  background: #f7eee7;
+  border-color: #ecdccf;
+}
+.state-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.state-who .avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+}
+.state-who strong {
+  font-weight: 650;
+  color: #2b342f;
+}
+.state-detail {
+  color: #5b665d;
 }
 .state-banner > span {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
 }
 .state-dot {
   width: 5px;
@@ -589,26 +621,35 @@ textarea {
   display: inline-block;
 }
 .state-banner.paused {
-  color: #9b724e;
+  background: #f6efdf;
+  border-color: #e8dcc0;
+  color: #5e4a22;
 }
 .state-banner.paused .state-dot {
   background: #b8895b;
 }
 .state-actions {
   display: flex;
-  gap: 9px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 .state-actions button {
-  border: 0;
-  background: none;
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  padding: 0;
-  font-size: 10px;
+  border: 1px solid #b9c7ad;
+  background: #fffefa;
+  color: #344e3e;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.state-actions button.primary {
+  background: #344e3e;
+  border-color: #344e3e;
+  color: #f3f5ee;
 }
 .message-scroll {
   overflow-y: auto;
+  scrollbar-gutter: stable;
   min-height: 0;
   flex: 1;
   scrollbar-width: thin;
@@ -617,6 +658,7 @@ textarea {
 }
 .messages {
   padding-bottom: 18px;
+  padding-right: 12px;
 }
 .message {
   display: flex;
@@ -638,22 +680,22 @@ textarea {
   margin: 2px 0 10px;
 }
 .message-header strong {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 650;
 }
 .message-header .to {
-  font-size: 9px;
-  color: #929b86;
+  font-size: 12px;
+  color: #6a7464;
 }
 .message-header time {
-  font-size: 9px;
-  color: #a0a793;
+  font-size: 12px;
+  color: #6a7464;
   margin-left: auto;
 }
 .message-text {
-  font-size: 13px;
-  line-height: 1.85;
-  color: #4d594a;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #3f4a42;
   overflow-wrap: anywhere;
 }
 .message-text p {
@@ -665,7 +707,7 @@ textarea {
 }
 .message-text pre {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.7;
   background: #f0f3e9;
   border: 1px solid #e3e9d9;
@@ -701,7 +743,7 @@ textarea {
   padding: 2px 0;
 }
 .message-via {
-  font-size: 8px;
+  font-size: 12px;
   color: #9da58f;
   margin-top: 8px;
 }
@@ -730,7 +772,7 @@ textarea {
   margin: 0 0 10px;
 }
 .empty-conversation p {
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.8;
   color: #95a084;
   margin: 0;
@@ -741,10 +783,10 @@ textarea {
 }
 .composer {
   background: #fffefa;
-  border: 1px solid #dce3d0;
-  border-radius: 11px;
-  padding: 15px 16px 12px;
-  box-shadow: 0 3px 14px #31412604;
+  border: 1px solid #d5ddc8;
+  border-radius: 16px;
+  padding: 14px 14px 10px 18px;
+  box-shadow: 0 3px 14px #3141260a;
 }
 .composer:focus-within {
   border-color: #a8bd90;
@@ -752,16 +794,17 @@ textarea {
 }
 .composer textarea {
   display: block;
-  resize: vertical;
+  resize: none;
   width: 100%;
-  min-height: 54px;
-  max-height: 200px;
-  padding: 0;
+  min-height: 48px;
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 2px 0 0;
   border: 0;
   outline: 0;
   background: none;
-  font-size: 12px;
-  line-height: 1.7;
+  font-size: 16px;
+  line-height: 1.5;
 }
 .composer textarea::placeholder {
   color: #a1a892;
@@ -771,7 +814,7 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 8px;
+  padding-top: 10px;
 }
 .recipient-picker {
   display: flex;
@@ -779,25 +822,31 @@ textarea {
   gap: 5px;
 }
 .recipient-picker > span {
-  font-size: 9px;
-  color: #a0a891;
-  margin-right: 5px;
+  font-size: 13px;
+  color: #5b665d;
+  margin-right: 4px;
 }
 .recipient {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 999px;
   background: none;
-  padding: 5px 7px;
-  font-size: 10px;
-  color: #929c82;
+  padding: 5px 12px 5px 9px;
+  font-size: 13px;
+  color: #5b665d;
 }
 .recipient.selected {
-  background: #edf2e5;
-  border-color: #e0e8d3;
-  color: #63764f;
+  background: #e8f0e6;
+  border-color: #cfdfcd;
+  color: #2f5a3d;
+  font-weight: 600;
+}
+.recipient.selected[data-recipient="claude"] {
+  background: #f7eee7;
+  border-color: #ead7c8;
+  color: #8f5539;
 }
 .mini-astra {
   color: #5f8767;
@@ -813,9 +862,9 @@ textarea {
   background: #3d583f;
   color: #eff5e5;
   border: 0;
-  border-radius: 7px;
-  width: 32px;
-  height: 32px;
+  border-radius: 12px;
+  width: 38px;
+  height: 38px;
 }
 .send-button svg {
   fill: none;
@@ -831,17 +880,17 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  font-size: 8px;
-  color: #9ba58b;
-  margin: 10px 3px 0;
+  font-size: 12px;
+  color: #6a7464;
+  margin: 8px 4px 0;
   line-height: 1.6;
 }
 .composer-caption kbd {
-  font-size: 8px;
+  font-size: 11px;
   background: #eef1e7;
   border: 1px solid #e4e9da;
-  border-radius: 3px;
-  padding: 1px 3px;
+  border-radius: 4px;
+  padding: 1px 4px;
 }
 .dialog {
   background: #fcfdf7;
@@ -896,13 +945,13 @@ textarea {
   color: #435638;
 }
 .dialog p {
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.8;
   color: #8a987b;
   margin: 0 0 23px;
 }
 .dialog label {
-  font-size: 11px;
+  font-size: 14px;
   color: #6b7b5c;
   display: block;
   margin: 18px 0 8px;
@@ -914,7 +963,7 @@ textarea {
   border-radius: 7px;
   width: 100%;
   padding: 12px;
-  font-size: 12px;
+  font-size: 15px;
 }
 .dialog input::placeholder {
   color: #a6b297;
@@ -923,13 +972,13 @@ textarea {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 9px;
+  font-size: 12px;
   color: #93a083;
   margin-top: 13px;
   line-height: 1.5;
 }
 .dialog-note span {
-  font-size: 13px;
+  font-size: 15px;
   color: #95a17f;
 }
 .dialog-actions {
@@ -949,24 +998,24 @@ textarea {
   gap: 10px;
 }
 .connect-person strong {
-  font-size: 12px;
+  font-size: 15px;
 }
 .connect-person small {
   display: block;
-  font-size: 9px;
+  font-size: 12px;
   margin-top: 4px;
   color: #92a080;
 }
 .connected-badge {
   margin-left: auto;
-  font-size: 9px;
+  font-size: 12px;
   color: #6e8c54;
   background: #ebf2df;
   border-radius: 12px;
   padding: 4px 8px;
 }
 .connect-card p {
-  font-size: 11px;
+  font-size: 14px;
   margin: 13px 0;
   color: #8a987c;
 }
@@ -981,7 +1030,7 @@ textarea {
   align-items: center;
   justify-content: center;
   text-decoration: none;
-  font-size: 10px;
+  font-size: 13px;
   border: 1px solid #d7e2c8;
   border-radius: 6px;
   padding: 10px 13px;
@@ -994,7 +1043,7 @@ textarea {
   border-color: #3a553c;
 }
 .invite-details {
-  font-size: 10px;
+  font-size: 13px;
   color: #8a9977;
   margin-top: 14px;
 }
@@ -1025,24 +1074,24 @@ textarea {
 }
 .diagnostic-icon {
   color: #859e6c;
-  font-size: 12px;
+  font-size: 15px;
   padding-top: 1px;
 }
 .diagnostic-icon.warn {
   color: #b18a57;
 }
 .diagnostic strong {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 550;
   display: block;
 }
 .diagnostic p {
-  font-size: 10px;
+  font-size: 13px;
   margin: 5px 0 0;
   line-height: 1.7;
 }
 .settings-note {
-  font-size: 10px;
+  font-size: 13px;
   color: #94a083;
   line-height: 1.8;
   border-top: 1px solid #e5ecda;
@@ -1050,7 +1099,7 @@ textarea {
   margin: 12px 0;
 }
 .text-link {
-  font-size: 10px;
+  font-size: 13px;
   color: #7f956a;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -1059,7 +1108,7 @@ textarea {
   display: flex;
   gap: 9px;
   align-items: flex-start;
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.7;
 }
 .acknowledgment input {
@@ -1076,14 +1125,14 @@ textarea {
   border-radius: 9px;
   background: #324736;
   color: #eff4e7;
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.7;
   box-shadow: 0 5px 20px #23381e26;
   z-index: 20;
 }
 .offline {
   padding: 10px 20px;
-  font-size: 11px;
+  font-size: 14px;
   background: #f4eadb;
   color: #977140;
   text-align: center;
@@ -1180,7 +1229,7 @@ textarea {
     display: none;
   }
   .local-pill {
-    font-size: 8px;
+    font-size: 12px;
   }
   .welcome {
     padding: 35px 22px;
@@ -1189,7 +1238,7 @@ textarea {
     font-size: 47px;
   }
   .welcome p {
-    font-size: 12px;
+    font-size: 15px;
   }
   .starters {
     margin-top: 35px;
@@ -1221,7 +1270,7 @@ textarea {
     font-size: 26px;
   }
   .conversation-heading > .subtle-button {
-    font-size: 9px;
+    font-size: 12px;
   }
   .members {
     margin: 17px 0;
@@ -1237,32 +1286,32 @@ textarea {
     padding: 13px;
   }
   .connection-guide p {
-    font-size: 9px;
+    font-size: 12px;
   }
   .connection-guide button {
-    font-size: 9px;
+    font-size: 12px;
     padding: 7px;
   }
   .message {
     padding: 20px 0;
   }
   .message-text {
-    font-size: 12px;
+    font-size: 15px;
   }
   .message-header .to {
-    font-size: 8px;
+    font-size: 12px;
   }
   .composer-caption {
-    font-size: 8px;
+    font-size: 12px;
   }
   .recipient-picker {
     gap: 3px;
   }
   .recipient-picker > span {
-    font-size: 8px;
+    font-size: 12px;
   }
   .recipient {
-    font-size: 9px;
+    font-size: 12px;
   }
   .dialog {
     padding: 23px;
@@ -1302,82 +1351,304 @@ textarea {
 .starters button > span:last-child,
 .empty-conversation p,
 .composer textarea::placeholder,
-.recipient-picker > span,
 .dialog-note,
 .invite-details,
 .settings-note,
 .connect-person small {
-  color: #68755e;
+  color: #6a7464;
 }
 .welcome p,
 .dialog p,
 .connection-guide p,
 .connect-card p,
 .diagnostic p,
-.state-banner,
-.subtle-button,
-.recipient {
-  color: #64715b;
+.subtle-button {
+  color: #5b665d;
 }
-.eyebrow,
-.sidebar-label,
-.sidebar-footnote,
-.welcome-note,
-.composer-caption,
-.message-header time,
-.message-header .to,
-.message-via,
-.member small,
-.starters button > span:last-child,
-.dialog-note,
-.connect-person small {
-  font-size: 10px;
-}
-.message-text {
+.room-copy strong,
+.breadcrumb,
+.starters strong {
   font-size: 14px;
-}
-.room-copy strong {
-  font-size: 13px;
-}
-.message-header strong {
-  font-size: 12px;
-}
-.breadcrumb {
-  font-size: 12px;
-}
-.composer textarea {
-  font-size: 14px;
-}
-.composer-caption {
-  font-size: 10px;
 }
 .dialog p {
-  font-size: 13px;
+  font-size: 15px;
 }
-.local-pill {
-  font-size: 10px;
-}
-.starters strong {
+.message-note {
+  margin-top: 8px;
   font-size: 12px;
+  color: #6a7464;
+}
+.message-note.read {
+  color: #2f5a3d;
 }
 @media (max-width: 760px) {
-  .message-text {
-    font-size: 14px;
+  .state-banner {
+    flex-wrap: wrap;
   }
-  .composer textarea {
-    font-size: 16px;
+}
+/* Guided start: invite each member, then the saved first message waits for them. */
+.start-card {
+  max-width: 660px;
+  margin: 10px auto 16px;
+  background: #fffefa;
+  border: 1px solid #dce3d0;
+  border-radius: 20px;
+  padding: 20px 24px 6px;
+  box-shadow: 0 12px 36px #3141260f;
+}
+.start-card h2 {
+  font-family: ui-serif, Georgia, "Times New Roman", serif;
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+  margin: 0 0 8px;
+  color: #2b342f;
+}
+.start-step {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid #edf0e7;
+}
+.step-number {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #344e3e;
+  color: #f3f5ee;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 650;
+}
+.step-number.done {
+  background: #dfe9d9;
+  color: #2f5a3d;
+}
+.start-step h3 {
+  margin: 2px 0 10px;
+  font-size: 15px;
+  font-weight: 650;
+  color: #2b342f;
+}
+.seat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: #f6f8f1;
+  border-radius: 14px;
+}
+.seat-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.seat-copy strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: #2b342f;
+}
+.seat-copy span {
+  font-size: 13px;
+  color: #5b665d;
+}
+.seat-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.seat-actions a,
+.seat-actions button {
+  border: 1px solid #b9c7ad;
+  background: #fffefa;
+  color: #344e3e;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.seat-actions a.primary {
+  background: #344e3e;
+  border-color: #344e3e;
+  color: #f3f5ee;
+}
+.joined-pill {
+  font-size: 12px;
+  font-weight: 650;
+  color: #2f5a3d;
+  background: #dfe9d9;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+.opening-preview {
+  background: #f6f8f1;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #2b342f;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.start-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #5b665d;
+}
+/* Home: one message starts a conversation. */
+.start-composer {
+  width: min(640px, 100%);
+  margin: 26px auto 0;
+  text-align: left;
+}
+.start-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.recipient.selected[data-member="claude"],
+.recipient.selected[data-start-recipient="claude"] {
+  background: #f7eee7;
+  border-color: #ead7c8;
+  color: #8f5539;
+}
+.welcome-note kbd {
+  font-size: 11px;
+  background: #eef1e7;
+  border: 1px solid #e4e9da;
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.welcome .starters {
+  margin-top: 36px;
+}
+.start-step > div {
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  .start-card {
+    padding: 16px 16px 4px;
   }
-  .composer-caption {
-    font-size: 9px;
+  .start-step {
+    grid-template-columns: 24px 1fr;
+    gap: 10px;
   }
-  .message-header .to,
-  .message-header time {
-    font-size: 9px;
+  .seat-row {
+    flex-wrap: wrap;
   }
-  .conversation-heading > .subtle-button {
-    font-size: 10px;
+  .seat-actions {
+    width: 100%;
+    flex-wrap: wrap;
   }
-  .recipient-picker > span {
-    font-size: 9px;
+}
+.composer.resting {
+  opacity: 0.6;
+}
+.composer.resting .recipient-picker {
+  visibility: hidden;
+}
+.recipient.selected[data-member]::after {
+  content: "✓";
+  font-size: 12px;
+  margin-left: 1px;
+}
+.message-text.folded {
+  max-height: 17em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent);
+}
+.expand {
+  margin-top: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: #476958;
+}
+.mention {
+  font-weight: 600;
+  color: #2f5a3d;
+}
+.seat-actions button.quiet {
+  border-color: transparent;
+  background: none;
+  color: #5b665d;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.composer.fixed-reply .recipient-picker {
+  visibility: hidden;
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+/* Companion: a small window beside the native apps. It reuses the narrow layout. */
+.companion .conversation-heading,
+.companion .members,
+.companion .local-pill,
+.companion #open-companion,
+.companion .starters,
+.companion .welcome-note {
+  display: none;
+}
+.companion .topbar {
+  height: 52px;
+  min-height: 52px;
+}
+.companion .welcome h1 {
+  font-size: 34px;
+  letter-spacing: -1.2px;
+}
+.companion .welcome .hero-avatars {
+  margin-bottom: 14px;
+}
+@media (max-width: 520px) {
+  .topbar-actions .local-pill {
+    display: none;
   }
+}
+/* The person's reply limit for this conversation: 4, 10, 20 or no limit. */
+.limit-switch {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -6px 0 14px;
+  font-size: 13px;
+  color: #5b665d;
+}
+.limit-switch > span {
+  margin-right: 2px;
+}
+.limit-switch button {
+  border: 1px solid #dfe5d6;
+  background: #fffefa;
+  border-radius: 999px;
+  padding: 3px 11px;
+  font-size: 13px;
+  color: #3f4a42;
+}
+.limit-switch button.selected {
+  background: #344e3e;
+  border-color: #344e3e;
+  color: #f3f5ee;
+  font-weight: 600;
+}
+.limit-switch small {
+  margin-left: 4px;
+  font-size: 12px;
+  color: #6a7464;
 }

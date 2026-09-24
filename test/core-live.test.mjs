@@ -117,7 +117,7 @@ test("queued turns survive reopening; acceptance carries unseen context and the 
   await second.run();
   assert.equal(calls.length, 1, "run must not redeliver a queued turn");
   await assert.rejects(
-    second.send("Overlap", "claude"),
+    second.pass("claude"),
     /native reply is pending/,
   );
   const accepted = await second.accept({
@@ -421,4 +421,214 @@ test("a receipt for the wrong turn cannot put the room into awaiting-reply", asy
   await assert.rejects(app.send("Hello"), /receipt does not match/);
   assert.equal(store.read().pending.state, "uncertain");
   assert.equal(store.read().owner, "human");
+});
+
+test("human interjections preserve ownership, require revision receipts, and route once across reopen", async (t) => {
+  const f = fixture(t);
+  const calls = [];
+  let app = new Semaphore(f.store, queuedAdapters(calls));
+  await app.send("Start", "astra", { maxTurns: 3 });
+  const id = app.room.pending.id;
+  app.receive(id, "astra");
+  await app.send("Please focus on setup", "claude", { clientId: "human-input-1" });
+  assert.equal(app.room.owner, "astra");
+  assert.equal(app.room.pending.through, 1);
+  assert.equal(app.room.autoTurns, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(app.room.messages[1].readAt, undefined);
+  app = new Semaphore(f.reopen(), queuedAdapters(calls));
+  await app.send("Please focus on setup", "claude", { clientId: "human-input-1" });
+  assert.equal(app.room.messages.length, 2);
+  await assert.rejects(app.send("Different", "claude", { clientId: "human-input-1" }), /Conflicting/);
+  const reply = { turnId: id, speaker: "astra", message: "Revised setup", next: "astra" };
+  const review = await app.accept(reply);
+  assert.equal(review.status, "review-required");
+  assert.equal(review.revision, 2);
+  assert.equal(app.room.messages.length, 2);
+  assert.equal(calls.length, 1);
+  app.receive(id, "astra"); // Repeating the original receipt does not acknowledge newer text.
+  assert.equal((await app.accept(reply)).status, "review-required");
+  app.receive(id, "astra", review.revision);
+  assert.equal(app.room.messages[1].readBy, "astra");
+  await app.send("Also include recovery", "claude", { clientId: "human-input-2" });
+  const newer = await app.accept(reply);
+  assert.equal(newer.revision, 3);
+  assert.throws(() => app.receive(id, "astra", 2), /Stale review/);
+  app.receive(id, "astra", 3);
+  const accepted = await app.accept(reply);
+  assert.equal(accepted.status, "accepted");
+  assert.equal(accepted.message.next, "claude");
+  assert.equal(accepted.message.nominatedNext, "astra");
+  assert.equal(app.room.owner, "claude");
+  assert.equal(app.room.autoTurns, 1);
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].prompt, /Also include recovery/);
+  assert.equal((await app.accept(reply)).duplicate, true);
+  assert.equal(calls.length, 2);
+});
+
+test("interjections cannot reset the cap, unpause a room, or override a request for human input", async (t) => {
+  const f = fixture(t);
+  const calls = [];
+  const app = new Semaphore(f.store, queuedAdapters(calls));
+  await app.send("Start", "astra", { maxTurns: 1 });
+  const id = app.room.pending.id;
+  await app.send("Claude next", "claude");
+  await app.send("Actually Astra next", "astra");
+  const reply = { turnId: id, speaker: "astra", message: "Done", next: "claude" };
+  const review = await app.accept(reply);
+  app.receive(id, "astra", review.revision);
+  await app.accept(reply);
+  assert.equal(app.room.owner, "human");
+  assert.equal(app.room.autoTurns, 1);
+  assert.equal(app.room.replyNext.to, "astra");
+  assert.equal(calls.length, 1);
+  await app.pass("claude");
+  const nextId = app.room.pending.id;
+  await app.send("Astra next", "astra");
+  const question = { turnId: nextId, speaker: "claude", message: "Which project?", next: "human" };
+  app.receive(nextId, "claude", (await app.accept(question)).revision);
+  await app.accept(question);
+  assert.equal(app.room.owner, "human");
+  await app.pass("astra");
+  const stoppedId = app.room.pending.id;
+  app.takeStick();
+  await app.send("Save this while paused", "claude");
+  assert.equal(app.room.owner, "human");
+  assert.equal(app.room.pending.state, "uncertain");
+  await assert.rejects(app.accept({ ...reply, turnId: stoppedId }), /Stale reply/);
+});
+
+test("opening request waits for all selected seats and never repeats its dispatch", async (t) => {
+  const f = fixture(t);
+  const calls = [];
+  let app = new Semaphore(f.store, queuedAdapters(calls));
+  app.room.participants.astra.id = null;
+  app.room.participants.claude.id = null;
+  const options = { clientId: "opening-request-1", members: ["astra", "claude"] };
+  await app.setOpening("Discuss the UX", "claude", options);
+  assert.equal(app.room.opening.state, "waiting");
+  assert.equal(app.room.owner, "human");
+  assert.equal(calls.length, 0);
+  app.room.participants.claude.id = SESSION;
+  await app.startOpening();
+  assert.equal(calls.length, 0);
+  app.save();
+  app = new Semaphore(f.reopen(), queuedAdapters(calls));
+  app.room.participants.astra.id = THREAD;
+  await app.startOpening();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].speaker, "claude");
+  assert.equal(app.room.opening.state, "started");
+  await app.setOpening("Discuss the UX", "claude", options);
+  await app.startOpening();
+  assert.equal(app.room.messages.length, 1);
+  assert.equal(calls.length, 1);
+  await assert.rejects(app.setOpening("Different", "claude", options), /different opening/);
+});
+
+test("opening dispatch uncertainty and a paused opening survive restart without retry", async (t) => {
+  const f = fixture(t);
+  let calls = 0;
+  const adapters = queuedAdapters();
+  adapters.astra.deliver = async () => { calls++; throw new Error("lost receipt"); };
+  let app = new Semaphore(f.store, adapters);
+  const options = { clientId: "opening-request-2", members: ["astra"] };
+  await assert.rejects(app.setOpening("Start", "astra", options), /lost receipt/);
+  assert.equal(app.room.opening.state, "uncertain");
+  app = new Semaphore(f.reopen(), adapters);
+  await app.setOpening("Start", "astra", options);
+  await app.startOpening();
+  assert.equal(calls, 1);
+  assert.equal(app.room.owner, "human");
+});
+
+test("input journal replay after a partial drain cannot duplicate input or spend another turn", async (t) => {
+  const { queueHumanInput, queuedInputs, withInputs, inputMessages } = await import("../lib/inputs.mjs");
+  const f = fixture(t);
+  const app = new Semaphore(f.store, queuedAdapters());
+  await app.send("Start", "astra");
+  const turnId = app.room.pending.id;
+  app.receive(turnId, "astra");
+  queueHumanInput(f.store, { text: "One extra thought", to: "claude", clientId: "replay-input-123" });
+  // Simulate a crash after the main journal is durable but before ingress clears.
+  withInputs(f.store.dir, (journal) => {
+    for (const message of inputMessages(app.room, journal.all())) {
+      delete message.queued;
+      app.room.messages.push(message);
+      app.room.replyNext = { to: message.next, seq: message.seq };
+    }
+    app.save();
+  });
+  assert.equal(queuedInputs(f.store.dir).length, 1);
+  const restarted = new Semaphore(f.reopen(), queuedAdapters());
+  assert.equal(restarted.room.messages.length, 2);
+  assert.equal(queuedInputs(f.store.dir).length, 0);
+  const review = await restarted.accept({ turnId, speaker: "astra", message: "Old response", next: "claude" });
+  assert.equal(review.status, "review-required");
+  assert.equal(restarted.room.autoTurns, 0);
+  assert.equal(restarted.room.pending.id, turnId);
+  restarted.receive(turnId, "astra", review.revision);
+  await restarted.send("Newer routing choice", "astra", { clientId: "newer-input-123" });
+  const second = await restarted.accept({ turnId, speaker: "astra", message: "Updated response", next: "claude" });
+  assert.equal(second.status, "review-required");
+  assert.equal(restarted.room.replyNext.to, "astra");
+});
+
+test("a direct human send drains older queued input before choosing the next speaker", async (t) => {
+  const { queueHumanInput } = await import("../lib/inputs.mjs");
+  const f = fixture(t);
+  const app = new Semaphore(f.store, queuedAdapters());
+  await app.send("Start", "astra");
+  queueHumanInput(f.store, { text: "Earlier queued thought", to: "claude", clientId: "ordering-early-123" });
+  await app.send("Later direct thought", "astra", { clientId: "ordering-later-123" });
+  assert.deepEqual(app.room.messages.map((m) => m.text), ["Start", "Earlier queued thought", "Later direct thought"]);
+  assert.deepEqual(app.room.replyNext, { to: "astra", seq: 3 });
+  assert.equal(app.room.owner, "astra");
+});
+
+test("the per-conversation reply limit applies now, persists, and can be turned off", async (t) => {
+  const f = fixture(t);
+  const calls = [];
+  const adapters = queuedAdapters(calls);
+  const app = new Semaphore(f.store, adapters);
+  assert.equal(app.room.turnLimit, 4);
+  await app.send("Start.", "astra");
+  assert.equal(app.room.maxTurns, 4, "an exchange uses the conversation's limit");
+  app.setTurnLimit(10);
+  assert.equal(app.room.maxTurns, 10, "a change applies to the exchange in progress");
+  assert.throws(() => app.setTurnLimit(0), /1 to 20/);
+  assert.throws(() => app.setTurnLimit(21), /1 to 20/);
+  app.setTurnLimit(null);
+  const reopened = new Semaphore(f.reopen(), adapters);
+  assert.equal(reopened.room.turnLimit, null, "no limit survives reopening");
+  assert.equal(reopened.room.maxTurns, null);
+  let turn = reopened.room.pending;
+  for (let i = 0; i < 6; i++) {
+    const speaker = turn.speaker;
+    await reopened.accept({
+      turnId: turn.id,
+      speaker,
+      message: `Reply ${i + 1}`,
+      next: speaker === "astra" ? "claude" : "astra",
+    });
+    turn = reopened.room.pending;
+  }
+  assert.equal(reopened.room.autoTurns, 6);
+  assert.notEqual(reopened.room.owner, "human", "no limit never pauses on its own");
+  assert.equal(
+    reopened.room.events.filter((event) => event.type === "turn-limit").length,
+    0,
+  );
+  reopened.setTurnLimit(4);
+  await reopened.accept({
+    turnId: turn.id,
+    speaker: turn.speaker,
+    message: "One more",
+    next: turn.speaker === "astra" ? "claude" : "astra",
+  });
+  assert.equal(reopened.room.owner, "human", "a lower limit pauses at the next reply");
+  reopened.takeStick();
+  await reopened.pass("claude");
+  assert.equal(reopened.room.maxTurns, 4, "the next exchange keeps the chosen limit");
 });

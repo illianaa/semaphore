@@ -24,7 +24,7 @@ import {
   shellQuote as quote,
 } from "./lib/paths.mjs";
 import { buildInvite } from "./lib/invite.mjs";
-import { createLiveRoom, readRooms } from "./lib/rooms.mjs";
+import { createLiveRoom, createStartedRoom, readRooms } from "./lib/rooms.mjs";
 import { diagnose } from "./lib/doctor.mjs";
 import {
   DEFAULT_PORT,
@@ -41,9 +41,12 @@ const { values, positionals } = parseArgs({
     to: { type: "string", default: "astra" },
     file: { type: "string" },
     root: { type: "string", default: defaultRoomRoot },
-    "max-turns": { type: "string", default: "4" },
+    "max-turns": { type: "string" },
     as: { type: "string" },
     turn: { type: "string" },
+    revision: { type: "string" },
+    "request-id": { type: "string" },
+    first: { type: "string" },
     next: { type: "string" },
     via: { type: "string" },
     rebind: { type: "boolean" },
@@ -83,6 +86,8 @@ Conversations for live desktop chats:
   node cli.mjs unlock <room>                Remove a lock only if its process died
 
 Live chats (run from inside the Astra or Claude desktop chat):
+  node cli.mjs loop-in --as astra --to claude --file request.md --request-id <id>
+    Create a group from this chat, save the opening, and prepare the other invitation.
   node cli.mjs join <room> --as astra|claude [--rebind]   Bind this chat to the room
   node cli.mjs listen <room>                Claude: wait in the background for the next turn
   node cli.mjs stick <room>                 Whose turn is it? Exits 3 if it isn't this chat's
@@ -95,7 +100,8 @@ In a conversation:
   /native   /recover   /quit
   Plain text goes to the last model you selected. Ctrl+C takes the stick
   during a response; at the prompt, Ctrl+C exits. Each run defaults to
-  at most four model replies. Use --max-turns 1–20 to change this.
+  the conversation's reply limit, set in the app (four unless changed).
+  Use --max-turns 1–20 to override it for one run.
 `;
 const names = { human: "You", astra: "Astra", claude: "Claude" };
 const recipients = { human: "you", astra: "Astra", claude: "Claude" };
@@ -165,6 +171,30 @@ function newRoom() {
   console.log(
     `To bring an AI in: invite ${room.name}${rootFlag} --to astra|claude`,
   );
+}
+
+async function loopIn() {
+  const speaker = values.as;
+  if (!["astra", "claude"].includes(speaker) || !["astra", "claude"].includes(values.to) || values.to === speaker)
+    throw new Error("Choose this chat with --as and the other participant with --to.");
+  const binding = bindFromEnv(speaker);
+  const appPort = port();
+  const text = readMessage();
+  const clientId = values["request-id"];
+  if (typeof clientId !== "string" || !/^[A-Za-z0-9_-]{8,128}$/.test(clientId))
+    throw new Error("Provide --request-id and keep it for retries of this opening.");
+  const existing = readRooms(root).find(({ room }) => room.participants[speaker]?.id === binding.id);
+  if (existing && existing.room.creationRequest?.clientId !== clientId)
+    throw new Error(`This chat is already connected to ${existing.room.name}. Reuse that room, or start a new native chat for a separate conversation.`);
+  const first = values.first ?? speaker;
+  const { room, duplicate } = await createStartedRoom(root, { text, to: first, members: [speaker, values.to], clientId },
+    { source: { speaker, ...binding } });
+  console.log(`${duplicate ? "Already saved" : "Saved"} your request in ${room.name}. This chat is connected as ${names[speaker]}.`);
+  console.log(`Conversation: http://127.0.0.1:${appPort}/#${encodeURIComponent(room.name)}`);
+  if (room.opening.state === "waiting")
+    console.log(`The opening waits for ${names[values.to]} to join, then goes to ${names[first]} once.`);
+  invite(room);
+  listenHint(binding.transport, speaker, room.name);
 }
 
 function invite(room) {
@@ -325,7 +355,7 @@ function native(room, store) {
 
 function status(room, store) {
   console.log(
-    `Room ${room.name} “${room.title || room.name}” · stick: ${room.owner} · model turns ${room.autoTurns ?? 0}/${room.maxTurns ?? 4}`,
+    `Room ${room.name} “${room.title || room.name}” · stick: ${room.owner} · model turns ${room.autoTurns ?? 0}${room.maxTurns === null ? " (no limit)" : `/${room.maxTurns ?? 4}`}`,
   );
   for (const speaker of ["astra", "claude"]) {
     const participant = room.participants[speaker];
@@ -474,6 +504,13 @@ async function reply(app, caller) {
       message: readMessage(),
       next: values.next,
     });
+    if (result.status === "review-required") {
+      console.log("Your reply was not accepted. New human input arrived; you still hold the stick. Read it, run the receive command below, then revise and submit your reply.");
+      console.log(liveEnvelope({ room: app.room, participant: app.room.participants[caller],
+        turn: { ...app.room.pending, through: result.revision, revision: result.revision }, prompt: "" }, { root }));
+      process.exitCode = 3;
+      return;
+    }
     console.log(
       result.duplicate
         ? `Already accepted as message ${result.message.seq}; nothing was sent again.`
@@ -637,6 +674,7 @@ async function main() {
     "stick",
     "receive",
     "new",
+    "loop-in",
     "rooms",
     "invite",
     "doctor",
@@ -651,6 +689,7 @@ async function main() {
   if (command === "open") return openApp();
   if (command === "rooms") return listRooms();
   if (command === "new") return newRoom();
+  if (command === "loop-in") return loopIn();
   const store = new RoomStore(root, name);
   if (command === "unlock") {
     store.unlock();
@@ -701,8 +740,13 @@ async function main() {
     }
     return;
   }
-  const maxTurns = Number(values["max-turns"]);
-  if (!Number.isInteger(maxTurns) || maxTurns < 1 || maxTurns > 20)
+  // Without --max-turns, each exchange uses the conversation's own reply limit.
+  const maxTurns =
+    values["max-turns"] === undefined ? undefined : Number(values["max-turns"]);
+  if (
+    maxTurns !== undefined &&
+    (!Number.isInteger(maxTurns) || maxTurns < 1 || maxTurns > 20)
+  )
     throw new Error("--max-turns must be between 1 and 20.");
   await store.acquire({ waitMs: 15_000 });
   let semaphore;
@@ -728,11 +772,17 @@ async function main() {
         ownTurn: command === "reply" ? values.turn : undefined,
       }),
     );
-    if (command === "join") return join(semaphore);
+    if (command === "join") {
+      join(semaphore);
+      // A new binding can complete setup. Refresh the adapters from that binding.
+      semaphore.adapters = transportsFor(semaphore.room, callerIn(semaphore.room));
+      await semaphore.startOpening();
+      return;
+    }
     if (command === "receive") {
       if (!caller)
         throw new Error("Receive must run inside the chat bound to this room.");
-      const turn = semaphore.receive(values.turn, caller);
+      const turn = semaphore.receive(values.turn, caller, values.revision === undefined ? undefined : Number(values.revision));
       acknowledgeDelivery({ roomDir: store.dir, speaker: caller, turnId: turn.id });
       console.log(
         liveEnvelope(
