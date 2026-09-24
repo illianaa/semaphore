@@ -401,10 +401,12 @@ function renderRoom(room, force = false) {
   renderLimit(room, setup);
   const missing = waitingOn(room);
   // Seats that receive turns through an inbox but have no listener running right now.
+  // A seat Semaphore wakes automatically needs no listener, so it is never "not listening".
   const resting = (room.members ?? SEATS).filter(
     (speaker) =>
       room.connections[speaker].connected &&
       room.connections[speaker].listening === false &&
+      room.connections[speaker].wake !== "automatic" &&
       !(room.pending?.speaker === speaker && room.pending.progress === "received"),
   );
   const needsListener = resting.length > 0;
