@@ -7,6 +7,7 @@ import http from "node:http";
 import { createAppServer } from "../server.mjs";
 import { RoomStore } from "../lib/core.mjs";
 import { LiveDeliveryError } from "../lib/live.mjs";
+import { RUNTIME } from "../lib/build-info.mjs";
 
 async function fixture(t, options = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "semaphore-http-"));
@@ -73,6 +74,18 @@ async function fixture(t, options = {}) {
   };
   return { root, app, url, request, create, bind, calls, page, html };
 }
+
+test("the session reports the running version and invitations preserve a configured project folder", async (t) => {
+  const workspace = "/Users/example/Project with spaces";
+  const f = await fixture(t, { workspace });
+  const room = await f.create("A chosen project");
+  const session = await f.request("/api/session");
+  assert.equal(session.body.version, RUNTIME.version);
+  assert.equal(session.body.workspace, workspace);
+  const invite = await f.request(`/api/rooms/${room.name}/invite/claude`);
+  assert.equal(invite.status, 200);
+  assert.equal(new URL(invite.body.url).searchParams.get("folder"), workspace);
+});
 
 test("web shell is available, uses restrictive headers, and never exposes raw room files", async (t) => {
   const f = await fixture(t);
@@ -177,6 +190,11 @@ test("new rooms are live-only, private, persist titles, and offer portable invit
   assert.equal(
     new URL(invite.body.url).searchParams.get("q"),
     invite.body.prompt,
+  );
+  // New Claude chats open in the room's shared folder, never the (possibly read-only) code folder.
+  assert.equal(
+    new URL(invite.body.url).searchParams.get("folder"),
+    path.join(f.root, room.name, "workspace"),
   );
   const send = await f.request(`/api/rooms/${room.name}/messages`, {
     method: "POST",

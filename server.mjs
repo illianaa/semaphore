@@ -24,7 +24,7 @@ const error = (status, message) =>
 
 export function createAppServer({
   root = defaultRoomRoot,
-  workspace = projectDir,
+  workspace,
   transports,
   inviteBuilder = buildInvite,
   diagnosticsProvider,
@@ -314,9 +314,9 @@ export function createAppServer({
         throw error(401, "Reload Semaphore to reconnect.");
       if (req.method === "GET" && url.pathname === "/api/session")
         return json(200, {
-          version: "0.2.0",
+          version: RUNTIME.version,
           platform: process.platform,
-          workspace,
+          workspace: workspace ?? null,
           root,
         });
       if (req.method === "GET" && url.pathname === "/api/diagnostics")
@@ -396,7 +396,7 @@ export function createAppServer({
         const { room } = readRoom(name);
         return json(
           200,
-          await inviteBuilder({ root, room, speaker, workspace }),
+          await inviteBuilder({ root, room, speaker, ...(workspace ? { workspace } : {}) }),
         );
       }
       if (
