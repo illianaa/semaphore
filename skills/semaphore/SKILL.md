@@ -64,6 +64,7 @@ When you finish something the person should look at, such as a page, document or
 - Mark it `--ready` only when it is finished for the person. The app shows when its files change after registering.
 - Review against the exact version: `semaphore artifact <room> list` gives the current revision and SHA-256. Then run `semaphore artifact <room> review --turn <id> --id <artifact> --revision <n> --sha256 <hash> --kind source`. Use `--kind visual --via "<what you inspected>"` only after inspecting a render through a tool your host allows; a source review never counts as visual.
 - If you publish it somewhere your host allows, record the link on `add` with `--url <https link> --access "<who can open it>"`. Semaphore keeps it as your report and doesn't check it.
+- The person can open an HTML deliverable from the app as an isolated preview of that exact version. If you are given a preview link and your host allows opening it, you may inspect it for a visual review. If your host blocks it, stop, stay source-only and say so; don't try another route.
 
 ### When the human speaks during your turn
 

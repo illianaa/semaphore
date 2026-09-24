@@ -21,6 +21,8 @@ const state = {
   owners: {},
   approvals: {},
   readySeen: {},
+  // Preview links issued in this page, by artifact. They are capabilities, so never stored.
+  previewLinks: {},
 };
 // Message requests still in flight, by request ID. The box clears as soon as one is sent.
 const inFlight = new Map();
@@ -493,7 +495,20 @@ function artifactCard(item) {
   const files = (item.files ?? [])
     .map((file) => `<li><span>${escape(file.name)}</span><span>${escape(formatBytes(file.bytes))}</span></li>`)
     .join("");
-  return `<article class="artifact" data-availability="${escape(item.availability)}"><div class="artifact-head"><strong class="artifact-title">${escape(item.title)}</strong><span class="artifact-status ${tone}">${escape(status)}</span></div><div class="artifact-meta">${escape(item.entry)}${extra > 0 ? ` + ${extra} ${extra === 1 ? "file" : "files"}` : ""} · ${escape(formatBytes(item.bytes))} · v${Number(item.revision)} · updated by ${escape(labels[item.updatedBy] ?? item.updatedBy)} ${escape(relativeTime(item.updatedAt).replace(/^Just now$/, "just now"))}</div><div class="artifact-line">${artifactReviews(item)}</div>${published}<details class="artifact-files"><summary>${(item.files?.length ?? 1) === 1 ? "1 file" : `${item.files.length} files`} · ${escape(item.preview?.available ? "Preview available" : item.preview?.reason ?? "No shared preview.")}</summary><code class="artifact-path">${escape(item.path)}</code><ul>${files}</ul><button type="button" data-copy-path="${escape(item.id)}">Copy path</button></details></article>`;
+  return `<article class="artifact" data-availability="${escape(item.availability)}"><div class="artifact-head"><strong class="artifact-title">${escape(item.title)}</strong><span class="artifact-status ${tone}">${escape(status)}</span></div><div class="artifact-meta">${escape(item.entry)}${extra > 0 ? ` + ${extra} ${extra === 1 ? "file" : "files"}` : ""} · ${escape(formatBytes(item.bytes))} · v${Number(item.revision)} · updated by ${escape(labels[item.updatedBy] ?? item.updatedBy)} ${escape(relativeTime(item.updatedAt).replace(/^Just now$/, "just now"))}</div><div class="artifact-line">${artifactReviews(item)}</div>${published}${item.preview?.available ? previewActions(item) : ""}<details class="artifact-files"><summary>${(item.files?.length ?? 1) === 1 ? "1 file" : `${item.files.length} files`}${item.preview?.available ? "" : ` · ${escape(item.preview?.reason ?? "No shared preview.")}`}</summary><code class="artifact-path">${escape(item.path)}</code><ul>${files}</ul><button type="button" data-copy-path="${escape(item.id)}">Copy path</button></details></article>`;
+}
+// A link issued for this exact version stays usable as a plain link until it expires, so a
+// blocked pop-up never strands the person.
+function previewActions(item) {
+  const issued = state.previewLinks[item.id];
+  const link =
+    issued && issued.revision === Number(item.revision) && issued.sha256 === item.sha256 &&
+    Date.parse(issued.expiresAt) > Date.now()
+      ? webLink(issued.url)
+      : null;
+  return link
+    ? `<div class="artifact-actions"><a class="artifact-open" href="${escape(link.href)}" target="_blank" rel="noopener noreferrer">Open version ${Number(item.revision)} ↗</a><span>Link works until ${escape(formatTime(issued.expiresAt))}</span></div>`
+    : `<div class="artifact-actions"><button type="button" data-preview="${escape(item.id)}">Open preview ↗</button><span>Version ${Number(item.revision)}, as registered</span></div>`;
 }
 function renderDeliverables(room, setup) {
   const panel = $("#deliverables");
@@ -903,6 +918,35 @@ $("#manage-connections").addEventListener("click", connections);
 $("#connection-guide").addEventListener("click", (event) => {
   if (event.target.closest("button")) connections();
 });
+// Opens an isolated preview of one registered version. The tab opens inside the click, so
+// browsers allow it; it only learns its address once Semaphore has issued the link.
+async function openPreview(room, button) {
+  const item = (room.artifacts ?? []).find((artifact) => artifact.id === button.dataset.preview);
+  if (!item || button.disabled) return;
+  const tab = window.open("about:blank", "_blank");
+  if (tab) tab.opener = null;
+  button.disabled = true;
+  try {
+    const preview = await api(
+      `/rooms/${encodeURIComponent(room.name)}/artifacts/${encodeURIComponent(item.id)}/preview`,
+      { method: "POST", body: {} },
+    );
+    const link = webLink(preview.url);
+    if (!link || link.protocol !== "http:" || link.hostname !== "127.0.0.1")
+      throw new Error("Semaphore returned an unexpected preview address.");
+    state.previewLinks[item.id] = { url: link.href, revision: Number(preview.revision), sha256: preview.sha256, expiresAt: preview.expiresAt };
+    if (tab) {
+      tab.location.replace(link.href);
+      toast(`Opened version ${Number(preview.revision)}. The link works until ${formatTime(preview.expiresAt)}.`);
+    } else toast("Your browser blocked the new tab. Use the “Open version” link on the card instead.");
+    if (state.room?.name === room.name) renderDeliverables(state.room, false);
+  } catch (err) {
+    tab?.close();
+    toast(err.message || "The preview couldn’t open. The files are still listed here.");
+  } finally {
+    button.disabled = false;
+  }
+}
 $("#deliverables").addEventListener("click", async (event) => {
   const room = state.room;
   if (!room) return;
@@ -911,6 +955,8 @@ $("#deliverables").addEventListener("click", async (event) => {
     storageSet(`semaphore:deliverables:${room.name}`, open ? "closed" : "open");
     return renderDeliverables(room, false);
   }
+  const preview = event.target.closest("[data-preview]");
+  if (preview) return openPreview(room, preview);
   const button = event.target.closest("[data-copy-path]");
   const item = button && (room.artifacts ?? []).find((artifact) => artifact.id === button.dataset.copyPath);
   if (!item) return;
