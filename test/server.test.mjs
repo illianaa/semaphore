@@ -650,3 +650,54 @@ test("instant wake is read and changed only through its routes, and a restart wa
   assert.match(failed.body.error, /shared engine/);
   assert.ok(failed.body.wake, "a failure still reports where things stand");
 });
+
+test("the room API shows a status note only for the turn that wrote it, and never an expired one", async (t) => {
+  const f = await fixture(t);
+  const room = await f.create("Status notes");
+  f.bind(room.name);
+  const sent = await f.request(`/api/rooms/${room.name}/messages`, {
+    method: "POST",
+    body: { text: "Please research this", to: "claude", clientId: "human-request-note" },
+  });
+  const turnId = sent.body.room.pending.id;
+  const write = (note) => {
+    const store = new RoomStore(f.root, room.name);
+    store.acquire();
+    try {
+      const saved = store.read();
+      saved.statusNote = note;
+      saved.pending.receivedAt = new Date().toISOString();
+      store.save(saved);
+    } finally {
+      store.release();
+    }
+  };
+  const now = Date.now();
+  const note = (fields) => ({ speaker: "claude", turnId, kind: "working", text: "Comparing pricing pages",
+    updatedAt: new Date(now).toISOString(), expiresAt: new Date(now + 60_000).toISOString(), ...fields });
+  const shown = async () => {
+    const [detail, list] = await Promise.all([f.request(`/api/rooms/${room.name}`), f.request("/api/rooms")]);
+    assert.deepEqual(list.body.rooms.find((r) => r.name === room.name).statusNote, detail.body.room.statusNote);
+    return detail.body.room.statusNote;
+  };
+
+  write(note({ kind: "approval", expiresAt: null, text: "x".repeat(400) }));
+  const approval = await shown();
+  assert.equal(approval.kind, "approval");
+  assert.equal(approval.text.length, 280);
+  assert.equal(approval.expiresAt, null);
+  for (const stale of [
+    note({ turnId: "another-turn" }),
+    note({ speaker: "astra" }),
+    note({ expiresAt: new Date(now - 1).toISOString() }),
+    note({ kind: "done" }),
+    note({ text: "   " }),
+  ]) {
+    write(stale);
+    assert.equal(await shown(), null);
+  }
+  write(note());
+  assert.equal((await shown()).text, "Comparing pricing pages");
+  const taken = await f.request(`/api/rooms/${room.name}/take`, { method: "POST", body: {} });
+  assert.equal(taken.body.room.statusNote, null);
+});

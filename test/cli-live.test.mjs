@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { WORKING_NOTE_TTL } from "../lib/status-note.mjs";
 
 const CLI = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -917,4 +918,90 @@ test('a wrong compact display revision never acknowledges a turn', (t) => {
   assert.equal(f.room('room').pending.receivedAt,undefined);
   const recovered=f.run(['receive','room','--turn',id,'--revision','1','--show'],ASTRA);
   assert.equal(recovered.code,0,recovered.err);
+});
+
+test('notes require the bound, acknowledged turn and never deliver a reply', (t) => {
+  const f = setup(t); joinBoth(f.run);
+  assert.equal(f.run(['send', 'room', '--to', 'astra', 'Make the presentation']).code, 0);
+  const id = f.room('room').pending.id;
+  const note = (args, env = ASTRA) => f.run(['note', 'room', '--turn', id, ...args], env);
+  assert.match(note(['Starting']).err, /Receive this turn/);
+  assert.equal(f.room('room').statusNote, undefined);
+  assert.equal(f.run(['receive', 'room', '--turn', id], ASTRA).code, 0);
+  const before = f.room('room');
+  for (const env of [{}, { CODEX_THREAD_ID: OTHER }, CLAUDE])
+    assert.equal(note(['Not mine'], env).code, 1);
+  assert.equal(note(['--as', 'claude', 'Impersonating']).code, 1);
+  assert.equal(f.run(['note', 'room', '--turn', 'stale-turn', 'Stale'], ASTRA).code, 1);
+  assert.equal(note(['   \n\t']).code, 1);
+  assert.equal(note(['--clear', '--approval']).code, 1);
+  assert.equal(note(['--clear', 'ambiguous']).code, 1);
+  assert.equal(note(['--clear', '--file', '-']).code, 1);
+  assert.equal(note(['Comparing\n\tthree  options']).code, 0);
+  const working = f.room('room').statusNote;
+  assert.equal(working.text, 'Comparing three options');
+  assert.equal(working.kind, 'working');
+  assert.equal(Date.parse(working.expiresAt) - Date.parse(working.updatedAt), WORKING_NOTE_TTL);
+  assert.match(f.run(['status', 'room']).out, /Astra is working[\s\S]*Comparing three options/);
+
+  assert.equal(note(['--approval', 'Approve the native file operation']).code, 0);
+  assert.equal(f.room('room').statusNote.expiresAt, null);
+  assert.match(f.run(['status', 'room']).out, /waiting for your approval in ChatGPT/);
+  assert.equal(note(['🦋'.repeat(281)]).code, 0);
+  assert.equal(f.room('room').statusNote.text, '🦋'.repeat(280), 'the cap never splits a Unicode code point');
+  const after = f.room('room');
+  for (const key of ['owner', 'messages', 'pending', 'autoTurns', 'maxTurns', 'participants'])
+    assert.deepEqual(after[key], before[key], key);
+  assert.equal(after.events.filter(e => e.type === 'status-note').length, 3);
+  assert.ok(after.events.filter(e => e.type.startsWith('status-note')).every(e => !('text' in e.detail)));
+  assert.equal(f.queued().length, 0);
+  assert.equal(f.claudeCalled(), false);
+  assert.equal(note(['--clear']).code, 0);
+  assert.equal(note(['--clear']).code, 0, 'clearing twice is harmless');
+  assert.equal(f.room('room').statusNote, undefined);
+});
+
+test('notes survive human interjections and review retries, then clear on reply and take', (t) => {
+  const f = setup(t); joinBoth(f.run);
+  f.run(['send', 'room', '--to', 'astra', 'Please work']);
+  const id = f.room('room').pending.id;
+  f.run(['receive', 'room', '--turn', id], ASTRA);
+  assert.equal(f.run(['note', 'room', '--turn', id, '--approval', 'Native approval pending'], ASTRA).code, 0);
+  const original = f.room('room').statusNote;
+  assert.equal(f.run(['send', 'room', '--to', 'claude', 'Keep the new requirement']).code, 0);
+  assert.deepEqual(f.room('room').statusNote, original);
+  const reply = ['reply', 'room', '--turn', id, '--next', 'claude', 'Incorporated the requirement'];
+  assert.equal(f.run(reply, ASTRA).code, 3);
+  assert.deepEqual(f.room('room').statusNote, original, 'an uncommitted reply keeps the note');
+  assert.equal(f.run(['receive', 'room', '--turn', id, '--revision', '2'], ASTRA).code, 0);
+  assert.equal(f.run(reply, ASTRA).code, 0);
+  assert.equal(f.room('room').statusNote, undefined);
+  const next = f.room('room').pending.id;
+  assert.equal(f.run(['note', 'room', '--turn', id, '--clear'], ASTRA).code, 1);
+  assert.equal(f.run(['receive', 'room', '--turn', next], CLAUDE).code, 0);
+  assert.equal(f.run(['note', 'room', '--turn', next, '--approval', 'Please approve in Claude'], CLAUDE).code, 0);
+  assert.match(f.run(['status', 'room']).out, /waiting for your approval in the Claude app/);
+  assert.equal(f.run(['take', 'room']).code, 0);
+  assert.equal(f.room('room').statusNote, undefined);
+  assert.equal(f.run(['note', 'room', '--turn', next, 'Still working'], CLAUDE).code, 1);
+});
+
+test('status hides expired notes and a rebind removes the old seat note', (t) => {
+  const f = setup(t); joinBoth(f.run);
+  f.run(['send', 'room', '--to', 'astra', 'Please work']);
+  const id = f.room('room').pending.id;
+  f.run(['receive', 'room', '--turn', id], ASTRA);
+  f.run(['note', 'room', '--turn', id, 'An old working note'], ASTRA);
+  const file = path.join(f.root, 'room', 'room.json');
+  const expired = f.room('room');
+  expired.statusNote.expiresAt = new Date(Date.now() - 1).toISOString();
+  fs.writeFileSync(file, JSON.stringify(expired));
+  assert.doesNotMatch(f.run(['status', 'room']).out, /An old working note/);
+  f.run(['take', 'room']); f.run(['recover', 'room']);
+  // A legacy or interrupted writer may have left stale state in the journal.
+  const saved = f.room('room'); saved.statusNote = expired.statusNote;
+  fs.writeFileSync(file, JSON.stringify(saved));
+  assert.equal(f.run(['join', 'room', '--as', 'astra', '--rebind'], { CODEX_THREAD_ID: OTHER }).code, 0);
+  assert.equal(f.room('room').statusNote, undefined);
+  assert.equal(f.run(['note', 'room', '--turn', id, 'Old chat'], ASTRA).code, 1);
 });

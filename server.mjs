@@ -15,6 +15,7 @@ import { wakeStatus, enableWake, disableWake, restartChatGPT } from "./lib/wake.
 import { WakePump } from "./lib/wake-delivery.mjs";
 import { diagnose } from "./lib/doctor.mjs";
 import { RUNTIME } from './lib/build-info.mjs';
+import { statusNote } from './lib/status-note.mjs';
 
 const SPEAKERS = ["astra", "claude"];
 const MAX_BODY = 80_000;
@@ -125,6 +126,7 @@ export function createAppServer({
               : {}),
           }
         : null,
+      statusNote: statusNote(room),
       connections,
       lock: store.lockStatus(),
       autoTurns: room.autoTurns ?? 0,

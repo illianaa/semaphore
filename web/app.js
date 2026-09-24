@@ -19,6 +19,7 @@ const state = {
   startRecipient: rememberedRecipient(),
   expanded: new Set(),
   owners: {},
+  approvals: {},
 };
 // Message requests still in flight, by request ID. The box clears as soon as one is sent.
 const inFlight = new Map();
@@ -55,6 +56,19 @@ let toastTimer;
 
 // Where each AI works, and where it asks the person for approval.
 const hostApp = (speaker) => (speaker === "astra" ? "ChatGPT" : "the Claude app");
+// A status note is the AI's own line about the turn it holds. Show it only while that exact
+// turn is pending, and always as the AI's words, never as Semaphore's.
+function currentNote(room) {
+  const note = room?.statusNote;
+  const pending = room?.pending;
+  if (!note || pending?.state !== "awaiting-reply" || note.turnId !== pending.id || note.speaker !== pending.speaker)
+    return null;
+  if (!["working", "approval"].includes(note.kind) || typeof note.text !== "string" || !note.text.trim())
+    return null;
+  if (note.expiresAt && !(Date.parse(note.expiresAt) > Date.now())) return null;
+  return note;
+}
+const awaitingApproval = (room) => currentNote(room)?.kind === "approval";
 // Queue acceptance is distinct from acknowledgment by the bound native chat.
 function pendingDetail(pending, room) {
   const who = labels[pending.speaker];
@@ -283,6 +297,7 @@ function roomSubtitle(room) {
         ? `Waiting for ${labels[missing[0]]} to join`
         : "Starting…";
   }
+  if (awaitingApproval(room)) return `${labels[room.pending.speaker]} needs your approval`;
   if (room.pending) return `${labels[room.pending.speaker]}’s turn`;
   return room.messageCount
     ? `${room.messageCount} messages · ${relativeTime(room.updatedAt)}`
@@ -298,7 +313,7 @@ function renderSidebar() {
     ? rooms
         .map(
           (room) =>
-            `<button class="room-item ${state.selected === room.name ? "selected" : ""}" data-room="${escape(room.name)}" ${state.selected === room.name ? 'aria-current="page"' : ""}><span class="room-symbol" aria-hidden="true">▧</span><span class="room-copy"><strong>${escape(room.title)}</strong><small>${escape(roomSubtitle(room))}</small></span>${room.pending ? '<span class="room-dot" aria-label="Reply pending"></span>' : ""}</button>`,
+            `<button class="room-item ${state.selected === room.name ? "selected" : ""}" data-room="${escape(room.name)}" ${state.selected === room.name ? 'aria-current="page"' : ""}><span class="room-symbol" aria-hidden="true">▧</span><span class="room-copy"><strong>${escape(room.title)}</strong><small>${escape(roomSubtitle(room))}</small></span>${awaitingApproval(room) ? '<span class="room-dot approval" aria-label="Approval needed"></span>' : room.pending ? '<span class="room-dot" aria-label="Reply pending"></span>' : ""}</button>`,
         )
         .join("")
     : `<p class="no-rooms">${search ? "No matching conversations." : "A good conversation starts with a thought. Make room for yours."}</p>`;
@@ -401,17 +416,21 @@ function renderRoom(room, force = false) {
   const stale = room.lock?.state === "stale";
   const paused = pending?.state === "uncertain" || stale;
   const banner = $("#state-banner");
+  const note = paused ? null : currentNote(room);
+  const approval = note?.kind === "approval";
+  const chatURL = approval ? room.connections[pending.speaker]?.url : null;
   banner.classList.toggle("paused", paused);
+  banner.classList.toggle("approval", approval);
   banner.dataset.holder = paused ? "paused" : (pending?.speaker ?? "human");
   const who = paused
     ? `<i class="state-dot"></i><span>${stale ? "A previous app process stopped. Your conversation is saved." : "Paused · a previous delivery needs your review"}</span>`
     : pending
-      ? `${avatar(pending.speaker)}<span><strong>${labels[pending.speaker]} has the stick</strong><span class="state-detail"> · ${escape(pendingDetail(pending, room))}${Number.isInteger(room.maxTurns) ? ` · reply ${Math.min((room.autoTurns ?? 0) + 1, room.maxTurns)} of ${room.maxTurns}` : ""}</span></span>`
+      ? `${avatar(pending.speaker)}<span>${approval ? `<strong>${labels[pending.speaker]} is waiting for your approval in ${hostApp(pending.speaker)}</strong>` : `<strong>${labels[pending.speaker]} has the stick</strong><span class="state-detail"> · ${escape(pendingDetail(pending, room))}${Number.isInteger(room.maxTurns) ? ` · reply ${Math.min((room.autoTurns ?? 0) + 1, room.maxTurns)} of ${room.maxTurns}` : ""}</span>`}${note ? `<span class="state-note">“${escape(note.text)}” · ${escape(relativeTime(note.updatedAt))}</span>` : ""}</span>`
       : `${avatar("human")}<span><strong>Your turn</strong><span class="state-detail"> · reply, or hand the stick to one of them</span></span>`;
   // During the guided start, the start card is the only call to action.
   banner.innerHTML = setup
     ? ""
-    : `<span class="state-who">${who}</span><div class="state-actions">${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? '<button data-action="take">Take the stick</button>' : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
+    : `<span class="state-who">${who}</span><div class="state-actions">${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${chatURL ? `<a class="state-link" href="${escape(chatURL)}">Open chat ↗</a>` : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
   const scroller = $("#message-scroll");
   const atBottom =
     scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 90;
@@ -449,6 +468,8 @@ function composerHint(room, mode) {
   if (mode === "opening")
     return `Your first message waits until ${joinPhrase(room)} joined, then goes to ${labels[state.recipient]}.`;
   if (stale) return "You can keep sending. Saved messages wait until the stopped process is recovered.";
+  if (mode === "interject" && awaitingApproval(room))
+    return `${labels[room.pending.speaker]} is waiting for your approval in ${hostApp(room.pending.speaker)}. It will read your message before replying.`;
   if (mode === "interject")
     return room.pending.state === "uncertain"
       ? "Your message is saved until the conversation continues."
@@ -538,6 +559,30 @@ function notifyTurns(rooms) {
     };
   }
 }
+// Tells you when an AI starts waiting for your approval in its own app.
+function notifyApprovals(rooms) {
+  for (const room of rooms) {
+    const note = currentNote(room);
+    const key = note?.kind === "approval" ? `${note.turnId}:${note.updatedAt}` : null;
+    const seen = room.name in state.approvals;
+    const before = state.approvals[room.name];
+    state.approvals[room.name] = key;
+    if (!seen || !key || key === before || !canNotify() || (!document.hidden && document.hasFocus()))
+      continue;
+    let alert;
+    try {
+      alert = new Notification(`Approval needed · ${room.title}`, {
+        body: `${labels[note.speaker]} is waiting for your approval in ${hostApp(note.speaker)}: “${note.text}”`,
+        tag: `${room.name}:approval`,
+      });
+    } catch { continue; } // An OS notification failure must not mark the app offline.
+    alert.onclick = () => {
+      window.focus();
+      selectRoom(room.name);
+      alert.close();
+    };
+  }
+}
 async function refresh() {
   const selected = state.selected;
   try {
@@ -548,6 +593,7 @@ async function refresh() {
     $("#offline").hidden = true;
     state.rooms = list.rooms;
     notifyTurns(list.rooms);
+    notifyApprovals(list.rooms);
     renderSidebar();
     if (detail && selected === state.selected) renderRoom(detail.room);
   } catch (err) {

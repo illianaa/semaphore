@@ -628,10 +628,46 @@ textarea {
 .state-banner.paused .state-dot {
   background: #b8895b;
 }
+/* A status note: the AI's own line about the turn it holds. */
+.state-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: #5b665d;
+  overflow-wrap: anywhere;
+}
+/* An AI is waiting for the person's approval in its own app. */
+.state-banner.approval {
+  background: #f8edd9;
+  border-color: #e3c994;
+  color: #5e4a22;
+}
+.state-banner.approval .state-who strong {
+  color: #4a3812;
+}
+.state-banner.approval .state-note {
+  color: #6b5429;
+}
+.room-dot.approval {
+  width: 7px;
+  height: 7px;
+  background: #c08a2e;
+  margin-top: 7px;
+}
 .state-actions {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+.state-actions .state-link {
+  border: 1px solid #b9c7ad;
+  background: #fffefa;
+  color: #344e3e;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
 }
 .state-actions button {
   border: 1px solid #b9c7ad;

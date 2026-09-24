@@ -31,6 +31,7 @@ import { readWakeSettings, wakePaths } from "./lib/wake.mjs";
 import { WakeClient, verifyNativeSeat, sameRuntime } from "./lib/codex-runtime.mjs";
 import { cancelQueuedWake } from "./lib/wake-delivery.mjs";
 import { RUNTIME, formatRuntime, runtimeIdentity, runtimeChange, sameBuild } from './lib/build-info.mjs';
+import { statusNote } from './lib/status-note.mjs';
 import {
   DEFAULT_PORT,
   SERVICE_LABEL,
@@ -53,6 +54,8 @@ const { values, positionals } = parseArgs({
     compact: { type: "boolean" },
     "seen-through": { type: "string" },
     show: { type: "boolean" },
+    approval: { type: "boolean" },
+    clear: { type: "boolean" },
     "request-id": { type: "string" },
     first: { type: "string" },
     next: { type: "string" },
@@ -106,6 +109,9 @@ Live chats (run from inside the Astra or Claude desktop chat):
   node cli.mjs reply <room> --turn <id> --next human|astra|claude --file reply.md
     --file - reads stdin; omit --file for short quoted text. Use files or quoted heredocs for long Markdown.
     Replies preserve whitespace. A reply needing review keeps a draft and prints its retry command.
+  node cli.mjs note <room> --turn <id> [--approval] "<text>"
+    After receive, share a working note (30 minutes) or an approval wait (until cleared).
+    Notes use one line, at most 280 characters. Use --clear without text to remove one.
   A send from a bound chat records the human's message as relayed via that chat.
 
 In a conversation:
@@ -390,6 +396,11 @@ function status(room, store) {
       `Pending: turn ${pending.id} for ${pending.speaker} · ${pending.state ?? "uncertain"}${pending.receipt ? ` via ${pending.receipt.transport}` : ""}`,
     );
   const last = room.messages.at(-1);
+  const note = statusNote(room);
+  if (note) {
+    const host = note.speaker === "astra" ? "ChatGPT" : "the Claude app";
+    console.log(`Status note: ${names[note.speaker]} ${note.kind === "approval" ? `is waiting for your approval in ${host}` : "is working"} · ${note.updatedAt}\n  ${note.text}`);
+  }
   if (last)
     console.log(
       `Last message: #${last.seq} ${last.speaker}${last.via ? ` via ${last.via}` : ""} → ${last.next}`,
@@ -479,6 +490,7 @@ async function join(app) {
       to: binding.transport,
     });
     participant.transport = binding.transport;
+    if (app.room.statusNote?.speaker === speaker) delete app.room.statusNote;
     delete participant.wakeVerification;
     delete participant.wakeAutomatic;
     app.save();
@@ -512,6 +524,7 @@ async function join(app) {
   for (const key of ["model", "actualModel", "started", "wakeVerification", "wakeAutomatic", "wakeError", "joinedRuntime", "lastReceivedRuntime"])
     delete participant[key];
   Object.assign(participant, { ...binding, seen: 0, joinedRuntime: runtimeIdentity() });
+  if (app.room.statusNote?.speaker === speaker) delete app.room.statusNote;
   app.save();
   console.log(
     `Joined ${app.room.name} as ${speaker} (${binding.transport} ${binding.id}).`,
@@ -730,6 +743,7 @@ async function main() {
     "listen",
     "stick",
     "receive",
+    "note",
     "new",
     "loop-in",
     "rooms",
@@ -882,6 +896,17 @@ async function main() {
           { root, compact: turn.compact === true, runtimeNotice },
         ),
       );
+      return;
+    }
+    if (command === "note") {
+      if (!caller || (values.as && values.as !== caller))
+        throw new Error("Status notes must run inside the chat bound to this room as their speaker.");
+      if (values.clear && (values.approval || values.file || words.length))
+        throw new Error("Use --clear without text, --file or --approval.");
+      const note = semaphore.note({ turnId: values.turn, speaker: caller,
+        text: readMessage(), approval: values.approval, clear: values.clear });
+      console.log(note ? `Status note saved (${note.kind}): ${note.text}` : "Status note cleared.");
+      console.log("You still hold the stick. No reply was sent.");
       return;
     }
     if (command === "reply") return await reply(semaphore, caller);
