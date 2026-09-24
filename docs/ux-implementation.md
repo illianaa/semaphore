@@ -34,7 +34,7 @@ The supported implementation keeps both participants in their native chats with 
 
 ## Validation
 
-- 101 automated tests cover ownership, binding authentication, retries, interrupted drains, process locks, read receipts, startup, limit changes/persistence, native loop-in from both apps, recovery and compact invitation fallback. The SQLite startup-warning test also verifies that unrelated warnings remain visible. Tests make no model calls.
+- 102 automated tests cover ownership, binding authentication, retries, interrupted drains, process locks, read receipts, startup, limit changes/persistence, native loop-in from both apps, recovery and compact invitation fallback. The SQLite startup-warning test also verifies that unrelated warnings remain visible. Tests make no model calls.
 - Browser checks cover lost start response/reload/retry, lost message response reconciliation, send during setup and pending turns, 10/unlimited persistence, mentions, message expansion and companion launch/reload. Desktop and narrow layouts inspected; no page errors.
 - The notification transition was checked with a browser notification stub.
 - The opt-in native feasibility probe makes exactly two harmless model turns in an isolated ephemeral thread. No host settings change.
@@ -47,3 +47,5 @@ The implementation was committed as `96971cf`, fast-forwarded into `main`, and t
 The app now exposes the per-room limit control. The active test chat's setting was left at its existing default; the person chooses the preferred value. The test-only UI servers were stopped. No remote push was made.
 
 Final cleanup includes the 18-slide proposal deck and its editable sources under `design/ux-proposals`, the sidebar label fix, and a narrowly scoped SQLite startup-warning filter. The finished `semaphore-next` worktree was removed after preserving its disposable test fixtures outside the repo; the `ux-proposals` branch remains as a history pointer.
+
+Astra now uses an event-only foreground listener with no default five-minute timer. This removes repetitive timeout messages, but does not make the native task idle or promise zero host polling. See [Codex waiting behavior](codex-waiting.md).

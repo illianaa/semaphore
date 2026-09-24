@@ -747,3 +747,23 @@ test("loop-in from Claude defaults to a catch-up turn in the initiating native c
   assert.equal(f.inbox(name).length, 1);
   assert.equal(f.claudeCalled(), false);
 });
+
+test("Astra's default listener has no timer and stays quiet until a real turn arrives", async (t) => {
+  const f = setup(t); joinBoth(f.run);
+  // Advance the child clock by ten minutes each read. A former 300-second
+  // default would exit immediately; an event-only wait must remain attached.
+  const clock = f.write('fast-clock.mjs', 'let now = Date.now(); Date.now = () => (now += 600000);');
+  const listening = f.start(['listen', 'room', '--as', 'astra'], { ...ASTRA, NODE_OPTIONS: `--import=${clock}` });
+  await new Promise(resolve => setTimeout(resolve, 750));
+  const marker = path.join(f.root, 'room', 'inbox', 'astra', 'listener.pid');
+  assert.equal(fs.existsSync(marker), true, 'the default listener remains attached past the old virtual deadline');
+  const sent = f.run(['send', 'room', '--to', 'astra', '--file', f.write('event.md', 'Your next turn')]);
+  assert.equal(sent.code, 0, sent.err);
+  let timer;
+  try {
+    const result = await Promise.race([listening, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Listener failed to return the turn')), 5000); })]);
+    assert.equal(result.code, 0, result.out);
+    assert.ok(turnIn(result.out));
+    assert.doesNotMatch(result.out, /ExperimentalWarning|No new turn in/);
+  } finally { clearTimeout(timer); }
+});

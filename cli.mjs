@@ -89,7 +89,7 @@ Live chats (run from inside the Astra or Claude desktop chat):
   node cli.mjs loop-in --as astra --to claude --file request.md --request-id <id>
     Create a group from this chat, save the opening, and prepare the other invitation.
   node cli.mjs join <room> --as astra|claude [--rebind]   Bind this chat to the room
-  node cli.mjs listen <room>                Claude: wait in the background for the next turn
+  node cli.mjs listen <room>                Wait for a turn without a timer; --timeout <seconds> opts in
   node cli.mjs stick <room>                 Whose turn is it? Exits 3 if it isn't this chat's
   node cli.mjs receive <room> --turn <id>    Acknowledge and read this chat's current turn
   node cli.mjs reply <room> --turn <id> --next human|astra|claude --file reply.md
@@ -571,13 +571,9 @@ async function listenForTurn(room, store) {
     throw new Error(
       `${speaker} receives turns through ${transport}, not an inbox. Join again without --manual to switch.`,
     );
-  // Astra waits in the foreground, so its wait is bounded; Claude's background listener is not.
-  const seconds =
-    values.timeout !== undefined
-      ? Number(values.timeout)
-      : speaker === "astra"
-        ? 300
-        : 0;
+  // Keep a single listener attached until a turn, native input, disconnect or
+  // cancellation. An explicit timeout remains available for tests/manual waits.
+  const seconds = values.timeout === undefined ? 0 : Number(values.timeout);
   if (!Number.isInteger(seconds) || seconds < 0 || seconds > 3600)
     throw new Error("--timeout must be between 0 and 3600 seconds.");
   // A turn stays in the inbox until this chat acknowledges it with receive. Only the session that

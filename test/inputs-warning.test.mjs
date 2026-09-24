@@ -8,9 +8,13 @@ test('loading the input journal suppresses only SQLite startup noise and restore
     import os from 'node:os';
     import path from 'node:path';
     import { withInputs } from ${JSON.stringify(new URL('../lib/inputs.mjs', import.meta.url).href)};
+    const { codexQueueRevision } = await import(${JSON.stringify(new URL('../lib/live.mjs', import.meta.url).href)});
     const original = process.emitWarning;
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'semaphore-warning-'));
-    try { withInputs(dir, (journal) => journal.all()); }
+    try {
+      codexQueueRevision({ threadId: '0190f000-0000-7000-8000-00000000a57a', home: dir, env: {} });
+      withInputs(dir, (journal) => journal.all());
+    }
     finally { fs.rmSync(dir, { recursive: true, force: true }); }
     if (process.emitWarning !== original) throw new Error('Warning handler was not restored');
     process.emitWarning('An unrelated warning remains visible', 'ExperimentalWarning');

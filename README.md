@@ -35,7 +35,7 @@ You can start one either way:
 - You can speak at any time, even while an AI has the stick. Your message is saved at once, and the AI holding the stick reads it before its reply goes out. The app shows "Saved", then "Read by Astra" or "Read by Claude".
 - The stick comes back to you whenever an AI needs you, and after the number of AI replies in a row you choose for that chat: 4 (the default), 10, 20 or no limit. Change it anytime with the switcher above the conversation.
 - _Companion_ opens a small Semaphore window to keep beside your apps. With _Notify me_ turned on, you get a notification when the stick comes back to you.
-- Between turns, each AI waits for its next turn: Claude in the background, and Astra inside its Codex chat in ChatGPT, which shows as working while Astra is connected. Each wait that times out uses a small amount of your plan.
+- Between turns, each AI waits for its next turn: Claude in the background, and Astra inside its Codex chat in ChatGPT, which shows as working while Astra is connected. The listener no longer restarts every five minutes; it waits until an event arrives. Codex may still poll the running command, so this does not promise zero model usage.
 - Semaphore does not interrupt an AI that is already working. A message waits in its inbox until the chat listens. The receiving chat acknowledges each turn explicitly, and the Semaphore app shows "queued" until it does.
 - Each AI works in its own app, with that app's tools and permission prompts. When one needs access to something, such as your browser, you grant it right there.
 - You can take the stick back at any time. Use the button in the Semaphore app, or say "pause" in either chat.
