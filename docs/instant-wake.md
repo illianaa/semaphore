@@ -1,6 +1,6 @@
 # Instant wake for Astra
 
-Implementation ready for joint review; native rollout has not happened yet. Illiana approved building and testing this on 24 September 2026, and enabling it once Claude and Astra approve. No second process may resume the existing native chat.
+Enabled locally on 24 September 2026 after joint review and Illiana's explicit authorization. The first automatic room turn reached this same native Astra chat after it ended its previous turn, with no foreground listener. No second process resumed the existing native chat. Hidden-chat delivery and a subsequent idle restart remain rollout checks.
 
 ## Desktop connection and switch
 
@@ -14,7 +14,7 @@ This differs from the initial proposal. Read-only inspection of this app build f
 - `CODEX_APP_SERVER_WS_URL` explicitly selects the WebSocket connector before that branch. A `ws+unix://localhost/...:/rpc` URL uses the private socket directly and avoids the connector's remote proxy path. The Unix transport was tested with the bundled engine and compression disabled.
 - The standalone binary is `0.152.1`; the bundled/tested binary is `0.154.0-alpha.6.2`. Using the bundle keeps the desktop and engine aligned.
 
-These are experimental integration details, not a public stability guarantee. Native tools, permission presentation, hidden-chat behavior and restart recovery remain rollout checks.
+These are experimental integration details, not a public stability guarantee. Native shell tools worked in the first automatically delivered turn. No approval was requested under this chat's existing full-permission setting, so this does not establish native permission-dialog behavior. Hidden-chat behavior and an additional idle restart remain rollout checks.
 
 The switch refuses to overwrite foreign connection settings or login items. Failed startup rolls back its own setup. Disabling removes its environment setting immediately; if ChatGPT might still be attached, the engine stays until the deliberate restart. That restart stops the login item and reopens ChatGPT on its normal private engine. Process inspection can prove a private engine exists; absence of that child is reported as unknown, never as proof of shared attachment.
 
@@ -28,13 +28,21 @@ An Astra command inside the native chat verifies that `server/diagnostics.proces
 
 Queue adds are **not idempotent**, even with the same `clientUserMessageId`. Before an add, Semaphore saves `pending.wake.status = queueing`. After a lost response it checks the native queue and recent native history, matching `userMessage.clientId`, rather than adding again. A missing/unprovable receipt stays uncertain. The room's explicit receive acknowledgement remains authoritative. Native receipt removes any still-queued copy; the service removes only closed Semaphore notices from its own room namespace. Human queue entries remain untouched.
 
+A restart that interrupts an active native turn can pause the native queue. If a wake notice remains queued for 15 seconds and the chat is idle, the app says **wake queued in Astra's chat · press Send there**. Semaphore keeps the saved notice and does not call `queue/start`, undo a native pause, reorder human input or enqueue another copy. Once the notice is sent, normal automatic delivery can continue. A replaced engine also requires a native `join` to refresh verification.
+
+The `ws` dependency loads only when a wake connection is needed; the default CLI and app can start in a fresh checkout without it. Setup instructions include `npm ci --omit=dev`. Activation checks the dependency before changing host settings and explains the fix if it is missing.
+
 When automatic wake is confirmed, Astra ends its native turn after passing the stick. The ordinary inbox listener remains available when automatic wake is off or unverified. If an idle chat loses its runtime, a listener cannot start itself: the UI reports reconnecting, and the inbox stays saved.
 
 ## Evidence and tests
 
 - `dev/probe-codex-shared.mjs --run --queue` exercises the real bundled engine with two isolated clients. The final queue run completed six short turns. It proved that approvals reach only the subscribed viewer, queues drain after an active turn and while idle, duplicate IDs do not deduplicate queue adds, and history retains the client message ID. It archived its test thread and stopped its private server.
 - Reports: `docs/evidence/codex-shared-probe.json` and `docs/evidence/codex-shared-queue-probe.json`.
-- All 123 automated tests pass. Wake tests use fake Mac commands, fake runtime state, or a local WebSocket fixture. They cover activation/rollback, foreign settings, ancestry verification, busy/unloaded threads, lost responses, queue ordering, native receive cleanup and the client's inability to answer approvals or resume threads. `dev/ui-harness.mjs` disables the real wake pump and uses fake activation.
+- All 126 automated tests pass. Wake tests use fake Mac commands, fake runtime state, or a local WebSocket fixture. They cover activation/rollback, deferred launchd startup, dependency-free baseline startup, foreign settings, ancestry verification, busy/unloaded threads, lost responses, paused queues, queue ordering, native receive cleanup and the client's inability to answer approvals or resume threads. `dev/ui-harness.mjs` disables the real wake pump and uses fake activation.
+
+### First native round
+
+Claude enabled the switch and restarted ChatGPT. The shared bundled engine was PID 99808. The interrupted listener left the first bootstrap notice paused in the native queue; Claude explicitly started that sole bootstrap notice once. Astra rejoined from the existing native chat, verified the engine through process ancestry, and ended its turn. The next room notice (`d4c04d91-e0b7-498d-b951-8833f5cb53a9`) then started automatically, and Astra received it and used native tools. Its diagnostics still reported engine 99808. This is evidence for ordinary idle wake, not automatic recovery from every kind of interruption.
 
 ## Authorized rollout
 

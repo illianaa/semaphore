@@ -47,6 +47,9 @@ if (process.env.FAKE_CODEX_FAIL) { console.error("Error: No active session found
       ([key]) => !/^CODEX_|^CLAUDE_CODE_SESSION_ID$/.test(key),
     ),
   );
+  // Real instant wake can be enabled on the machine running these tests.
+  // Keep fake native identities away from its settings and socket.
+  base.SEMAPHORE_HOME = path.join(dir, 'installation');
   const run = (args, env = {}) => {
     const result = spawnSync(process.execPath, [CLI, ...args, "--root", root], {
       encoding: "utf8",

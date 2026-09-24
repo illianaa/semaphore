@@ -34,7 +34,7 @@ The supported implementation keeps both participants in their native chats with 
 
 ## Validation
 
-- 123 automated tests cover ownership, binding authentication, retries, interrupted drains, process locks, read receipts, startup, limit changes/persistence, native loop-in from both apps, recovery and compact invitation fallback. The SQLite startup-warning test also verifies that unrelated warnings remain visible. Tests make no model calls.
+- 126 automated tests cover ownership, binding authentication, retries, interrupted drains, process locks, read receipts, startup, limit changes/persistence, native loop-in from both apps, recovery and compact invitation fallback. The SQLite startup-warning test also verifies that unrelated warnings remain visible. Tests make no model calls.
 - Browser checks cover lost start response/reload/retry, lost message response reconciliation, send during setup and pending turns, 10/unlimited persistence, mentions, message expansion and companion launch/reload. Desktop and narrow layouts inspected; no page errors.
 - The notification transition was checked with a browser notification stub.
 - The opt-in native feasibility probe makes exactly two harmless model turns in an isolated ephemeral thread. No host settings change.
@@ -50,4 +50,4 @@ Final cleanup includes the 18-slide proposal deck and its editable sources under
 
 Astra now uses an event-only foreground listener with no default five-minute timer. This removes repetitive timeout messages, but does not make the native task idle or promise zero host polling. See [Codex waiting behavior](codex-waiting.md).
 
-Optional shared-runtime wake is implemented and under joint review before native activation; see [instant wake](instant-wake.md) for the current rollout status.
+Optional shared-runtime wake is enabled locally, and the first automatic native Astra turn passed. Interrupted native turns retain their queued notice and can require pressing Send. See [instant wake](instant-wake.md) for evidence and remaining rollout checks.

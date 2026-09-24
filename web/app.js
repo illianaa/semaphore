@@ -59,6 +59,7 @@ function pendingDetail(pending, room) {
   if (pending.state === "delivering") return "sending";
   if (pending.progress === "received") return "received";
   if (pending.wake?.status === "uncertain") return "wake status uncertain · check Astra’s chat";
+  if (pending.wake?.status === "needs-send") return "wake queued in Astra’s chat · press Send there";
   const seat = room.connections[pending.speaker];
   if (pending.progress === "queued")
     return seat?.manual

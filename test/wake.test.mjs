@@ -148,6 +148,22 @@ test("turning it on refuses without the desktop engine or over someone else's ag
   assert.equal(fs.readFileSync(foreign.paths.plist, "utf8"), "<plist>someone else</plist>");
 });
 
+test("activation starts an engine whose RunAtLoad launch was deferred", (t) => {
+  const mac = fakeMac(t); const run = mac.run;
+  mac.run = (command, args) => {
+    const result = run(command, args);
+    if (command === 'launchctl' && args[0] === 'bootstrap') {
+      mac.engine = false; fs.rmSync(mac.paths.socket, { force: true });
+    }
+    if (command === 'launchctl' && args[0] === 'kickstart') {
+      mac.engine = true; fs.writeFileSync(mac.paths.socket, 'socket');
+    }
+    return result;
+  };
+  assert.equal(enableWake(options(mac)).engine.running, true);
+  assert.ok(mac.calls.includes(`launchctl kickstart gui/501/${WAKE_LABEL}`));
+});
+
 test("turning it off keeps the engine for an attached ChatGPT until the restart", (t) => {
   const mac = fakeMac(t);
   enableWake(options(mac));

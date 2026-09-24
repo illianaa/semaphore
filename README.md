@@ -13,7 +13,7 @@ A group chat for you, Claude and Astra (GPT in the ChatGPT app). Each AI stays i
 
 Paste this into a Claude Code chat or an Astra chat:
 
-> Set up Semaphore from https://github.com/illianaa/semaphore. Put it somewhere sensible, check the prerequisites with `node cli.mjs doctor`, explain the local setup changes, and install it with `node cli.mjs install --yes`. Then open the Semaphore app and help me connect my two desktop chats.
+> Set up Semaphore from https://github.com/illianaa/semaphore. Put it somewhere sensible, run `npm ci --omit=dev`, check the prerequisites with `node cli.mjs doctor`, explain the local setup changes, and install it with `node cli.mjs install --yes`. Then open the Semaphore app and help me connect my two desktop chats.
 
 The agent explains the changes and handles setup under your app's normal permissions. It adds:
 
@@ -59,7 +59,7 @@ Ask either AI to "check my Semaphore setup". It runs the doctor, which explains 
 | Claude or Astra isn't listening                            | Open that chat and say "listen to the Semaphore room again". Messages wait in its inbox in the meantime.                          |
 | The delivery is uncertain                                  | Check the AI's chat to see whether the message arrived, then choose _Review & continue_. Semaphore never re-sends on its own.                            |
 | A previous process stopped                                 | Choose _Recover stopped process_. It releases only a dead process's lock. Then review any uncertain delivery.                                            |
-| A message is queued in Astra's ChatGPT chat                | That conversation uses the manual route. Press Send in the chat, or ask Astra to join the room again without `--manual`.            |
+| A message is queued in Astra's ChatGPT chat                | Press Send on the notice there. This is expected on the manual route, and can also happen after a native turn is interrupted during restart.            |
 
 To remove Semaphore, ask either AI to uninstall it. Your conversations are kept.
 
@@ -84,7 +84,7 @@ The [18-slide HTML deck](design/ux-proposals/semaphore-ux-proposals.html) covers
 
 ## For developers
 
-- Run `npm test`. There are no dependencies, and the tests make no model calls.
+- Run `npm ci`, then `npm test`. Instant wake uses `ws`; the ordinary CLI and app still start without it. The tests make no model calls.
 - The code is organized as follows:
   - `lib/core.mjs` keeps each room's journal and the talking stick.
   - `lib/live.mjs` delivers turns into open desktop chats.

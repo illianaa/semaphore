@@ -102,6 +102,23 @@ test('native receive removes only the matching wake notice and leaves human inpu
   const count=f.native.calls.length;await wakePending(f.store,f.options);assert.equal(f.native.calls.length,count);
 });
 
+test('an idle queue paused after interruption offers native Send without starting or duplicating input',async t=>{
+  const f=fixture(t);f.native.autoConsume=false;
+  f.native.queue.push({id:'human',clientUserMessageId:'human-message'});
+  let now=Date.now();f.options.now=()=>now;
+  await wakePending(f.store,f.options);
+  assert.equal(f.store.read().pending.wake.status,'queued');
+  now+=16000;await wakePending(f.store,f.options);
+  assert.equal(f.store.read().pending.wake.status,'needs-send');
+  assert.match(f.store.read().pending.wake.reason,/press Send/);
+  assert.equal(f.native.queue[0].id,'human');
+  assert.equal(f.native.calls.filter(call=>call.method==='thread/queue/add').length,1);
+  assert.equal(f.native.calls.some(call=>['turn/start','thread/queue/start'].includes(call.method)),false);
+  f.native.queue=[];f.native.state='active';f.native.history.push({id:'native-turn',items:[{type:'userMessage',clientId:f.store.read().pending.wake.clientUserMessageId}]});
+  await wakePending(f.store,f.options);
+  assert.equal(f.store.read().pending.wake.status,'sent');
+});
+
 test('seat verification requires native process ancestry and a loaded thread',async t=>{
   const f=fixture(t);
   const seat=await verifyNativeSeat({client:f.native,threadId:'native-thread',socket:'/tmp/test.sock',pid:80,run:f.run});

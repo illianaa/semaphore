@@ -65,6 +65,27 @@ function tempHome(t) {
   return home;
 }
 
+test("a fresh checkout starts its CLI and app without optional wake dependencies", (t) => {
+  const checkout = tempHome(t);
+  for (const name of ['lib', 'server.mjs', 'cli.mjs', 'package.json'])
+    fs.cpSync(path.join(projectDir, name), path.join(checkout, name), { recursive: true });
+  const env = { ...process.env, NODE_PATH: '', SEMAPHORE_HOME: path.join(checkout, 'data') };
+  const preview = spawnSync(process.execPath, ['cli.mjs', 'install'], { cwd: checkout, env, encoding: 'utf8', timeout: 10000 });
+  assert.equal(preview.status, 0, preview.stderr);
+  const smoke = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import assert from 'node:assert/strict';
+    import { createAppServer } from './server.mjs';
+    import { wakeWebSocket } from './lib/codex-runtime.mjs';
+    assert.throws(() => wakeWebSocket(), /npm ci --omit=dev/);
+    const app = createAppServer({ root: './data/rooms', wakePump: false });
+    const url = await app.listen(0);
+    const response = await fetch(url + '/health');
+    assert.equal(response.status, 200);
+    await app.close();
+  `], { cwd: checkout, env, encoding: 'utf8', timeout: 10000 });
+  assert.equal(smoke.status, 0, smoke.stderr);
+});
+
 // Setup is exercised against a temporary home with launchd untouched.
 const offline = (home) => ({
   home,
