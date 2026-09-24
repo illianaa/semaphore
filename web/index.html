@@ -281,6 +281,40 @@
         while the group is talking.
       </p>
       <div id="diagnostics" class="diagnostics">Checking your setup…</div>
+      <section class="wake-card" id="wake-card" hidden>
+        <div class="wake-head">
+          <div>
+            <strong>Instant wake for Astra</strong>
+            <p>
+              Astra’s ChatGPT chat rests between turns, like Claude’s.
+              Semaphore wakes it when it’s Astra’s turn.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="switch"
+            id="wake-toggle"
+            role="switch"
+            aria-checked="false"
+            aria-label="Instant wake for Astra"
+          >
+            <span></span>
+          </button>
+        </div>
+        <p class="wake-status" id="wake-status"></p>
+        <div class="wake-actions" id="wake-actions"></div>
+        <details class="wake-details">
+          <summary>How it works</summary>
+          <p>
+            ChatGPT runs Codex through a shared engine on this Mac that
+            Semaphore can also reach. Turning this on adds a login item and a
+            setting that points ChatGPT at that engine, so every Codex chat in
+            ChatGPT uses it after one restart. The engine is an experimental
+            Codex feature. Turn this off anytime, and ChatGPT goes back to its
+            own engine after its next restart.
+          </p>
+        </details>
+      </section>
       <div class="settings-note">
         Conversations are saved on this computer. Semaphore has no hosted
         account, analytics, or API key to configure.
@@ -313,6 +347,16 @@
         ><button class="primary-button" id="recover-confirm" disabled>
           Continue conversation
         </button>
+      </div>
+    </dialog>
+    <dialog id="confirm-dialog" class="dialog">
+      <div class="dialog-heading"><div class="dialog-icon">↻</div></div>
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-text"></p>
+      <div class="dialog-actions">
+        <button type="button" class="subtle-button" id="confirm-cancel">
+          Cancel</button
+        ><button type="button" class="primary-button" id="confirm-ok"></button>
       </div>
     </dialog>
     <div class="toast" id="toast" role="status" hidden></div>

@@ -58,13 +58,18 @@ function pendingDetail(pending, room) {
   const who = labels[pending.speaker];
   if (pending.state === "delivering") return "sending";
   if (pending.progress === "received") return "received";
+  if (pending.wake?.status === "uncertain") return "wake status uncertain · check Astra’s chat";
   const seat = room.connections[pending.speaker];
   if (pending.progress === "queued")
     return seat?.manual
       ? `queued in ${who}’s Codex chat · press Send there`
-      : seat?.listening === false
-        ? `waiting in ${who}’s inbox until its chat listens again`
-        : `waiting for ${who}’s chat to pick it up`;
+      : seat?.wake === "automatic"
+        ? `waking ${who}’s chat`
+        : seat?.wake === "reconnect"
+          ? `saved in ${who}’s inbox · its chat needs reconnecting`
+          : seat?.listening === false
+            ? `waiting in ${who}’s inbox until its chat listens again`
+            : `waiting for ${who}’s chat to pick it up`;
   return "waiting for a reply";
 }
 function waitingOn(room) {
@@ -363,7 +368,7 @@ function renderRoom(room, force = false) {
   $("#members").innerHTML = ["human", ...(room.members ?? SEATS)]
     .map(
       (speaker) =>
-        `<span class="member ${room.owner === speaker ? "holder" : ""}">${avatar(speaker)}${labels[speaker]}${speaker !== "human" && !room.connections[speaker].connected ? "<small>not connected</small>" : ""}${room.owner === speaker ? '<span class="member-dot" aria-label="Holds the stick"></span>' : ""}</span>`,
+        `<span class="member ${room.owner === speaker ? "holder" : ""}">${avatar(speaker)}${labels[speaker]}${speaker !== "human" && !room.connections[speaker].connected ? "<small>not connected</small>" : room.connections[speaker]?.wake === "automatic" ? "<small>wakes automatically</small>" : room.connections[speaker]?.wake === "reconnect" ? "<small>needs reconnecting</small>" : ""}${room.owner === speaker ? '<span class="member-dot" aria-label="Holds the stick"></span>' : ""}</span>`,
     )
     .join("");
   const opening = room.opening;
@@ -646,7 +651,7 @@ async function connections() {
         const safeURL = /^(codex|claude):\/\//.test(invite.url)
           ? invite.url
           : "#";
-        return `<section class="connect-card"><div class="connect-person">${avatar(speaker)}<div><strong>${labels[speaker]}</strong><small>${speaker === "astra" ? "Codex chat in ChatGPT" : "Code chat in Claude"}</small></div>${connected ? '<span class="connected-badge">Connected</span>' : ""}</div><p>${connected ? (speaker === "claude" ? "Keep this chat open and listening. You can continue speaking to Claude in its app." : state.room.connections.astra.manual ? "Manual delivery: messages wait in Astra’s Codex chat until you press Send there." : "Astra waits quietly inside its active Codex chat. There is no five-minute restart. If it stops listening, ask it there to listen to this room again.") : speaker === "claude" ? "Open Claude, confirm the project folder, then send the invitation. Or copy it into a Code chat you already have." : "Open a new chat with the invitation filled in, then send it. Or copy the invitation into a chat you already have."}</p><div class="connect-actions">${!connected ? `<a href="${escape(safeURL)}">${escape(invite.label || "Open app")} ↗</a>` : state.room.connections[speaker].url ? `<a href="${escape(state.room.connections[speaker].url)}">Open chat ↗</a>` : ""}<button data-copy-invite="${speaker}">${connected ? "Copy connection instructions" : "Copy invitation"}</button></div><details class="invite-details"><summary>View invitation</summary><pre class="invite-prompt">${escape(invite.prompt)}</pre></details></section>`;
+        return `<section class="connect-card"><div class="connect-person">${avatar(speaker)}<div><strong>${labels[speaker]}</strong><small>${speaker === "astra" ? "Codex chat in ChatGPT" : "Code chat in Claude"}</small></div>${connected ? '<span class="connected-badge">Connected</span>' : ""}</div><p>${connected ? (speaker === "claude" ? "Keep this chat open and listening. You can continue speaking to Claude in its app." : state.room.connections.astra.manual ? "Manual delivery: messages wait in Astra’s Codex chat until you press Send there." : state.room.connections.astra.wake === "automatic" ? "Semaphore wakes this chat automatically when it is Astra’s turn. No listener is needed between turns." : "Astra waits quietly inside its active Codex chat. There is no five-minute restart. If it stops listening, ask it there to listen to this room again.") : speaker === "claude" ? "Open Claude, confirm the project folder, then send the invitation. Or copy it into a Code chat you already have." : "Open a new chat with the invitation filled in, then send it. Or copy the invitation into a chat you already have."}</p><div class="connect-actions">${!connected ? `<a href="${escape(safeURL)}">${escape(invite.label || "Open app")} ↗</a>` : state.room.connections[speaker].url ? `<a href="${escape(state.room.connections[speaker].url)}">Open chat ↗</a>` : ""}<button data-copy-invite="${speaker}">${connected ? "Copy connection instructions" : "Copy invitation"}</button></div><details class="invite-details"><summary>View invitation</summary><pre class="invite-prompt">${escape(invite.prompt)}</pre></details></section>`;
       })
       .join("");
   } catch (err) {
@@ -951,8 +956,100 @@ $("#connect-body").addEventListener("click", async (event) => {
     button.disabled = false;
   }
 });
+// Asks before a change that reaches beyond Semaphore. Resolves true only on confirm.
+function confirmAction({ title, text, action }) {
+  const dialog = $("#confirm-dialog");
+  $("#confirm-title").textContent = title;
+  $("#confirm-text").textContent = text;
+  $("#confirm-ok").textContent = action;
+  dialog.returnValue = "";
+  showDialog("#confirm-dialog");
+  return new Promise((resolve) =>
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "ok"), {
+      once: true,
+    }),
+  );
+}
+$("#confirm-ok").addEventListener("click", () => $("#confirm-dialog").close("ok"));
+$("#confirm-cancel").addEventListener("click", () =>
+  $("#confirm-dialog").close("cancel"),
+);
+const WAKE_STATES = {
+  off: "Off",
+  "needs-engine": "Needs Codex’s shared engine",
+  "restart-chatgpt": "Almost on",
+  on: "On",
+  "turning-off": "Almost off",
+  attention: "Needs attention",
+};
+function renderWake(wake) {
+  $("#wake-card").hidden = !wake?.supported;
+  if (!wake?.supported) return;
+  $("#wake-toggle").setAttribute("aria-checked", String(wake.enabled));
+  $("#wake-status").dataset.state = wake.state;
+  $("#wake-status").innerHTML = `<strong>${escape(WAKE_STATES[wake.state] ?? wake.state)}</strong> · ${escape(wake.detail)}`;
+  $("#wake-actions").innerHTML = ["restart-chatgpt", "turning-off"].includes(
+    wake.state,
+  )
+    ? '<button type="button" class="primary-button" data-wake="restart">Restart ChatGPT now</button>'
+    : "";
+}
+async function loadWake() {
+  try {
+    renderWake((await api("/wake")).wake);
+  } catch {
+    // An older background app has no instant wake yet.
+    $("#wake-card").hidden = true;
+  }
+}
+$("#wake-toggle").addEventListener("click", async () => {
+  const turningOn = $("#wake-toggle").getAttribute("aria-checked") !== "true";
+  if (
+    turningOn &&
+    !(await confirmAction({
+      title: "Turn on instant wake?",
+      text: "Semaphore adds a login item and a setting that points ChatGPT at Codex’s shared engine, then starts that engine. Every Codex chat in ChatGPT uses it once ChatGPT restarts. You can turn it off anytime.",
+      action: "Turn on",
+    }))
+  )
+    return;
+  $("#wake-toggle").disabled = true;
+  try {
+    renderWake(
+      (await api("/wake", { method: "POST", body: { enabled: turningOn } })).wake,
+    );
+  } catch (err) {
+    toast(err.message);
+    await loadWake();
+  } finally {
+    $("#wake-toggle").disabled = false;
+  }
+});
+$("#wake-actions").addEventListener("click", async (event) => {
+  if (!event.target.closest("[data-wake=restart]")) return;
+  if (
+    !(await confirmAction({
+      title: "Restart ChatGPT now?",
+      text: "ChatGPT quits and reopens. Any Codex task running there stops, so do this while no one is mid-reply.",
+      action: "Restart ChatGPT",
+    }))
+  )
+    return;
+  $("#wake-status").textContent = "Restarting ChatGPT…";
+  $("#wake-actions").innerHTML = "";
+  try {
+    renderWake(
+      (await api("/wake/restart", { method: "POST", body: { confirm: true } }))
+        .wake,
+    );
+  } catch (err) {
+    toast(err.message);
+    await loadWake();
+  }
+});
 $("#settings").addEventListener("click", async () => {
   showDialog("#settings-dialog");
+  loadWake();
   $("#diagnostics").textContent = "Checking your setup…";
   try {
     const result = await api("/diagnostics");

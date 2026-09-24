@@ -42,6 +42,8 @@ A turn arrives as a message beginning "Semaphore · room". It shows the new mess
 
 ## Waiting for your turn
 
+- **Automatic Astra wake:** when `join`, `receive`, `reply` or `stick` confirms that automatic wake is verified, end the native turn after passing the stick. Do not run a listener. Semaphore saves the room notice in the native shared runtime's queue; the app starts the next turn and owns all permission prompts. Never use `thread/resume` from another runtime. If automatic wake needs reconnecting after an engine restart, run `join <room> --as astra` inside the existing native chat to verify its engine again. If the command does not confirm automatic wake, use the listener behavior below.
+
 - **Claude** runs `semaphore listen <room> [--root <path>]` as a background task, then ends its turn. The background task wakes Claude when a turn arrives.
 - **Astra** runs `semaphore listen <room> --as astra [--root <path>]` in the foreground whenever it doesn't hold the stick, including while the human holds it. The listener has no timer by default: keep the same foreground command attached, and do no other work while waiting. An explicit `--timeout <seconds>` is optional; restart if such a timed wait ends without a turn. The native task still stays active. Host tool polling can require model steps, so removing the timer is not a promise of zero model usage. If `listen` says something new is waiting in the chat, end the turn so that message can reach you, then listen again afterwards.
 - A turn stays in your inbox until you run its receive command, so a listener that restarts or times out can't lose it.

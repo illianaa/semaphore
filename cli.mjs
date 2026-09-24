@@ -26,6 +26,9 @@ import {
 import { buildInvite } from "./lib/invite.mjs";
 import { createLiveRoom, createStartedRoom, readRooms } from "./lib/rooms.mjs";
 import { diagnose } from "./lib/doctor.mjs";
+import { readWakeSettings, wakePaths } from "./lib/wake.mjs";
+import { WakeClient, verifyNativeSeat, sameRuntime } from "./lib/codex-runtime.mjs";
+import { cancelQueuedWake } from "./lib/wake-delivery.mjs";
 import {
   DEFAULT_PORT,
   SERVICE_LABEL,
@@ -405,7 +408,32 @@ function display(
   if (type === "notice") console.log(`\n${text}\n`);
 }
 
-function join(app) {
+async function refreshWakeSeat(app, speaker) {
+  if (speaker !== "astra" || app.room.participants.astra.transport !== "astra-inbox") return;
+  const seat = app.room.participants.astra;
+  const paths = wakePaths();
+  delete seat.wakeAutomatic;
+  if (!readWakeSettings(paths.settings).enabled) { delete seat.wakeVerification; app.save(); return; }
+  const client = new WakeClient({ socket: paths.socket });
+  try {
+    await client.initialize();
+    seat.wakeVerification = await verifyNativeSeat({ client, threadId: seat.id, socket: paths.socket });
+    seat.wakeAutomatic = true;
+    if (app.room.pending?.receivedAt) await cancelQueuedWake(client, app.room);
+    delete seat.wakeError;
+  } catch (error) {
+    delete seat.wakeVerification;
+    seat.wakeError = error.message;
+  } finally { client.close(); app.save(); }
+}
+
+function automaticallyWakes(participant) {
+  const paths = wakePaths();
+  return participant?.wakeAutomatic === true && readWakeSettings(paths.settings).enabled &&
+    sameRuntime(participant.wakeVerification, { socket: paths.socket });
+}
+
+async function join(app) {
   const speaker = values.as;
   if (!["astra", "claude"].includes(speaker))
     throw new Error("Use join <room> --as astra or --as claude.");
@@ -420,7 +448,8 @@ function join(app) {
     participant.id === binding.id
   ) {
     console.log(`This chat is already ${speaker} in ${app.room.name}.`);
-    return listenHint(binding.transport, speaker, app.room.name);
+    await refreshWakeSeat(app, speaker);
+    return listenHint(binding.transport, speaker, app.room.name, automaticallyWakes(participant));
   }
   // The same chat changing how it receives turns. Its identity is proven by its environment, so
   // no other chat is replaced; only its own seat, and only while it has no turn in progress.
@@ -436,11 +465,14 @@ function join(app) {
       to: binding.transport,
     });
     participant.transport = binding.transport;
+    delete participant.wakeVerification;
+    delete participant.wakeAutomatic;
     app.save();
     console.log(
       `This chat now receives ${app.room.name} turns through ${binding.transport}.`,
     );
-    return listenHint(binding.transport, speaker, app.room.name);
+    await refreshWakeSeat(app, speaker);
+    return listenHint(binding.transport, speaker, app.room.name, automaticallyWakes(participant));
   }
   // Unused seats: a live placeholder or never-started headless astra (no id), or a never-started headless claude.
   const unused =
@@ -463,21 +495,23 @@ function join(app) {
     }),
   });
   // A newly bound chat has seen none of the room, so its first turn carries the whole transcript.
-  for (const key of ["model", "actualModel", "started"])
+  for (const key of ["model", "actualModel", "started", "wakeVerification", "wakeAutomatic", "wakeError"])
     delete participant[key];
   Object.assign(participant, { ...binding, seen: 0 });
   app.save();
   console.log(
     `Joined ${app.room.name} as ${speaker} (${binding.transport} ${binding.id}).`,
   );
-  listenHint(binding.transport, speaker, app.room.name);
+  await refreshWakeSeat(app, speaker);
+  listenHint(binding.transport, speaker, app.room.name, automaticallyWakes(participant));
 }
 
 function listenCommand(speaker, room) {
   return `node ${quote(path.join(projectDir, "cli.mjs"))} listen ${room}${rootFlag}${speaker === "astra" ? " --as astra" : ""}`;
 }
 
-function listenHint(transport, speaker, room) {
+function listenHint(transport, speaker, room, automatic = false) {
+  if (automatic) return console.log(handOffText(transport, listenCommand(speaker, room), { automatic }));
   if (transport === "claude-inbox")
     console.log(`Keep this running in the background to receive turns: ${listenCommand(speaker, room)}`);
   else if (transport === "astra-inbox")
@@ -497,6 +531,7 @@ async function reply(app, caller) {
     );
   if (!SPEAKERS.includes(values.next))
     throw new Error("--next must be human, astra, or claude.");
+  await refreshWakeSeat(app, caller);
   try {
     const result = await app.accept({
       turnId: values.turn,
@@ -531,7 +566,7 @@ async function reply(app, caller) {
 function handOff(room, caller) {
   if (room.owner === caller) return;
   console.log(
-    `You no longer hold the stick.\n${handOffText(room.participants[caller].transport, listenCommand(caller, room.name))}`,
+    `You no longer hold the stick.\n${handOffText(room.participants[caller].transport, listenCommand(caller, room.name), { automatic: automaticallyWakes(room.participants[caller]) })}`,
   );
 }
 
@@ -548,7 +583,9 @@ function stick(room) {
   }
   const transport = caller ? room.participants[caller].transport : null;
   const wait =
-    transport === "astra-inbox"
+    automaticallyWakes(room.participants[caller])
+      ? "Automatic wake is verified. End your native turn and wait for Semaphore to wake this chat."
+      : transport === "astra-inbox"
       ? `Stay connected: wait for your turn by running this in the foreground: ${listenCommand("astra", room.name)}`
       : transport === "claude-inbox"
         ? `Make sure this is running as a background task, then end your turn: ${listenCommand("claude", room.name)}`
@@ -567,6 +604,19 @@ async function listenForTurn(room, store) {
       `Run listen from inside the ${speaker} chat bound to room ${room.name}.`,
     );
   const transport = room.participants[speaker].transport;
+  if (speaker === "astra" && transport === "astra-inbox" && readWakeSettings().enabled &&
+      !automaticallyWakes(room.participants.astra)) {
+    await store.acquire({ waitMs: 5000 });
+    try {
+      room = store.read();
+      if (callerIn(room) !== speaker) throw new Error("This chat’s room binding changed.");
+      await refreshWakeSeat({ room, save: () => store.save(room) }, speaker);
+    } finally { store.release(); }
+  }
+  if (automaticallyWakes(room.participants[speaker]) && room.owner !== speaker) {
+    console.log("Automatic wake is verified. End your native turn now; no listener is needed.");
+    return;
+  }
   if (!INBOX_TRANSPORTS.includes(transport))
     throw new Error(
       `${speaker} receives turns through ${transport}, not an inbox. Join again without --manual to switch.`,
@@ -677,8 +727,15 @@ async function main() {
     "install",
     "uninstall",
     "open",
+    "wake",
   ];
   if (!commands.includes(command)) throw new Error(help);
+  // Read-only: instant wake is turned on and off from the Semaphore app, by the person.
+  if (command === "wake") {
+    const { wakeStatus } = await import("./lib/wake.mjs");
+    console.log(JSON.stringify(wakeStatus(), null, 2));
+    return;
+  }
   if (command === "doctor") return doctor();
   if (command === "install") return installCommand();
   if (command === "uninstall") return uninstallCommand();
@@ -769,7 +826,7 @@ async function main() {
       }),
     );
     if (command === "join") {
-      join(semaphore);
+      await join(semaphore);
       // A new binding can complete setup. Refresh the adapters from that binding.
       semaphore.adapters = transportsFor(semaphore.room, callerIn(semaphore.room));
       await semaphore.startOpening();
@@ -780,6 +837,7 @@ async function main() {
         throw new Error("Receive must run inside the chat bound to this room.");
       const turn = semaphore.receive(values.turn, caller, values.revision === undefined ? undefined : Number(values.revision));
       acknowledgeDelivery({ roomDir: store.dir, speaker: caller, turnId: turn.id });
+      await refreshWakeSeat(semaphore, caller);
       console.log(
         liveEnvelope(
           {

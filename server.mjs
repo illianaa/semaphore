@@ -11,6 +11,8 @@ import { projectDir, defaultRoomRoot } from "./lib/paths.mjs";
 import { buildInvite } from "./lib/invite.mjs";
 import { createLiveRoom, createStartedRoom } from "./lib/rooms.mjs";
 import { queueHumanInput, queuedInputs, inputMessages } from "./lib/inputs.mjs";
+import { wakeStatus, enableWake, disableWake, restartChatGPT } from "./lib/wake.mjs";
+import { WakePump } from "./lib/wake-delivery.mjs";
 import { diagnose } from "./lib/doctor.mjs";
 
 const SPEAKERS = ["astra", "claude"];
@@ -24,6 +26,13 @@ export function createAppServer({
   transports,
   inviteBuilder = buildInvite,
   diagnosticsProvider,
+  wakePump,
+  wake = {
+    status: wakeStatus,
+    enable: enableWake,
+    disable: disableWake,
+    restart: restartChatGPT,
+  },
 } = {}) {
   root = path.resolve(root);
   const token = randomBytes(32).toString("hex");
@@ -41,6 +50,7 @@ export function createAppServer({
   let port;
   diagnosticsProvider ??= () => diagnose({ port, root });
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+  const pump = wakePump === false ? null : wakePump ?? new WakePump({ root });
 
   function readRoom(name) {
     let store;
@@ -73,6 +83,7 @@ export function createAppServer({
             connected: !!(live && p.id),
             manual: p?.transport === "codex-queue",
             transport: p?.transport,
+            ...(speaker === "astra" ? { wake: pump?.mode(p, store.dir, room) } : {}),
             ...(INBOX_TRANSPORTS.includes(p?.transport) && p.id
               ? { listening: listenerStatus(store.dir, speaker).active }
               : {}),
@@ -101,6 +112,7 @@ export function createAppServer({
             speaker: room.pending.speaker,
             state: room.pending.state,
             at: room.pending.at,
+            wake: room.pending.wake ?? null,
             ...(room.pending.state === "awaiting-reply"
               ? {
                   progress: deliveryProgress({
@@ -306,6 +318,44 @@ export function createAppServer({
         });
       if (req.method === "GET" && url.pathname === "/api/diagnostics")
         return json(200, await diagnosticsProvider());
+      // Instant wake for Astra: off by default, turned on and off only from the app.
+      if (url.pathname === "/api/wake" || url.pathname === "/api/wake/restart") {
+        if (req.method === "GET" && url.pathname === "/api/wake")
+          return json(200, { wake: await wake.status() });
+        if (req.method !== "POST") throw error(405, "Method not allowed.");
+        const input = await body(req);
+        if (url.pathname === "/api/wake" && typeof input.enabled !== "boolean")
+          throw error(400, "Say whether instant wake should be on or off.");
+        if (url.pathname === "/api/wake/restart") {
+          if (input.confirm !== true)
+            throw error(400, "Confirm the ChatGPT restart first.");
+          // Restarting stops any Codex task running in ChatGPT, so wait for Astra's turn to end.
+          const busy = listRooms().find(
+            (room) =>
+              room.pending?.speaker === "astra" &&
+              room.pending.progress === "received",
+          );
+          if (busy)
+            throw error(
+              409,
+              `Astra is working in “${busy.title}”. Restart ChatGPT once Astra has passed the stick.`,
+            );
+        }
+        try {
+          const status =
+            url.pathname === "/api/wake/restart"
+              ? await wake.restart()
+              : input.enabled
+                ? await wake.enable()
+                : await wake.disable();
+          return json(200, { wake: status });
+        } catch (err) {
+          return json(err.status || 500, {
+            error: err.message,
+            wake: err.wake ?? (await wake.status()),
+          });
+        }
+      }
       if (req.method === "GET" && url.pathname === "/api/rooms")
         return json(200, { rooms: listRooms() });
       if (req.method === "POST" && url.pathname === "/api/rooms") {
@@ -474,10 +524,12 @@ export function createAppServer({
         server.listen(requestedPort, "127.0.0.1", resolve);
       });
       port = server.address().port;
+      pump?.start();
       return `http://127.0.0.1:${port}`;
     },
     async close() {
       closing = true;
+      pump?.close();
       for (const timer of flushTimers) clearTimeout(timer);
       for (const app of active.values()) if (app.running) app.takeStick();
       server.closeIdleConnections();

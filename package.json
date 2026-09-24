@@ -31,5 +31,8 @@
     "setup": "node cli.mjs install",
     "doctor": "node cli.mjs doctor",
     "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
   }
 }

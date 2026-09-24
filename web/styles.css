@@ -1655,3 +1655,77 @@ textarea {
 .sidebar-label {
   white-space: nowrap;
 }
+/* Instant wake for Astra, in Setup & connections. */
+.wake-card {
+  margin: 16px 0 6px;
+  padding: 14px 16px;
+  border: 1px solid #e1e7d8;
+  border-radius: 14px;
+  background: #fbfcf8;
+}
+.wake-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.wake-head strong {
+  font-size: 15px;
+  font-weight: 650;
+  color: #2b342f;
+}
+.wake-head p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #5b665d;
+}
+.switch {
+  flex-shrink: 0;
+  position: relative;
+  width: 42px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #cfd6c6;
+}
+.switch span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fffefa;
+  box-shadow: 0 1px 2px #2b342f33;
+  transition: transform 0.15s;
+}
+.switch[aria-checked="true"] {
+  background: #344e3e;
+}
+.switch[aria-checked="true"] span {
+  transform: translateX(18px);
+}
+.wake-status {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #3f4a42;
+}
+.wake-status[data-state="attention"],
+.wake-status[data-state="needs-engine"] {
+  color: #5e4a22;
+}
+.wake-actions:not(:empty) {
+  margin-top: 10px;
+}
+.wake-details {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6a7464;
+}
+.wake-details p {
+  margin: 6px 0 0;
+  line-height: 1.5;
+}

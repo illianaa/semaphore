@@ -24,9 +24,36 @@ const fake = (kind) => ({
     };
   },
 });
+// A pretend instant wake: it only changes state in memory, never this Mac's settings.
+const wake = (() => {
+  let enabled = false;
+  let chatgpt = "private";
+  const status = () => ({
+    supported: true,
+    enabled,
+    state: enabled
+      ? chatgpt === "shared" ? "on" : "restart-chatgpt"
+      : chatgpt === "shared" ? "turning-off" : "off",
+    detail: enabled
+      ? chatgpt === "shared"
+        ? "ChatGPT is using the shared engine. Astra's chat can rest between turns."
+        : "Restart ChatGPT so it uses the shared engine."
+      : chatgpt === "shared"
+        ? "Restart ChatGPT to put Codex back on its own engine."
+        : "Astra waits for its turn inside its ChatGPT chat.",
+  });
+  return {
+    status,
+    enable: () => ((enabled = true), status()),
+    disable: () => ((enabled = false), status()),
+    restart: async () => ((chatgpt = enabled ? "shared" : "private"), status()),
+  };
+})();
 const app = createAppServer({
   root,
   transports: { astra: fake("astra-inbox"), claude: fake("claude-inbox") },
+  wake,
+  wakePump: false,
 });
 const url = (await app.listen(port)).replace(/\/$/, "");
 

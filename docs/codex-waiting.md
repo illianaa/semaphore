@@ -1,6 +1,6 @@
 # Why Astra's task stays active
 
-Checked September 24, 2026, against this app's available tools and the installed Semaphore code.
+Checked September 24, 2026, against this app's available tools and the installed Semaphore code. This describes the default listener route. A subsequent [shared-runtime implementation](instant-wake.md) adds optional automatic wake; its native rollout status is tracked there.
 
 Claude starts the room listener as a background Bash task and ends its response. The Claude host returns the completed task's output to the chat when a room turn arrives. This is the wake mechanism used by the current integration, not a second Claude process resuming the chat. [Claude's background-command documentation](https://code.claude.com/docs/en/interactive-mode#background-bash-commands) describes the native background task mechanism.
 

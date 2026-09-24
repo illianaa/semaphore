@@ -7,9 +7,10 @@ import { createRequire } from 'node:module';
 import { EventEmitter, once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { codexExecutable } from '../lib/adapters.mjs';
+import { socketURL } from '../lib/codex-runtime.mjs';
 
 if (!process.argv.includes('--run')) {
-  console.log('Use --run [--ws-module <module>] to test two clients on a private app-server socket, up to five short model turns, declined approvals, and restart recovery. No desktop settings are changed.');
+  console.log('Use --run [--ws-module <module>] to test two clients on a private app-server socket, up to seven short model turns, declined approvals, and restart recovery. No desktop settings are changed.');
   process.exit(0);
 }
 
@@ -24,6 +25,7 @@ const report = { version: spawnSync(executable, ['--version'], { encoding: 'utf8
 const approvalPrompt = 'Approval routing test: use the shell tool exactly once to run node -e "console.log(\'semaphore-approval-probe\')". If the command is declined, reply exactly: approval-declined. Do not retry, read any files, or use other tools.';
 let server, viewer, wake, threadId;
 let serverLog = '';
+let beforeDecline;
 
 function stop(child) {
   if (!child || child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
@@ -37,7 +39,7 @@ class Client extends EventEmitter {
   constructor(name) {
     super();
     this.name = name; this.sequence = 0; this.pending = new Map(); this.events = []; this.requests = [];
-    this.socket = new WebSocket(`ws+unix://${socket}:/`, { perMessageDeflate: false });
+    this.socket = new WebSocket(socketURL(socket), { perMessageDeflate: false });
     this.socket.on('error', error => this.fail(error));
     this.socket.on('close', () => this.fail(new Error(`${name} connection closed`)));
     this.socket.on('message', line => {
@@ -92,17 +94,21 @@ async function startServer() {
   viewer = new Client('viewer'); wake = new Client('wake');
   // The wake client never answers an approval. The simulated viewing client
   // declines only the harmless probe command; nothing is auto-approved.
-  viewer.on('request', message => {
+  viewer.on('request', async message => {
     if (['item/commandExecution/requestApproval', 'item/fileChange/requestApproval'].includes(message.method)) {
-      setTimeout(() => { if (!viewer.failure) viewer.write({ id: message.id, result: { decision: 'decline' } }); }, 1000);
+      try { if (beforeDecline) await beforeDecline(); }
+      catch (error) { report.queueProbeError = error.message; }
+      if (!viewer.failure) viewer.write({ id: message.id, result: { decision: 'decline' } });
     } else viewer.write({ id: message.id, error: { code: -32601, message: 'Probe does not implement this request' } });
   });
   await viewer.initialize(); await wake.initialize();
 }
 
-async function turn(text) {
+async function turn(text, startQueued) {
   const start = { viewer: viewer.events.length, wake: wake.events.length, viewerRequests: viewer.requests.length, wakeRequests: wake.requests.length };
-  const started = await wake.request('turn/start', { threadId, input: [{ type: 'text', text }], effort: 'low' });
+  const started = startQueued
+    ? await wake.request('thread/queue/start', { threadId, queuedSubmissionId: startQueued })
+    : await wake.request('turn/start', { threadId, input: [{ type: 'text', text }], effort: 'low' });
   const turnId = started.turn.id;
   for (let tries = 0; tries < 600; tries++) {
     const completed = viewer.events.slice(start.viewer).find(event => event.method === 'turn/completed' && event.params.threadId === threadId && event.params.turn.id === turnId);
@@ -135,7 +141,43 @@ try {
   report.threadId = threadId;
   report.checks.push({ check: 'visible to second client', found: (await wake.request('thread/loaded/list')).data.includes(threadId) });
   report.checks.push({ check: 'wake without resume while viewer owns loaded thread', result: await turn('Reply exactly: semaphore-shared-first') });
+  let queued;
+  if (process.argv.includes('--queue')) beforeDecline = async () => {
+    const params = { threadId, clientUserMessageId: `semaphore-${threadId}`, input: [{ type: 'text', text: 'Reply exactly: semaphore-queued' }] };
+    queued = (await wake.request('thread/queue/add', params)).queuedSubmission;
+    const duplicate = (await wake.request('thread/queue/add', params)).queuedSubmission;
+    report.checks.push({ check: 'duplicate queue add', sameId: queued.id === duplicate.id, queue: await wake.request('thread/queue/list', { threadId }) });
+    await wake.request('thread/queue/delete', { threadId, queuedSubmissionId: queued.id });
+    queued = duplicate;
+    try { report.checks.push({ check: 'queue start while active', result: await wake.request('thread/queue/start', { threadId, queuedSubmissionId: queued.id }) }); }
+    catch (error) { report.checks.push({ check: 'queue start while active', error: error.message }); }
+    report.checks.push({ check: 'queue preserved after busy rejection', queue: await wake.request('thread/queue/list', { threadId }) });
+  };
   report.checks.push({ check: 'approval routing with wake client unsubscribed', result: await turn(approvalPrompt) });
+  beforeDecline = null;
+  if (queued) {
+    await delay(1000);
+    const queue = await wake.request('thread/queue/list', { threadId });
+    report.checks.push({ check: 'queue after previous turn settles', queue, status: (await wake.request('thread/read', { threadId })).thread.status });
+    if (queue.data.some(item => item.id === queued.id)) report.checks.push({ check: 'queue start while idle', result: await turn(null, queued.id) });
+    else {
+      for (let tries=0;tries<600;tries++) {
+        if ((await wake.request('thread/read', { threadId })).thread.status.type === 'idle') break;
+        await delay(100);
+      }
+      const history = await wake.request('thread/read', { threadId, includeTurns: true });
+      report.checks.push({ check: 'queue drains automatically after busy turn', turns: history.thread.turns.map(turn => ({ id: turn.id, status: turn.status, items: turn.items.filter(item => ['userMessage','agentMessage'].includes(item.type)) })) });
+    }
+    const idle = (await wake.request('thread/queue/add', { threadId, clientUserMessageId: `idle-${threadId}`, input: [{ type: 'text', text: 'Reply exactly: semaphore-idle-queue' }] })).queuedSubmission;
+    await delay(500);
+    const remaining = await wake.request('thread/queue/list', { threadId });
+    report.checks.push({ check: 'idle queue before explicit start', queue: remaining, status: (await wake.request('thread/read', { threadId })).thread.status });
+    if (remaining.data.some(item => item.id === idle.id)) report.checks.push({ check: 'idle queue explicit start', result: await turn(null, idle.id) });
+    else {
+      for (let tries=0;tries<600;tries++) { if ((await wake.request('thread/read',{threadId})).thread.status.type === 'idle') break; await delay(100); }
+      report.checks.push({ check: 'idle queue auto-started', history: (await wake.request('thread/read',{threadId,includeTurns:true})).thread.turns.map(turn=>({id:turn.id,status:turn.status,items:turn.items.filter(item=>['userMessage','agentMessage'].includes(item.type))})) });
+    }
+  }
   const resumed = await wake.request('thread/resume', { threadId });
   report.checks.push({ check: 'resume rejoins same loaded thread', sameId: resumed.thread.id === threadId, loadedCopies: (await wake.request('thread/loaded/list')).data.filter(id => id === threadId).length });
   report.checks.push({ check: 'approval routing with both clients subscribed', result: await turn(approvalPrompt) });

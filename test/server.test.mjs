@@ -25,6 +25,7 @@ async function fixture(t, options = {}) {
   });
   const app = createAppServer({
     root,
+    wakePump: false,
     transports: { astra: fake("astra-inbox"), claude: fake("claude-inbox") },
     ...options,
   });
@@ -563,4 +564,89 @@ test("the app sets a conversation's reply limit, including no limit", async (t) 
     );
   const read = await f.request(`/api/rooms/${room.name}`);
   assert.equal(read.body.room.turnLimit, null);
+});
+
+test("instant wake is read and changed only through its routes, and a restart waits for Astra", async (t) => {
+  const calls = [];
+  const state = { enabled: false };
+  const status = () => ({
+    supported: true,
+    enabled: state.enabled,
+    state: state.enabled ? "restart-chatgpt" : "off",
+    detail: "",
+  });
+  const wake = {
+    status,
+    enable: () => {
+      calls.push("enable");
+      state.enabled = true;
+      return status();
+    },
+    disable: () => {
+      calls.push("disable");
+      state.enabled = false;
+      return status();
+    },
+    restart: async () => {
+      calls.push("restart");
+      return status();
+    },
+  };
+  const f = await fixture(t, { wake });
+  assert.equal((await f.request("/api/wake")).body.wake.state, "off");
+  assert.equal(
+    (await f.request("/api/wake", { method: "POST", body: { enabled: "yes" } })).status,
+    400,
+  );
+  const on = await f.request("/api/wake", { method: "POST", body: { enabled: true } });
+  assert.equal(on.body.wake.state, "restart-chatgpt");
+  assert.equal(
+    (await f.request("/api/wake/restart", { method: "POST", body: {} })).status,
+    400,
+    "the restart needs an explicit confirmation",
+  );
+  const room = await f.create("Astra is busy");
+  f.bind(room.name);
+  await f.request(`/api/rooms/${room.name}/messages`, {
+    method: "POST",
+    body: { text: "Over to you", to: "astra", clientId: "wake-busy-1" },
+  });
+  const store = new RoomStore(f.root, room.name);
+  store.acquire();
+  try {
+    const saved = store.read();
+    saved.pending.receivedAt = new Date().toISOString();
+    store.save(saved);
+  } finally {
+    store.release();
+  }
+  const blocked = await f.request("/api/wake/restart", {
+    method: "POST",
+    body: { confirm: true },
+  });
+  assert.equal(blocked.status, 409);
+  assert.match(blocked.body.error, /Astra is working/);
+  await f.request(`/api/rooms/${room.name}/take`, { method: "POST", body: {} });
+  const restarted = await f.request("/api/wake/restart", {
+    method: "POST",
+    body: { confirm: true },
+  });
+  assert.equal(restarted.status, 200);
+  assert.deepEqual(calls, ["enable", "restart"]);
+
+  const failing = await fixture(t, {
+    wake: {
+      ...wake,
+      enable: () => {
+        throw new Error("Couldn't start Codex's shared engine: boom");
+      },
+    },
+  });
+  const failed = await failing.request("/api/wake", {
+    method: "POST",
+    body: { enabled: true },
+  });
+  assert.equal(failed.status, 500);
+  assert.match(failed.body.error, /shared engine/);
+  assert.ok(failed.body.wake, "a failure still reports where things stand");
 });
