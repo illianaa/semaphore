@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import http from "node:http";
 import { createAppServer } from "../server.mjs";
-import { RoomStore } from "../lib/core.mjs";
+import { RoomStore, Semaphore } from "../lib/core.mjs";
 import { LiveDeliveryError } from "../lib/live.mjs";
 import { RUNTIME } from "../lib/build-info.mjs";
 
@@ -718,4 +718,30 @@ test("the room API shows a status note only for the turn that wrote it, and neve
   assert.equal((await shown()).text, "Comparing pricing pages");
   const taken = await f.request(`/api/rooms/${room.name}/take`, { method: "POST", body: {} });
   assert.equal(taken.body.room.statusNote, null);
+});
+
+test('deliverables stay visible after handing off to the human without another native delivery', async t => {
+  const f = await fixture(t), room = await f.create('A shared deliverable');
+  f.bind(room.name);
+  const sent = await f.request(`/api/rooms/${room.name}/messages`, { method: 'POST',
+    body: { text: 'Make a page', to: 'astra', clientId: 'artifact-request' } });
+  const store = new RoomStore(f.root, room.name);
+  store.acquire();
+  let file;
+  try {
+    const app = new Semaphore(store, {}), turnId = sent.body.room.pending.id;
+    app.receive(turnId, 'astra');
+    file = path.join(store.workspace, 'result.html'); fs.writeFileSync(file, '<h1>Ready</h1>');
+    app.registerArtifact({ turnId, speaker: 'astra', file, ready: true });
+    await app.accept({ turnId, speaker: 'astra', message: 'The page is ready', next: 'human' });
+  } finally { store.release(); }
+  let detail = (await f.request(`/api/rooms/${room.name}`)).body.room;
+  const summary = (await f.request('/api/rooms')).body.rooms.find(item => item.name === room.name);
+  assert.equal(detail.owner, 'human'); assert.equal(detail.artifacts[0].ready, true);
+  assert.deepEqual(summary.deliverables, { total: 1, ready: 1 });
+  assert.equal(f.calls.length, 1, 'recording completion never wakes another model');
+  fs.writeFileSync(file, '<h1>An unregistered change</h1>');
+  detail = (await f.request(`/api/rooms/${room.name}`)).body.room;
+  assert.equal(detail.artifacts[0].availability, 'changed');
+  assert.equal(detail.deliverables.ready, 0);
 });

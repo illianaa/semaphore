@@ -16,6 +16,7 @@ import { WakePump } from "./lib/wake-delivery.mjs";
 import { diagnose } from "./lib/doctor.mjs";
 import { RUNTIME } from './lib/build-info.mjs';
 import { statusNote } from './lib/status-note.mjs';
+import { artifactViews } from './lib/artifacts.mjs';
 
 const SPEAKERS = ["astra", "claude"];
 const MAX_BODY = 80_000;
@@ -46,6 +47,7 @@ export function createAppServer({
     ["/icon.svg", ["icon.svg", "image/svg+xml"]],
   ]);
   const active = new Map();
+  const artifactCache = new Map();
   const flushing = new Set();
   const flushTimers = new Set();
   let closing = false;
@@ -99,6 +101,7 @@ export function createAppServer({
       }),
     );
     const last = room.messages.at(-1);
+    const artifacts = artifactViews(room, { cache: artifactCache });
     return {
       name: room.name,
       title: room.title || room.name,
@@ -127,6 +130,8 @@ export function createAppServer({
           }
         : null,
       statusNote: statusNote(room),
+      artifacts,
+      deliverables: { total: artifacts.length, ready: artifacts.filter(item => item.ready).length },
       connections,
       lock: store.lockStatus(),
       autoTurns: room.autoTurns ?? 0,

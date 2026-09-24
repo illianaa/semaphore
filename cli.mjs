@@ -32,6 +32,7 @@ import { WakeClient, verifyNativeSeat, sameRuntime } from "./lib/codex-runtime.m
 import { cancelQueuedWake } from "./lib/wake-delivery.mjs";
 import { RUNTIME, formatRuntime, runtimeIdentity, runtimeChange, sameBuild } from './lib/build-info.mjs';
 import { statusNote } from './lib/status-note.mjs';
+import { artifactViews, artifactView } from './lib/artifacts.mjs';
 import {
   DEFAULT_PORT,
   SERVICE_LABEL,
@@ -56,6 +57,16 @@ const { values, positionals } = parseArgs({
     show: { type: "boolean" },
     approval: { type: "boolean" },
     clear: { type: "boolean" },
+    id: { type: "string" },
+    title: { type: "string" },
+    asset: { type: "string", multiple: true },
+    "no-assets": { type: "boolean" },
+    ready: { type: "boolean" },
+    draft: { type: "boolean" },
+    url: { type: "string" },
+    access: { type: "string" },
+    sha256: { type: "string" },
+    kind: { type: "string" },
     "request-id": { type: "string" },
     first: { type: "string" },
     next: { type: "string" },
@@ -112,6 +123,14 @@ Live chats (run from inside the Astra or Claude desktop chat):
   node cli.mjs note <room> --turn <id> [--approval] "<text>"
     After receive, share a working note (30 minutes) or an approval wait (until cleared).
     Notes use one line, at most 280 characters. Use --clear without text to remove one.
+  node cli.mjs artifact <room> list         Selected deliverables and exact registered versions (JSON)
+  node cli.mjs artifact <room> add --turn <id> --file <path> [--title "<title>"] [--ready]
+    --id <artifact> updates one; --asset <relative-file> selects an adjacent asset (repeatable).
+    Omit --asset to keep the previous selection; --no-assets clears it. --draft removes readiness.
+    --url <http(s) link> --access "<who can open it>" records a publication claim for this version.
+    --url "" clears the link. No file is uploaded and no URL is fetched.
+  node cli.mjs artifact <room> review --turn <id> --id <artifact> --revision <n> --sha256 <hash> --kind source|visual
+    A visual review also needs --via "<permitted render inspected>". Reviews apply only to that version.
   A send from a bound chat records the human's message as relayed via that chat.
 
 In a conversation:
@@ -744,6 +763,7 @@ async function main() {
     "stick",
     "receive",
     "note",
+    "artifact",
     "new",
     "loop-in",
     "rooms",
@@ -771,6 +791,10 @@ async function main() {
   if (command === "new") return newRoom();
   if (command === "loop-in") return loopIn();
   const store = new RoomStore(root, name);
+  if (command === "artifact" && words[0] === "list") {
+    console.log(JSON.stringify({ artifacts: artifactViews(store.read()) }, null, 2));
+    return;
+  }
   if (command === "unlock") {
     store.unlock();
     console.log("No stale lock remains.");
@@ -896,6 +920,22 @@ async function main() {
           { root, compact: turn.compact === true, runtimeNotice },
         ),
       );
+      return;
+    }
+    if (command === "artifact") {
+      if (!caller || (values.as && values.as !== caller))
+        throw new Error("Artifact changes must run inside the chat bound to this room as their speaker.");
+      if (values.ready && values.draft) throw new Error("Choose --ready or --draft, not both.");
+      if (values.asset && values["no-assets"]) throw new Error("Choose --asset files or --no-assets, not both.");
+      const common = { turnId: values.turn, speaker: caller, id: values.id };
+      let result;
+      if (words[0] === "add") result = semaphore.registerArtifact({ ...common,
+        file: values.file, title: values.title, assets: values["no-assets"] ? [] : values.asset,
+        ready: values.ready ? true : values.draft ? false : undefined, url: values.url, access: values.access });
+      else if (words[0] === "review") result = semaphore.reviewArtifact({ ...common,
+        revision: Number(values.revision), sha256: values.sha256, kind: values.kind, via: values.via });
+      else throw new Error("Use artifact <room> list, add or review.");
+      console.log(JSON.stringify({ ...result, artifact: artifactView(result.artifact) }, null, 2));
       return;
     }
     if (command === "note") {

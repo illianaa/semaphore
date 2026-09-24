@@ -1005,3 +1005,35 @@ test('status hides expired notes and a rebind removes the old seat note', (t) =>
   assert.equal(f.room('room').statusNote, undefined);
   assert.equal(f.run(['note', 'room', '--turn', id, 'Old chat'], ASTRA).code, 1);
 });
+
+test('artifact commands require this received turn and leave conversation delivery unchanged', t => {
+  const f = setup(t); joinBoth(f.run);
+  f.run(['send', 'room', '--to', 'astra', 'Create a deliverable']);
+  const id = f.room('room').pending.id;
+  const file = f.write('result.html', '<h1>A deliverable</h1>');
+  const add = ['artifact', 'room', 'add', '--turn', id, '--file', file, '--title', 'Our result', '--ready'];
+  assert.match(f.run(add, ASTRA).err, /Receive this turn/);
+  f.run(['receive', 'room', '--turn', id], ASTRA);
+  for (const env of [{}, CLAUDE, { CODEX_THREAD_ID: OTHER }]) assert.equal(f.run(add, env).code, 1);
+  assert.equal(f.run([...add, '--as', 'claude'], ASTRA).code, 1);
+  const before = f.room('room');
+  const registered = f.run(add, ASTRA);
+  assert.equal(registered.code, 0, registered.err);
+  const artifact = JSON.parse(registered.out).artifact;
+  assert.equal(JSON.parse(f.run(add, ASTRA).out).duplicate, true);
+  const review = ['artifact', 'room', 'review', '--turn', id, '--id', artifact.id, '--revision', '1', '--sha256', artifact.sha256, '--kind', 'source'];
+  assert.equal(f.run(review, ASTRA).code, 0);
+  const listed = JSON.parse(f.run(['artifact', 'room', 'list']).out).artifacts;
+  assert.equal(listed[0].ready, true); assert.equal(listed[0].currentReviews[0].speaker, 'astra');
+  for (const key of ['owner', 'messages', 'pending', 'autoTurns', 'maxTurns', 'participants'])
+    assert.deepEqual(f.room('room')[key], before[key], key);
+  const reply = f.run(['reply', 'room', '--turn', id, '--next', 'claude', 'Review our result'], ASTRA);
+  assert.equal(reply.code, 0, reply.err);
+  assert.equal(f.run(review, ASTRA).code, 1, 'old turn cannot write a review');
+  const envelope = f.run(['listen', 'room'], CLAUDE).out;
+  assert.ok(envelope.includes(`revision 1 · SHA-256 ${artifact.sha256}`));
+  assert.ok(envelope.includes(artifact.path));
+  assert.match(envelope, /artifact room --root .* list/);
+  assert.equal(f.queued().length, 0);
+  assert.equal(f.claudeCalled(), false);
+});
