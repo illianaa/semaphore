@@ -30,6 +30,6 @@ The first turn defaults to the initiating AI, which can reply with a clearly lab
 
 The other participant still needs to send its invitation in its app. This limitation is visible and intentional. Approvals remain in each participant's normal native host. There is no app-server transport replacing a live member, no background resume of an open chat, and no silent retry of uncertain delivery.
 
-## Still needed
+## Rollout and remaining boundary
 
-A final native end-to-end check after cutover. Claude's host findings are above; the compact companion is built (`/?view=companion`). Cross-room editing of the same project must use separate worktrees or explicit coordination; a per-room talking stick is not a cross-room write lock.
+The live app was updated after 100 passing tests and browser checks. The installed CLI acknowledged the existing native turn after restart with the same room and binding. Claude's host findings are above; the compact companion is built (`/?view=companion`). Cross-room editing of the same project must use separate worktrees or explicit coordination; a per-room talking stick is not a cross-room write lock.

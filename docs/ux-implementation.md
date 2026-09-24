@@ -39,3 +39,9 @@ The supported implementation keeps both participants in their native chats with 
 - The notification transition was checked with a browser notification stub.
 - The opt-in native feasibility probe makes exactly two harmless model turns in an isolated ephemeral thread. No host settings change.
 - `dev/ui-harness.mjs` runs the app with fake transports and disposable rooms. `dev/probe-codex-native.mjs` reproduces the Codex host checks.
+
+## Local rollout
+
+The implementation was committed as `96971cf`, fast-forwarded into `main`, and the existing Semaphore service restarted on port 4317. The installed CLI and both skill links already point to that checkout. All seven room journals matched their pre-update hashes, and the existing native turn was acknowledged by the new CLI without rebinding. `doctor` passed every check. Private journal backups are under `~/.semaphore/backups/ux-2026-09-24T16-59-23.403Z`.
+
+The app now exposes the per-room limit control. The active test chat's setting was left at its existing default; the person chooses the preferred value. The test-only UI servers were stopped. No remote push was made.
