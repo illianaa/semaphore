@@ -139,7 +139,7 @@ test("codex queue: success passes the envelope as one argument and returns a que
   );
   assert.match(
     message,
-    /reply live-test --turn turn-1 --next <human\|astra\|claude> --file <path>/,
+    /reply live-test --root .* --turn turn-1 --next <human\|astra\|claude> --file <path>/,
   );
 });
 

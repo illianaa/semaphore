@@ -16,7 +16,8 @@ import {
   INBOX_TRANSPORTS,
   acknowledgeDelivery,
   codexQueueRevision,
-  handOffText,
+  turnGuidance,
+  roomCommands,
 } from "./lib/live.mjs";
 import {
   defaultRoomRoot,
@@ -48,6 +49,9 @@ const { values, positionals } = parseArgs({
     as: { type: "string" },
     turn: { type: "string" },
     revision: { type: "string" },
+    compact: { type: "boolean" },
+    "seen-through": { type: "string" },
+    show: { type: "boolean" },
     "request-id": { type: "string" },
     first: { type: "string" },
     next: { type: "string" },
@@ -63,7 +67,7 @@ const { values, positionals } = parseArgs({
 });
 const [command = "help", name = "hello", ...words] = positionals;
 const root = path.resolve(values.root);
-const rootFlag = root === defaultRoomRoot ? "" : ` --root ${quote(root)}`;
+const rootFlag = ` --root ${quote(root)}`;
 const help = `Semaphore — you, Astra, and Claude, one speaker at a time.
 
 Setting up (Claude or Astra runs these for you):
@@ -95,7 +99,11 @@ Live chats (run from inside the Astra or Claude desktop chat):
   node cli.mjs listen <room>                Wait for a turn without a timer; --timeout <seconds> opts in
   node cli.mjs stick <room>                 Whose turn is it? Exits 3 if it isn't this chat's
   node cli.mjs receive <room> --turn <id>    Acknowledge and read this chat's current turn
+    --compact --seen-through <revision>    Only after reading that exact delivery; newer input is shown in full
+    --show                                Read the full turn again
   node cli.mjs reply <room> --turn <id> --next human|astra|claude --file reply.md
+    --file - reads stdin; omit --file for short quoted text. Use files or quoted heredocs for long Markdown.
+    Replies preserve whitespace. A reply needing review keeps a draft and prints its retry command.
   A send from a bound chat records the human's message as relayed via that chat.
 
 In a conversation:
@@ -111,7 +119,7 @@ const recipients = { human: "you", astra: "Astra", claude: "Claude" };
 
 function readMessage() {
   return values.file
-    ? fs.readFileSync(path.resolve(values.file), "utf8")
+    ? fs.readFileSync(values.file === "-" ? 0 : path.resolve(values.file), "utf8")
     : words.join(" ");
 }
 
@@ -197,7 +205,7 @@ async function loopIn() {
   if (room.opening.state === "waiting")
     console.log(`The opening waits for ${names[values.to]} to join, then goes to ${names[first]} once.`);
   invite(room);
-  listenHint(binding.transport, speaker, room.name);
+  printTurnGuidance(room, speaker);
 }
 
 function invite(room) {
@@ -323,7 +331,7 @@ function liveSpeakers(room) {
 
 function transportsFor(room, caller) {
   const formatEnvelope = (context) =>
-    liveEnvelope(context, { root: rootFlag ? root : undefined });
+    liveEnvelope(context, { root });
   const headless = { astra: new CodexAdapter(), claude: new ClaudeAdapter() };
   return Object.fromEntries(
     ["astra", "claude"].map((speaker) => {
@@ -449,7 +457,7 @@ async function join(app) {
   ) {
     console.log(`This chat is already ${speaker} in ${app.room.name}.`);
     await refreshWakeSeat(app, speaker);
-    return listenHint(binding.transport, speaker, app.room.name, automaticallyWakes(participant));
+    return;
   }
   // The same chat changing how it receives turns. Its identity is proven by its environment, so
   // no other chat is replaced; only its own seat, and only while it has no turn in progress.
@@ -472,7 +480,7 @@ async function join(app) {
       `This chat now receives ${app.room.name} turns through ${binding.transport}.`,
     );
     await refreshWakeSeat(app, speaker);
-    return listenHint(binding.transport, speaker, app.room.name, automaticallyWakes(participant));
+    return;
   }
   // Unused seats: a live placeholder or never-started headless astra (no id), or a never-started headless claude.
   const unused =
@@ -503,21 +511,14 @@ async function join(app) {
     `Joined ${app.room.name} as ${speaker} (${binding.transport} ${binding.id}).`,
   );
   await refreshWakeSeat(app, speaker);
-  listenHint(binding.transport, speaker, app.room.name, automaticallyWakes(participant));
 }
 
 function listenCommand(speaker, room) {
-  return `node ${quote(path.join(projectDir, "cli.mjs"))} listen ${room}${rootFlag}${speaker === "astra" ? " --as astra" : ""}`;
+  return roomCommands({ room: { name: room }, speaker, root }).listen;
 }
 
-function listenHint(transport, speaker, room, automatic = false) {
-  if (automatic) return console.log(handOffText(transport, listenCommand(speaker, room), { automatic }));
-  if (transport === "claude-inbox")
-    console.log(`Keep this running in the background to receive turns: ${listenCommand(speaker, room)}`);
-  else if (transport === "astra-inbox")
-    console.log(`Whenever you don't hold the stick, wait for turns by running this in the foreground, and run it again after each timeout: ${listenCommand(speaker, room)}`);
-  else if (transport === "codex-queue")
-    console.log("Manual delivery: turns are queued in this ChatGPT chat and wait there until someone presses Send.");
+function printTurnGuidance(room, speaker) {
+  console.log(turnGuidance({ room, speaker, root, automatic: automaticallyWakes(room.participants[speaker]) }));
 }
 
 async function reply(app, caller) {
@@ -532,17 +533,28 @@ async function reply(app, caller) {
   if (!SPEAKERS.includes(values.next))
     throw new Error("--next must be human, astra, or claude.");
   await refreshWakeSeat(app, caller);
+  const message = readMessage();
   try {
     const result = await app.accept({
       turnId: values.turn,
       speaker: caller,
-      message: readMessage(),
+      message,
       next: values.next,
     });
     if (result.status === "review-required") {
       console.log("Your reply was not accepted. New human input arrived; you still hold the stick. Read it, run the receive command below, then revise and submit your reply.");
+      let draft = values.file && values.file !== "-" ? path.resolve(values.file) : null;
+      if (!draft) {
+        const directory = path.join(app.store.dir, "drafts", caller);
+        fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+        draft = path.join(directory, `${app.room.pending.id}.md`);
+        const temp = `${draft}.${process.pid}.tmp`;
+        fs.writeFileSync(temp, message, { mode: 0o600 });
+        fs.renameSync(temp, draft);
+      }
+      console.log(`Your draft is kept at ${draft}. Revise it after reading the new input, then retry:\nnode ${quote(path.join(projectDir, "cli.mjs"))} reply ${app.room.name}${rootFlag} --turn ${values.turn} --next ${values.next} --file ${quote(draft)}`);
       console.log(liveEnvelope({ room: app.room, participant: app.room.participants[caller],
-        turn: { ...app.room.pending, through: result.revision, revision: result.revision }, prompt: "" }, { root }));
+        turn: { ...app.room.pending, through: result.revision, revision: result.revision, reviewRequired: true }, prompt: "" }, { root }));
       process.exitCode = 3;
       return;
     }
@@ -566,7 +578,7 @@ async function reply(app, caller) {
 function handOff(room, caller) {
   if (room.owner === caller) return;
   console.log(
-    `You no longer hold the stick.\n${handOffText(room.participants[caller].transport, listenCommand(caller, room.name), { automatic: automaticallyWakes(room.participants[caller]) })}`,
+    `You no longer hold the stick.\n${turnGuidance({ room, speaker: caller, root, afterReply: true, automatic: automaticallyWakes(room.participants[caller]) })}`,
   );
 }
 
@@ -576,23 +588,12 @@ function stick(room) {
   const mine = caller
     ? room.owner === caller
     : !nativeChat() && room.owner === "human";
-  const holder = room.owner === "human" ? "The human" : names[room.owner];
   if (mine) {
-    console.log(`You hold the stick in ${room.name}.`);
+    if (caller) printTurnGuidance(room, caller);
+    else console.log(`You hold the stick in ${room.name}.`);
     return;
   }
-  const transport = caller ? room.participants[caller].transport : null;
-  const wait =
-    automaticallyWakes(room.participants[caller])
-      ? "Automatic wake is verified. End your native turn and wait for Semaphore to wake this chat."
-      : transport === "astra-inbox"
-      ? `Stay connected: wait for your turn by running this in the foreground: ${listenCommand("astra", room.name)}`
-      : transport === "claude-inbox"
-        ? `Make sure this is running as a background task, then end your turn: ${listenCommand("claude", room.name)}`
-        : "End your turn and wait for your next turn.";
-  console.log(
-    `${holder} holds the stick in ${room.name}${room.pending?.speaker === room.owner ? " and has a pending turn" : ""}. Don't edit shared files or continue on your own. ${wait}`,
-  );
+  printTurnGuidance(room, caller);
   process.exitCode = 3;
 }
 
@@ -604,6 +605,10 @@ async function listenForTurn(room, store) {
       `Run listen from inside the ${speaker} chat bound to room ${room.name}.`,
     );
   const transport = room.participants[speaker].transport;
+  if (room.owner === speaker && room.pending?.speaker === speaker && room.pending.receivedAt) {
+    printTurnGuidance(room, speaker);
+    return;
+  }
   if (speaker === "astra" && transport === "astra-inbox" && readWakeSettings().enabled &&
       !automaticallyWakes(room.participants.astra)) {
     await store.acquire({ waitMs: 5000 });
@@ -829,14 +834,25 @@ async function main() {
       await join(semaphore);
       // A new binding can complete setup. Refresh the adapters from that binding.
       semaphore.adapters = transportsFor(semaphore.room, callerIn(semaphore.room));
+      const beforeTurn = semaphore.room.pending?.id;
       await semaphore.startOpening();
+      // Direct delivery already printed a full envelope. Otherwise render the
+      // current state only after opening dispatch decides who holds the stick.
+      if (!(semaphore.room.pending?.id !== beforeTurn && semaphore.room.owner === values.as))
+        printTurnGuidance(semaphore.room, values.as);
       return;
     }
     if (command === "receive") {
       if (!caller)
         throw new Error("Receive must run inside the chat bound to this room.");
-      const turn = semaphore.receive(values.turn, caller, values.revision === undefined ? undefined : Number(values.revision));
-      acknowledgeDelivery({ roomDir: store.dir, speaker: caller, turnId: turn.id });
+      const turn = semaphore.receive(values.turn, caller, values.revision === undefined ? undefined : Number(values.revision), {
+        compact: values.compact && !values.show,
+        seenThrough: values["seen-through"] === undefined ? undefined : Number(values["seen-through"]),
+      });
+      if (turn.reviewRequired) {
+        console.log("Compact receipt was not accepted. Read the full turn below, then run its receive command. New input has not been marked read.");
+        process.exitCode = 3;
+      } else acknowledgeDelivery({ roomDir: store.dir, speaker: caller, turnId: turn.id });
       await refreshWakeSeat(semaphore, caller);
       console.log(
         liveEnvelope(
@@ -846,7 +862,7 @@ async function main() {
             turn,
             prompt: "",
           },
-          { root: rootFlag ? root : undefined },
+          { root, compact: turn.compact === true },
         ),
       );
       return;

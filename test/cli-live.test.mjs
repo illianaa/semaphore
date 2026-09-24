@@ -20,10 +20,10 @@ const turnIn = (text) => text.match(/--turn ([A-Za-z0-9_-]+)/)?.[1];
 
 // Runs the real CLI against a temporary root. A fake codex records every queued message, and a
 // fake claude on PATH proves that no headless Claude session is ever started for a live room.
-function setup(t) {
+function setup(t, { defaultRoot = false, quotedRoot = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "semaphore-cli-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const root = path.join(dir, "rooms");
+  const root = path.join(dir, quotedRoot ? "shared rooms with an apostrophe's" : "rooms");
   const bin = path.join(dir, "bin");
   fs.mkdirSync(bin);
   const codexLog = path.join(dir, "codex.jsonl");
@@ -49,10 +49,11 @@ if (process.env.FAKE_CODEX_FAIL) { console.error("Error: No active session found
   );
   // Real instant wake can be enabled on the machine running these tests.
   // Keep fake native identities away from its settings and socket.
-  base.SEMAPHORE_HOME = path.join(dir, 'installation');
-  const run = (args, env = {}) => {
+  base.SEMAPHORE_HOME = defaultRoot ? dir : path.join(dir, 'installation');
+  const run = (args, env = {}, input) => {
     const result = spawnSync(process.execPath, [CLI, ...args, "--root", root], {
       encoding: "utf8",
+      input,
       env: {
         ...base,
         PATH: `${bin}:${base.PATH}`,
@@ -99,6 +100,10 @@ if (process.env.FAKE_CODEX_FAIL) { console.error("Error: No active session found
     queued,
     inbox,
     claudeCalled: () => fs.existsSync(claudeCalled),
+    runHint: (command, env = {}) => spawnSync('/bin/sh', ['-c', command], {
+      encoding: 'utf8', timeout: 5000,
+      env: { ...base, SEMAPHORE_CODEX_BIN: codex, ...env },
+    }),
   };
 }
 
@@ -567,7 +572,8 @@ test("an Astra turn waits in its inbox across listener gaps and timeouts; it is 
   assert.equal(inbox("room", "astra").length, 0, "acknowledged turns leave the inbox");
   const quiet = run(["listen", "room", "--as", "astra", "--timeout", "1"], ASTRA);
   assert.equal(quiet.code, 0);
-  assert.match(quiet.out, /No new turn in 1 seconds\. You are still connected; to keep waiting, run: node .*listen room --root .* --as astra/);
+  assert.match(quiet.out, /already received turn .*Continue your work, then reply:/);
+  assert.doesNotMatch(quiet.out, /No new turn| listen room/);
   assert.equal(queued().length, 0);
 });
 
@@ -588,7 +594,7 @@ test("the same chat can switch its idle seat between the manual ChatGPT queue an
   assert.equal(room("room").participants.astra.transport, "codex-queue");
   const upgraded = run(["join", "room", "--as", "astra"], ASTRA);
   assert.equal(upgraded.code, 0, upgraded.err);
-  assert.match(upgraded.out, /now receives room turns through astra-inbox[\s\S]*wait for turns by running this in the foreground/);
+  assert.match(upgraded.out, /now receives room turns through astra-inbox[\s\S]*wait for your turn by running this in the foreground/);
   assert.equal(room("room").participants.astra.transport, "astra-inbox");
   assert.deepEqual(room("room").events.map((e) => e.type), ["join", "transport-changed"]);
   assert.equal(run(["send", "room", "--to", "astra", "--file", write("h.txt", "Hi.")]).code, 0);
@@ -769,4 +775,145 @@ test("Astra's default listener has no timer and stays quiet until a real turn ar
     assert.ok(turnIn(result.out));
     assert.doesNotMatch(result.out, /ExperimentalWarning|No new turn in/);
   } finally { clearTimeout(timer); }
+});
+
+for (const options of [{ defaultRoot: true }, { quotedRoot: true }]) {
+  test(`generated commands keep their room root across environments: ${JSON.stringify(options)}`, (t) => {
+    const f = setup(t, options); joinBoth(f.run);
+    const joined = f.run(['join', 'room', '--as', 'claude'], CLAUDE);
+    assert.match(joined.out, /listen room --root /);
+    f.run(['send', 'room', '--to', 'claude', 'Keep this root']);
+    const envelope = f.run(['listen', 'room'], CLAUDE).out;
+    const receive = envelope.split('\n').find(line => line.startsWith('node ') && line.includes(' receive room '));
+    assert.ok(receive.includes('--root '));
+    const got = f.runHint(receive, { ...CLAUDE, SEMAPHORE_HOME: path.join(f.root, 'different-installation') });
+    assert.equal(got.status, 0, got.stderr);
+    assert.match(got.stdout, /Keep this root/);
+    for (const line of got.stdout.split('\n').filter(line => line.startsWith('node ')))
+      assert.ok(line.includes('--root '), line);
+    const reply = f.run(['reply', 'room', '--turn', f.room('room').pending.id, '--next', 'astra', 'Root retained'], CLAUDE);
+    assert.equal(reply.code, 0, reply.err);
+    assert.match(reply.out, /listen room --root /);
+    const next = f.run(['listen', 'room', '--as', 'astra'], ASTRA).out;
+    assert.match(next, /receive room --root /);
+    assert.match(next, /reply room --root /);
+    assert.match(next, /stick room --root /);
+  });
+}
+
+test('join with its own opening gives the turn first; repeat joins and listen guide the current holder', (t) => {
+  const f=setup(t);
+  const opening=f.run(['loop-in','--as','astra','--to','claude','--first','claude','--file',f.write('opening.md','Start with Claude'),'--request-id','state-aware-opening'],ASTRA);
+  const room=opening.out.match(/in (room-[a-f0-9]+)\./)[1];
+  const join=f.run(['join',room,'--as','claude'],CLAUDE);
+  assert.equal(join.code,0,join.err);
+  assert.match(join.out,/Start with Claude/);
+  assert.doesNotMatch(join.out,/Make sure this is running|Keep this running|Stay connected/);
+  const id=f.room(room).pending.id;
+  const duplicate=f.run(['join',room,'--as','claude'],CLAUDE);
+  assert.match(duplicate.out,/Read and acknowledge your saved turn first/);
+  assert.doesNotMatch(duplicate.out,/ listen /);
+  f.run(['receive',room,'--turn',id],CLAUDE);
+  for(const args of [['join',room,'--as','claude'],['stick',room],['listen',room]]){
+    const result=f.run(args,CLAUDE);
+    assert.equal(result.code,0,result.err);
+    assert.match(result.out,/already received turn/);
+    assert.doesNotMatch(result.out,/ listen /);
+  }
+});
+
+test('stdin, files and positional replies preserve literal Markdown and trailing newlines', (t) => {
+  const f=setup(t);joinBoth(f.run);
+  const message="## Today's draft — café 🌱\n\n`code` and $HOME, $(not-a-command), apostrophe's\n\n";
+  for(const mode of ['stdin','file','positional']){
+    f.run(['send','room','--to','astra',`Test ${mode}`]);
+    const id=f.room('room').pending.id;
+    f.run(['receive','room','--turn',id],ASTRA);
+    const input=mode==='stdin' ? ['--file','-'] : mode==='file' ? ['--file',f.write('literal.md',message)] : [message];
+    const result=f.run(['reply','room','--turn',id,'--next','human',...input],ASTRA,mode==='stdin'?message:undefined);
+    assert.equal(result.code,0,result.err);
+    assert.equal(f.room('room').messages.at(-1).text,message);
+    assert.equal(f.run(['reply','room','--turn',id,'--next','human',...input],ASTRA,mode==='stdin'?message:undefined).code,0);
+  }
+  // Simulate an accepted reply from a pre-upgrade process that trimmed it.
+  const legacy=f.room('room');const last=legacy.messages.at(-1);
+  last.text=last.text.trim();
+  fs.writeFileSync(path.join(f.root,'room','room.json'),JSON.stringify(legacy));
+  const retry=f.run(['reply','room','--turn',last.turnId,'--next','human','--file','-'],ASTRA,message);
+  assert.equal(retry.code,0,retry.err);assert.match(retry.out,/Already accepted/);
+  assert.equal(f.room('room').messages.length,legacy.messages.length);
+});
+
+test('a stdin reply requiring review leaves an exact private draft and a usable retry', (t) => {
+  const f=setup(t);joinBoth(f.run);
+  f.run(['send','room','--to','astra','Start']);
+  const id=f.room('room').pending.id;f.run(['receive','room','--turn',id],ASTRA);
+  f.run(['send','room','--to','astra','Include the new requirement']);
+  const text="A draft with `code`, $HOME and an apostrophe's — 🌱\n\n";
+  const review=f.run(['reply','room','--turn',id,'--next','human','--file','-'],ASTRA,text);
+  assert.equal(review.code,3,review.err);
+  const draft=review.out.match(/Your draft is kept at (.*)\. Revise/)[1];
+  assert.equal(fs.readFileSync(draft,'utf8'),text);
+  assert.equal(fs.statSync(draft).mode & 0o777,0o600);
+  const retry=review.out.split('\n').find(line=>line.startsWith('node ') && line.includes(' --next human --file '));
+  const revision=f.room('room').pending.reviewThrough;
+  assert.equal(f.run(['receive','room','--turn',id,'--revision',String(revision)],ASTRA).code,0);
+  const accepted=f.runHint(retry,ASTRA);
+  assert.equal(accepted.status,0,accepted.stderr);
+  assert.equal(f.room('room').messages.at(-1).text,text);
+});
+
+test('compact receipt is explicit, exact and recoverable with full output', (t) => {
+  const f=setup(t);joinBoth(f.run);
+  const body='Distinct long context '.repeat(400);
+  f.run(['send','room','--to','astra',body]);
+  const id=f.room('room').pending.id;
+  assert.equal(f.run(['receive','room','--turn',id,'--compact'],ASTRA).code,1);
+  assert.equal(f.room('room').pending.receivedAt,undefined);
+  const delivered=f.run(['listen','room','--as','astra'],ASTRA);
+  assert.match(delivered.out,/revision 1/);
+  const compact=f.run(['receive','room','--turn',id,'--compact','--seen-through','1'],ASTRA);
+  assert.equal(compact.code,0,compact.err);
+  assert.match(compact.out,/Acknowledged turn .*revision 1 · holder: astra/);
+  assert.match(compact.out,/reply room --root /);
+  assert.doesNotMatch(compact.out,/Distinct long context/);
+  assert.match(f.run(['receive','room','--turn',id,'--show'],ASTRA).out,/Distinct long context/);
+});
+
+test('new input forces full review instead of a compact acknowledgment, including later revisions', (t) => {
+  const f=setup(t);joinBoth(f.run);
+  f.run(['send','room','--to','astra','Original']);
+  const id=f.room('room').pending.id;
+  f.run(['send','room','--to','astra','New human input']);
+  const compact=f.run(['receive','room','--turn',id,'--compact','--seen-through','1'],ASTRA);
+  assert.equal(compact.code,3,compact.err);
+  assert.match(compact.out,/New human input/);
+  assert.match(compact.out,/--revision 2/);
+  assert.equal(f.room('room').pending.receivedAt,undefined);
+  assert.equal(f.room('room').messages[1].readAt,undefined);
+  f.run(['send','room','--to','astra','Even newer human input']);
+  const newer=f.run(['receive','room','--turn',id,'--revision','2','--compact','--seen-through','2'],ASTRA);
+  assert.equal(newer.code,3,newer.err);
+  assert.match(newer.out,/Even newer human input/);
+  assert.match(newer.out,/--revision 3/);
+  assert.equal(f.room('room').pending.receivedAt,undefined);
+  const bad=f.run(['receive','room','--turn',id,'--revision','999','--compact','--seen-through','999'],ASTRA);
+  assert.equal(bad.code,1);assert.equal(f.room('room').pending.reviewThrough,3);
+  const show=f.run(['receive','room','--turn',id,'--revision','3','--show'],ASTRA);
+  assert.equal(show.code,0,show.err);
+  assert.match(show.out,/New human input/);assert.match(show.out,/Even newer human input/);
+  assert.equal(f.room('room').pending.receivedThrough,3);
+  assert.ok(f.room('room').messages[2].readAt);
+});
+
+test('a wrong compact display revision never acknowledges a turn', (t) => {
+  const f=setup(t);joinBoth(f.run);
+  f.run(['send','room','--to','astra','Read this full body']);
+  const id=f.room('room').pending.id;
+  const result=f.run(['receive','room','--turn',id,'--compact','--seen-through','0'],ASTRA);
+  assert.equal(result.code,3,result.err);
+  assert.match(result.out,/Read this full body/);
+  assert.equal(f.room('room').pending.receivedAt,undefined);
+  const recovered=f.run(['receive','room','--turn',id,'--revision','1','--show'],ASTRA);
+  assert.equal(recovered.code,0,recovered.err);
 });
