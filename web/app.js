@@ -386,6 +386,10 @@ function renderRoom(room, force = false) {
   $("#conversation").hidden = false;
   $("#top-title").textContent = room.title;
   $("#conversation-title").textContent = room.title;
+  // A name an AI suggested stays visibly theirs until the person renames it.
+  $("#conversation-eyebrow").textContent = ["astra", "claude"].includes(room.titleSource)
+    ? `GROUP CONVERSATION · NAMED BY ${labels[room.titleSource].toUpperCase()}`
+    : "GROUP CONVERSATION";
   document.title = `${room.title} · Semaphore`;
   $("#members").innerHTML = ["human", ...(room.members ?? SEATS)]
     .map(
@@ -720,7 +724,15 @@ async function followRoute() {
   toast("That conversation wasn’t found. The link may be incomplete or the conversation removed.");
   showHome(undefined, { route: "replace" });
 }
+let renameGeneration = 0;
+function closeRename() {
+  renameGeneration++;
+  $("#rename-form").hidden = true;
+  $(".title-row").hidden = false;
+  $(".rename-save").disabled = false;
+}
 async function selectRoom(name, { route = "push" } = {}) {
+  closeRename();
   if (state.selected)
     storageSet(`semaphore:draft:${state.selected}`, $("#message").value);
   state.selected = name;
@@ -947,6 +959,46 @@ async function openPreview(room, button) {
     button.disabled = false;
   }
 }
+// Renaming never takes the stick or sends anything; the server decides what a valid name is.
+$("#rename").addEventListener("click", () => {
+  if (!state.room) return;
+  renameGeneration++;
+  $(".title-row").hidden = true;
+  $("#rename-form").hidden = false;
+  $("#rename-input").value = state.room.title;
+  $("#rename-input").focus();
+  $("#rename-input").select();
+});
+$("#rename-cancel").addEventListener("click", closeRename);
+$("#rename-input").addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeRename();
+});
+$("#rename-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const room = state.room;
+  const title = $("#rename-input").value;
+  if (!room) return closeRename();
+  if (title.replace(/\s+/g, " ").trim() === room.title && room.titleSource === "human") return closeRename();
+  const save = $(".rename-save");
+  if (save.disabled) return;
+  const generation = renameGeneration;
+  save.disabled = true;
+  try {
+    const result = await api(`/rooms/${encodeURIComponent(room.name)}/title`, {
+      method: "POST",
+      body: { title },
+    });
+    if (renameGeneration === generation && state.selected === room.name) closeRename();
+    if (state.selected === room.name) renderRoom(result.room, true);
+    await refresh();
+    toast("Renamed.");
+  } catch (err) {
+    toast(err.message || "The name wasn’t saved.");
+    if (renameGeneration === generation && state.selected === room.name) $("#rename-input").focus();
+  } finally {
+    if (renameGeneration === generation) save.disabled = false;
+  }
+});
 $("#deliverables").addEventListener("click", async (event) => {
   const room = state.room;
   if (!room) return;

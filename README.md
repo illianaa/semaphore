@@ -26,7 +26,7 @@ The agent explains the changes and handles setup under your app's normal permiss
 
 You can start one either way:
 
-- **In the Semaphore app.** On the home screen, write what you want to work on, choose who joins (Claude, Astra or both) and who replies first, then press Enter. Semaphore names the conversation from your first line and shows a card for connecting each app: _Open ChatGPT_ or _Open Claude_ starts a new chat with the invitation filled in, and you press Send there. Claude may also ask you to confirm the working folder: Semaphore suggests the conversation's shared folder, and you can pick a project folder instead. Your first message waits until everyone has joined, then goes out once.
+- **In the Semaphore app.** On the home screen, write what you want to work on, choose who joins (Claude, Astra or both) and who replies first, then press Enter. Semaphore names the conversation from your first line (the first AI may suggest a shorter name once; rename it anytime with ✎ next to the title) and shows a card for connecting each app: _Open ChatGPT_ or _Open Claude_ starts a new chat with the invitation filled in, and you press Send there. Claude may also ask you to confirm the working folder: Semaphore suggests the conversation's shared folder, and you can pick a project folder instead. Your first message waits until everyone has joined, then goes out once.
 - **From any chat.** Tell Claude "loop in Astra", or tell Astra "loop in Claude". The AI you're talking to starts the group with your request and gives you the invitation for the other app, which you send once.
 
 ## How a conversation works

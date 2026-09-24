@@ -185,9 +185,18 @@
         </section>
         <section id="conversation" class="conversation" hidden>
           <div class="conversation-heading">
-            <div>
-              <div class="eyebrow">GROUP CONVERSATION</div>
-              <h1 id="conversation-title"></h1>
+            <div class="title-block">
+              <div class="eyebrow" id="conversation-eyebrow">GROUP CONVERSATION</div>
+              <div class="title-row">
+                <h1 id="conversation-title"></h1>
+                <button type="button" class="rename-button" id="rename" aria-label="Rename conversation" title="Rename">✎</button>
+              </div>
+              <form id="rename-form" class="rename-form" hidden>
+                <label class="sr-only" for="rename-input">Conversation name</label>
+                <input id="rename-input" autocomplete="off" />
+                <button type="submit" class="rename-save">Save</button>
+                <button type="button" class="rename-cancel" id="rename-cancel">Cancel</button>
+              </form>
             </div>
             <button class="subtle-button" id="manage-connections">
               Manage members <span aria-hidden="true">↗</span>

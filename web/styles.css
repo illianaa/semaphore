@@ -483,6 +483,60 @@ textarea {
   margin: 9px 0 0;
   overflow-wrap: anywhere;
 }
+.title-block {
+  flex: 1;
+  min-width: 0;
+}
+.title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.rename-button {
+  flex-shrink: 0;
+  border: 0;
+  background: none;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 15px;
+  color: #8a9582;
+}
+.rename-button:hover {
+  background: #eef1e7;
+  color: #4a554c;
+}
+.rename-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+}
+.rename-form input {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid #cfd9c4;
+  border-radius: 8px;
+  background: #fffefa;
+  font-family: ui-serif, Georgia, serif;
+  font-size: 22px;
+}
+.rename-form button {
+  border: 1px solid #b9c7ad;
+  border-radius: 999px;
+  background: #fffefa;
+  color: #344e3e;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.rename-form .rename-save {
+  background: #344e3e;
+  border-color: #344e3e;
+  color: #f3f5ee;
+}
 .subtle-button {
   background: none;
   border: 0;
@@ -1939,4 +1993,29 @@ textarea {
 .wake-details p {
   margin: 6px 0 0;
   line-height: 1.5;
+}
+/* Narrow windows: the people take one row and the limit drops its explanation, so the
+   messages keep room. Every limit choice stays visible. */
+@media (max-width: 760px) {
+  .members {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 12px 0;
+  }
+  .members::-webkit-scrollbar {
+    display: none;
+  }
+  .member {
+    flex-shrink: 0;
+  }
+  .limit-switch {
+    margin: -2px 0 10px;
+  }
+  .limit-switch small {
+    display: none;
+  }
+  .message-scroll {
+    min-height: 160px;
+  }
 }
