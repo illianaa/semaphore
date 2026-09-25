@@ -3284,11 +3284,6 @@ select {
 }
 .sidebar-drawer .sidebar.open { transform: translateX(0); }
 @media (prefers-reduced-motion: reduce) { .sidebar-drawer .sidebar { transition: none; } }
-/* Fit the requested wordmark's temporary monospace fallback without clipping. */
-.brand { font-size: 24px; letter-spacing: 0; }
-@media (min-width: 761px) and (max-width: 1050px) {
-  body:not(.sidebar-drawer) .brand { font-size: 22px; }
-}
 @media (max-width: 760px) {
   .topbar { gap: 10px; }
   .navigation-actions { gap: 2px; }
@@ -3307,4 +3302,31 @@ select {
 .diagnostic-icon.warn { color: var(--amber); }
 @media (max-width: 520px) {
   .composer-caption { flex-direction: column; align-items: flex-start; gap: 6px; }
+}
+/* The wordmark: Jersey 10, bundled with the app (SIL Open Font License, web/fonts/OFL.txt). */
+@font-face {
+  font-family: "Jersey 10";
+  src: url("/fonts/jersey-10.ttf") format("truetype");
+  /* Briefly hide the fallback while the bundled local font loads. */
+  font-display: block;
+}
+/* Jersey 10 is drawn on a 10 px grid: 30 px keeps its pixels crisp, and it is narrower than
+   the monospace fallback, so the full wordmark still fits the sidebar. */
+.brand {
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+/* Medium widths: the status text keeps a readable column and the buttons wrap below it. */
+.room-alerts .state-banner {
+  flex-wrap: wrap;
+}
+.room-alerts .state-who {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.room-alerts .state-actions {
+  flex-shrink: 1;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }

@@ -4,12 +4,12 @@ Illiana's brief: a more hacker vibe, probably dark mode, less border radius, kee
 
 | Item | Owner | State |
 |---|---|---|
-| Dark terminal theme, tokens, corners, type | Claude | Done, awaiting review |
-| Logo and in-app mark | Claude | Done, awaiting review |
+| Dark terminal theme, tokens, corners, type | Claude | Done; reviewed by Astra |
+| Logo and in-app mark | Claude | Done; reviewed by Astra |
 | No room icons in the sidebar | Claude | Done |
-| Jersey 10 wordmark | Claude | Pending asset access; fallback only |
-| Collapsible side nav | Astra | Implemented and checked |
-| Preview viewer in the dark theme | Astra | Implemented and checked |
+| Jersey 10 wordmark | Claude | Bundled; local serving and render reviewed by Astra |
+| Collapsible side nav | Astra | Done; reviewed by Claude |
+| Preview viewer in the dark theme | Astra | Done; reviewed by Claude from source |
 | Cross-check in Chrome | Astra | Complete for this pass; fixes included |
 
 ## Design tokens
@@ -37,7 +37,12 @@ Illiana already named Jersey 10 in the request. Claude initially asked for separ
 
 Before handoff, room revision 66 recorded Illiana’s direct reply to Claude: “YES! You have my approval entirely claude”. The requested font download is explicitly approved; Astra’s tool restriction still applies to Astra and was not bypassed.
 
-The wordmark currently uses its monospace fallback. When the font and its licence are available through permitted access, add the local asset, its licence, and `@font-face`, then review the actual wordmark. The fallback sizes were checked at desktop and drawer widths. The branding sprint is not complete until the font decision is resolved.
+**Bundled (Claude, 25 September).** With Illiana's approval to Claude, Claude downloaded exactly the two files from `raw.githubusercontent.com/google/fonts/main/ofl/jersey10/` with Claude's own tools. This was Claude's own access, not a route around Astra's restriction.
+- **The files.** `web/fonts/Jersey10-Regular.ttf` is 77,732 bytes, TrueType, © 2023 The Soft Type Project Authors (github.com/scfried/soft-type-jersey), SHA-256 `db9cbd09…3e82`. `web/fonts/OFL.txt` is 4,395 bytes, SIL Open Font License 1.1. Both sizes match the headers checked before asking.
+- **Serving.** The server serves `/fonts/jersey-10.ttf` as `font/ttf`. The static handler now reads assets as bytes, so the font isn't corrupted; only `index.html` is edited as text.
+- **CSS.** `@font-face` uses `font-display: block` to briefly hide the fallback while the bundled local font loads. Slow or failed font loading can still show the fallback.
+- **Size.** The wordmark is 30 px, on Jersey 10's 10 px grid, and replaces the temporary sizes set for the fallback. It is 122 px wide and fits the sidebar at every checked width.
+- **Other.** The README credits the font and licence, and a new server test checks the font is served byte for byte.
 
 ## Navigation behavior
 
@@ -65,3 +70,20 @@ Temporary QA servers were stopped, the owned browser tabs closed, and the viewpo
 - **Main window at 1280×800.** The welcome screen, a 60-message conversation, the floating status, the Deliverables popover, and the members and setup dialogs.
 - **Companion at 420×720.** An Astra-working state with a long note: the card is 114 px with the note clamped, the rail is visible, and there's no overflow.
 - **Tests.** 169 pass.
+
+## Claude's review of Astra's pass, 25 September
+
+- **Approved.**
+  - **Collapsible sidebar.** It collapses to 0 px and becomes inert. The collapsed state persisted across a reload, with the toggle reading "Show sidebar". ⌘\ and Ctrl+\ both work, and the collapsed layout gives the conversation the full width, with the toggle and "+" in the top bar.
+  - **Guided-start and setup fixes, and the composer footer at 320 px.** Good.
+  - **Preview viewer.** Reviewed from source only: Claude's host blocks framed previews, and no preview was reopened.
+- **Claude's follow-up fix.** At medium widths (about 800 px), three buttons squeezed "Your turn · …" into a five-line column. The floating status now keeps at least about 260 px for its text and wraps its buttons below: 83 px tall at 800×500.
+- **Tests.** 170 pass, including the new font test.
+
+## Astra’s final review, 25 September
+
+The static route serves the local TTF as bytes and keeps HTML token substitution working, with the existing CSP and origin checks unchanged. The bundled font is 77,732 bytes with SHA-256 `db9cbd091617048a145d249daa2b815fe7083be6ab66ac26626e21a4e01c3e82`; the adjacent OFL text and README attribution are included in the release file list. Astra inspected these local files, without another external fetch.
+
+Chrome rendered the pixel wordmark in the 220 px sidebar at 800×500. The status text uses a readable row with buttons below (83 px card), and the page has no horizontal overflow. The final review approves Claude’s font-serving change and medium-width layout fix.
+
+Astra reran the complete suite: **170 passed**, zero failed (31.37 seconds). Final review fixtures were stopped, the browser tab closed, and its viewport override reset. Version 0.7.0 is prepared for the app-only cutover; its outcome is recorded separately in `docs/releases.md`.

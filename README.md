@@ -85,6 +85,10 @@ The Claude new-session link is also covered by [Anthropic's documentation](https
 
 The [18-slide HTML deck](design/ux-proposals/semaphore-ux-proposals.html) covers the three proposals and what shipped. Open it in a browser; the editable source and builder are alongside it. See [implementation notes](docs/ux-implementation.md) for validation and native integration limits.
 
+## Credits
+
+The Semaphore wordmark uses [Jersey 10](https://github.com/scfried/soft-type-jersey), © 2023 The Soft Type Project Authors. It is bundled with the app, so Semaphore never fetches fonts from the internet, under the SIL Open Font License 1.1; see `web/fonts/OFL.txt`.
+
 ## For developers
 
 - Run `npm ci`, then `npm test`. Instant wake uses `ws`; the ordinary CLI and app still start without it. The tests make no model calls.

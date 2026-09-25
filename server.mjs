@@ -48,6 +48,8 @@ export function createAppServer({
     ["/render.mjs", ["render.mjs", "text/javascript; charset=utf-8"]],
     ["/styles.css", ["styles.css", "text/css; charset=utf-8"]],
     ["/icon.svg", ["icon.svg", "image/svg+xml"]],
+    // The wordmark font is bundled (SIL Open Font License, web/fonts/OFL.txt), never fetched.
+    ["/fonts/jersey-10.ttf", ["fonts/Jersey10-Regular.ttf", "font/ttf"]],
   ]);
   const active = new Map();
   const artifactCache = new Map();
@@ -304,12 +306,10 @@ export function createAppServer({
       const url = new URL(req.url, origin);
       if (req.method === "GET" && assets.has(url.pathname)) {
         const [file, type] = assets.get(url.pathname);
-        let contents = fs.readFileSync(
-          path.join(projectDir, "web", file),
-          "utf8",
-        );
+        // Bytes, so the font stays intact; only the page is edited as text.
+        let contents = fs.readFileSync(path.join(projectDir, "web", file));
         if (file === "index.html")
-          contents = contents.replace("__SEMAPHORE_TOKEN__", token);
+          contents = contents.toString("utf8").replace("__SEMAPHORE_TOKEN__", token);
         res.writeHead(200, { "Content-Type": type });
         res.end(contents);
         return;
