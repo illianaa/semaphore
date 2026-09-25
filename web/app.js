@@ -31,6 +31,43 @@ const inFlight = new Map();
 const pendingLimits = new Map();
 const loadingInvites = new Set();
 let startBusy = false;
+const sidebarWidth = matchMedia("(max-width: 760px)");
+let sidebarCollapsed = storageGet("semaphore:sidebar-collapsed") === "true";
+const sidebarIsDrawer = () => companion || sidebarWidth.matches;
+function syncSidebar() {
+  const sidebar = $("#sidebar");
+  const drawer = sidebarIsDrawer();
+  const visible = drawer ? sidebar.classList.contains("open") : !sidebarCollapsed;
+  if (!visible && sidebar.contains(document.activeElement)) $("#menu").focus({ preventScroll: true });
+  document.body.classList.toggle("sidebar-drawer", drawer);
+  document.body.classList.toggle("sidebar-collapsed", !drawer && sidebarCollapsed);
+  sidebar.inert = !visible;
+  sidebar.setAttribute("aria-hidden", String(!visible));
+  $("#menu").setAttribute("aria-expanded", String(visible));
+  $("#menu").setAttribute("aria-label", visible ? "Hide sidebar" : "Show sidebar");
+  $("#menu").title = `${visible ? "Hide" : "Show"} sidebar (⌘\\ / Ctrl+\\)`;
+}
+function toggleSidebar() {
+  if (sidebarIsDrawer()) $("#sidebar").classList.toggle("open");
+  else {
+    sidebarCollapsed = !sidebarCollapsed;
+    storageSet("semaphore:sidebar-collapsed", String(sidebarCollapsed));
+  }
+  syncSidebar();
+  if (sidebarIsDrawer() && $("#sidebar").classList.contains("open")) $("#search").focus();
+}
+function closeSidebarDrawer() {
+  $("#sidebar").classList.remove("open");
+  syncSidebar();
+}
+sidebarWidth.addEventListener("change", closeSidebarDrawer);
+addEventListener("storage", (event) => {
+  if (event.key === "semaphore:sidebar-collapsed") {
+    sidebarCollapsed = event.newValue === "true";
+    syncSidebar();
+  }
+});
+syncSidebar();
 
 async function api(route, options = {}) {
   let response;
@@ -312,7 +349,7 @@ function renderSidebar() {
     ? rooms
         .map(
           (room) =>
-            `<button class="room-item ${state.selected === room.name ? "selected" : ""}" data-room="${escape(room.name)}" ${state.selected === room.name ? 'aria-current="page"' : ""}><span class="room-symbol" aria-hidden="true">▧</span><span class="room-copy"><strong>${escape(room.title)}</strong><small>${escape(roomSubtitle(room))}</small></span>${awaitingApproval(room) ? '<span class="room-dot approval" aria-label="Approval needed"></span>' : room.pending ? '<span class="room-dot" aria-label="Reply pending"></span>' : ""}</button>`,
+            `<button class="room-item ${state.selected === room.name ? "selected" : ""}" data-room="${escape(room.name)}" ${state.selected === room.name ? 'aria-current="page"' : ""}><span class="room-copy"><strong>${escape(room.title)}</strong><small>${escape(roomSubtitle(room))}</small></span>${awaitingApproval(room) ? '<span class="room-dot approval" aria-label="Approval needed"></span>' : room.pending ? '<span class="room-dot" aria-label="Reply pending"></span>' : ""}</button>`,
         )
         .join("")
     : `<p class="no-rooms">${search ? "No matching conversations." : "A good conversation starts with a thought. Make room for yours."}</p>`;
@@ -392,7 +429,7 @@ function renderStatus(room, setup) {
   const who = paused
     ? `<i class="state-dot"></i><span>${stale ? "A previous app process stopped. Your conversation is saved." : "Paused · a previous delivery needs your review"}</span>`
     : pending
-      ? `${signalMark(pending.speaker, approval ? "" : "working")}<span>${approval ? `<strong>${labels[pending.speaker]} is waiting for your approval in ${hostApp(pending.speaker)}</strong>` : `<strong>${labels[pending.speaker]} has the stick</strong><span class="state-detail"> · ${escape(pendingDetail(pending, room))}${Number.isInteger(room.maxTurns) ? ` · reply ${Math.min((room.autoTurns ?? 0) + 1, room.maxTurns)} of ${room.maxTurns}` : ""}</span>`}${note ? `<span class="state-note">“${escape(note.text)}” · ${escape(relativeTime(note.updatedAt))}</span>` : ""}</span>`
+      ? `${signalMark(pending.speaker, approval ? "" : "working")}<span>${approval ? `<strong>${labels[pending.speaker]} is waiting for your approval in ${hostApp(pending.speaker)}</strong>` : `<strong>${labels[pending.speaker]} has the stick</strong><span class="state-detail"> · ${escape(pendingDetail(pending, room))}${Number.isInteger(room.maxTurns) ? ` · reply ${Math.min((room.autoTurns ?? 0) + 1, room.maxTurns)} of ${room.maxTurns}` : ""}</span>`}${note ? `<span class="state-note" title="${escape(note.text)}">“${escape(note.text)}” · ${escape(relativeTime(note.updatedAt))}</span>` : ""}</span>`
       : `${signalMark("human")}<span><strong>Your turn</strong><span class="state-detail"> · reply, or hand the stick to one of them</span></span>`;
   // During the guided start, the start card is the only call to action.
   const markup = setup
@@ -999,7 +1036,7 @@ async function selectRoom(name, { route = "push" } = {}) {
   setRoute(name, route);
   $("#message").value = storageGet(`semaphore:draft:${name}`) || "";
   state.recipient = rememberedRecipient(name);
-  $("#sidebar").classList.remove("open");
+  closeSidebarDrawer();
   renderSidebar();
   try {
     const { room } = await api(`/rooms/${name}`);
@@ -1041,7 +1078,7 @@ function showHome(prefill, { route = "push" } = {}) {
   $("#conversation").hidden = true;
   $("#top-title").textContent = "New conversation";
   document.title = "Semaphore";
-  $("#sidebar").classList.remove("open");
+  closeSidebarDrawer();
   renderSidebar();
   const box = $("#start-message");
   box.value =
@@ -1189,9 +1226,12 @@ for (const button of document.querySelectorAll("[data-starter]"))
   button.addEventListener("click", () => showHome(button.dataset.starter));
 for (const button of document.querySelectorAll(".close-dialog"))
   button.addEventListener("click", () => button.closest("dialog").close());
-$("#menu").addEventListener("click", () =>
-  $("#sidebar").classList.toggle("open"),
-);
+$("#menu").addEventListener("click", toggleSidebar);
+$("#new-room-top").addEventListener("click", () => showHome());
+document.addEventListener("click", (event) => {
+  if (sidebarIsDrawer() && $("#sidebar").classList.contains("open") &&
+      !event.target.closest("#sidebar, #menu")) closeSidebarDrawer();
+});
 $("#search").addEventListener("input", renderSidebar);
 $("#room-list").addEventListener("click", (event) => {
   const button = event.target.closest("[data-room]");
@@ -1600,6 +1640,12 @@ $("#settings").addEventListener("click", async () => {
   }
 });
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !$("dialog[open]") && sidebarIsDrawer() && $("#sidebar").classList.contains("open"))
+    closeSidebarDrawer();
+  if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key === "\\" && !$("dialog[open]")) {
+    event.preventDefault();
+    toggleSidebar();
+  }
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
     event.preventDefault();
     showHome();

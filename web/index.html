@@ -3,7 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0a0f0c" />
     <meta name="semaphore-token" content="__SEMAPHORE_TOKEN__" />
     <meta
       name="description"
@@ -52,13 +53,20 @@
       </aside>
       <main class="main">
         <header class="topbar">
-          <button
-            class="icon-button mobile-menu"
-            id="menu"
-            aria-label="Toggle conversations"
-          >
-            ☰
-          </button>
+          <div class="navigation-actions">
+            <button
+              type="button"
+              class="icon-button sidebar-toggle"
+              id="menu"
+              aria-label="Hide sidebar"
+              aria-expanded="true"
+              aria-controls="sidebar"
+              title="Toggle sidebar (⌘\ / Ctrl+\)"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M9 4v16"/></svg>
+            </button>
+            <button type="button" class="icon-button" id="new-room-top" aria-label="New conversation" title="New conversation (⌘K / Ctrl+K)">＋</button>
+          </div>
           <div class="breadcrumb">
             <span>Workspace</span><span aria-hidden="true">/</span
             ><strong id="top-title">Home</strong>
