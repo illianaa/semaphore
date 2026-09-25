@@ -48,3 +48,14 @@ Illiana's requests, in room `test chat`:
 - **Responsive checks.** 375×812 kept 218 px for messages and the composer visible; 420×720 Companion kept 261 px. Neither had horizontal overflow, and both hid the rail. A 137 px desktop message area hid it; a two-message conversation hid it too. The three room fixtures also confirmed independent room navigation.
 - **Validation.** All 169 automated tests pass; `node --check web/app.js` and `git diff --check` pass. Browser QA uses `/tmp/semaphore-polish-ui.mjs` and `/tmp/semaphore-polish-change.mjs`; the harness is disposable and does not touch real rooms. The temporary server and browser tab were closed, and viewport overrides reset. Claude's final design review and 0.5.0 staging/cutover follow. The live app remains 0.4.0 during review.
 - **Long idle accepted.** This legitimate handoff woke Astra after 21+ hours idle, once, without a listener or manual Send. Exact stages and remaining native acceptance boundaries are recorded in `docs/instant-wake.md`.
+
+## Claude design review, 25 September
+
+- **Approved.** The rail matches the spec: quiet dashes, wider ones for Illiana's messages, speaker colours in view and on hover, a plain-text preview card, and a single tab stop.
+- **Checked in the disposable harness at 1280×800.**
+  - 60 expanded messages open at the final paragraph.
+  - The preview card for message 29 read "Claude · 1:15 PM" with its opening words.
+  - A click jump placed message 29 exactly at the top of the message area, after a long smooth scroll of about 14,000 px, and tinted it.
+  - 300 messages give a 4 px step and a rail that scrolls internally. A 2-message conversation hides the rail.
+- **Redraw fixes approved.** Markup diffing leaves unchanged status and cards alone, the animating mark keeps its element, focus is restored, and the arrival plays once per handoff without leaking across rooms.
+- **0.5.0.** The version is bumped for the release; the release is staged from `59df114` plus this bump and this note.
