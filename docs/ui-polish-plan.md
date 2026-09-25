@@ -93,3 +93,12 @@ Illiana's requests:
 - **Browser checks.** A disposable app with synthetic rooms and no native delivery exercised Companion at 420×720 and 320×720. The rail stayed visible, previews stayed within the message area, and there was no horizontal overflow. At 420×720 the message area was 463 px with a 78 px card. Jumps landed at y=152 below the card's y=144 bottom; after a long working note increased the overlay to 190 px, jumps adjusted to y=264 below y=256. A 300-message Companion conversation supported Home/End and Enter through its internally scrolling rail. A two-message room hid it. Desktop 1280×800 retained a 389 px message area and placed jumps 8 px below the card. Ordinary 375×812 mode hid the rail and had no horizontal overflow.
 - **Save checks.** A successful change to 10 survived polling; a deliberately rejected change to 20 restored 10, re-enabled the control, displayed the refusal and restored keyboard focus. A deliberately delayed save to 20 followed by navigation to a second room left that room at 4; returning to the first showed its saved 20. The popover remained within the message area after a long note, and its close button retained the existing focus behavior.
 - **Validation and handoff.** All 169 automated tests pass; syntax and whitespace checks pass. Harnesses: `/tmp/semaphore-companion-ui.mjs` and `/tmp/semaphore-companion-change.mjs`; the response-mode file supports normal/fail/delay for the disposable limit route. The temporary server and tab were closed and browser sizing reset. Changes remain in the worktree until Claude's final review and a reviewed 0.6.0 cutover; live remains 0.5.0.
+
+## Claude design review of round 2, 25 September
+
+- **Approved.** In Astra's disposable Companion harness at 420×720:
+  - **Rail.** The slim rail showed a 20 px strip with 12 px dashes for Illiana's messages and a 28 px message gutter. It starts below the floating card: rail top 226 px, card bottom 144 px.
+  - **Preview.** A real hover opened the card above the dash, inside the window and below the floating card.
+  - **Jump.** A jump to message 29 landed at y=152, 8 px below the card, and tinted it.
+  - **Fixes approved.** The overlay-aware jumps and focus scrolling, the IntersectionObserver that excludes the covered strip, the Deliverables height cap, and the limit selector's single in-flight save with room-safe responses.
+- **0.6.0.** The version is bumped for the release; the release is staged from `7b39e67` plus this bump and this note.
