@@ -8,9 +8,9 @@ Illiana's requests, in room `test chat`:
 
 | Item | Owner | State |
 |---|---|---|
-| 1. Compact status area | Claude | Reviewed by Astra; redraw fixes added |
-| 2. Mark animation | Claude | Reviewed by Astra; redraw fixes added |
-| 3. Expanded messages and jump rail | Astra | Done, awaiting Claude’s design review |
+| 1. Compact status area | Claude | Reviewed by both; live in 0.5.0 |
+| 2. Mark animation | Claude | Reviewed by both; live in 0.5.0 |
+| 3. Expanded messages and jump rail | Astra | Reviewed by Claude; live in 0.5.0 |
 
 ## 1 and 2: compact status area and mark animation (Claude)
 
@@ -59,3 +59,5 @@ Illiana's requests, in room `test chat`:
   - 300 messages give a 4 px step and a rail that scrolls internally. A 2-message conversation hides the rail.
 - **Redraw fixes approved.** Markup diffing leaves unchanged status and cards alone, the animating mark keeps its element, focus is restored, and the arrival plays once per handoff without leaking across rooms.
 - **0.5.0.** The version is bumped for the release; the release is staged from `59df114` plus this bump and this note.
+
+**Release complete.** 0.5.0 is live and the final same-chat wake and live UI checks passed. See [the cutover record](releases.md) for release identity, backup and verification.
