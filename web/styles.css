@@ -907,7 +907,13 @@ textarea {
   border-color: #344e3e;
   color: #f3f5ee;
 }
+.message-area {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+}
 .message-scroll {
+  height: 100%;
   overflow-y: auto;
   scrollbar-gutter: stable;
   min-height: 0;
@@ -1824,21 +1830,6 @@ textarea {
   font-size: 12px;
   margin-left: 1px;
 }
-.message-text.folded {
-  max-height: 17em;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
-  mask-image: linear-gradient(to bottom, #000 72%, transparent);
-}
-.expand {
-  margin-top: 6px;
-  padding: 2px 0;
-  border: 0;
-  background: none;
-  font-size: 13px;
-  font-weight: 600;
-  color: #476958;
-}
 .mention {
   font-weight: 600;
   color: #2f5a3d;
@@ -2015,7 +2006,335 @@ textarea {
   .limit-switch small {
     display: none;
   }
-  .message-scroll {
+  .message-area {
     min-height: 160px;
   }
+}
+/* One compact status area. People and the reply limit share a row, the connection notice is
+   one slim line, and deliverables open over the conversation instead of pushing it down. */
+.room-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 16px 0 12px;
+}
+.room-controls .members,
+.room-controls .limit-switch {
+  margin: 0;
+}
+.limit-switch button {
+  padding: 2px 9px;
+  font-size: 12px;
+}
+.connection-guide {
+  padding: 8px 10px 8px 14px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+}
+.connection-guide > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  min-width: 0;
+}
+.connection-guide strong {
+  display: inline;
+  margin: 0;
+  font-size: 13px;
+}
+.connection-guide p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.connection-guide button {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.status-area {
+  position: relative;
+  flex-shrink: 0;
+  margin: 0 0 10px;
+}
+.status-area .state-banner {
+  position: relative;
+  margin: 0;
+  min-height: 44px;
+  padding: 6px 8px 6px 10px;
+}
+/* The Semaphore mark as the turn signal: its bars wave while an AI works and it pings when
+   the stick comes back to the person. */
+.signal {
+  position: relative;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+}
+.signal svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.signal-bg {
+  fill: #293e35;
+}
+.signal.claude .signal-bg {
+  fill: #a5694d;
+}
+.signal.astra .signal-bg {
+  fill: #476958;
+}
+.signal .bar {
+  fill: #ecf2d6;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.signal.working .bar {
+  animation: signal-wave 1.8s ease-in-out infinite;
+}
+.signal.working .b2 {
+  animation-delay: 0.18s;
+}
+.signal.working .b3 {
+  animation-delay: 0.36s;
+}
+@keyframes signal-wave {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-3px);
+  }
+  65% {
+    transform: translateY(2.5px);
+  }
+}
+.signal.ping svg {
+  animation: signal-pop 0.55s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.signal.ping::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  animation: signal-ping 1.3s ease-out 0.1s 3;
+  pointer-events: none;
+}
+@keyframes signal-pop {
+  from {
+    transform: scale(0.82);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes signal-ping {
+  from {
+    box-shadow: 0 0 0 0 #6d8b5e8c;
+  }
+  to {
+    box-shadow: 0 0 0 9px #6d8b5e00;
+  }
+}
+/* A single soft sweep across the bar when it becomes the person's turn. */
+.state-banner.arrived::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 42%, #ffffffb3 50%, transparent 58%) no-repeat;
+  background-size: 260% 100%;
+  animation: banner-sweep 1.6s ease-out 0.2s both;
+  pointer-events: none;
+}
+@keyframes banner-sweep {
+  from {
+    background-position: 115% 0;
+  }
+  to {
+    background-position: -15% 0;
+  }
+}
+.deliverables-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #b9c7ad;
+  border-radius: 999px;
+  background: #fffefa;
+  color: #344e3e;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.deliverables-pill span {
+  font-weight: 500;
+  color: #5b665d;
+}
+.deliverables-pill[aria-expanded="true"] {
+  background: #e9efdd;
+  border-color: #a9bb9a;
+}
+.deliverables-pill.attention span {
+  color: #8a6424;
+}
+.deliverables-pill.fresh::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #c08a2e;
+  box-shadow: 0 0 0 2px #fbfcf7;
+}
+.deliverables {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  width: min(560px, 100%);
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+  margin: 0;
+  border: 1px solid #dfe5d6;
+  border-radius: 14px;
+  background: #fbfcf7;
+  box-shadow:
+    0 18px 50px #1e2d2724,
+    0 2px 8px #1e2d2712;
+}
+.deliverables-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 12px 8px 14px;
+  background: #fbfcf7;
+}
+.deliverables-head strong {
+  font-size: 14px;
+  color: #2b342f;
+}
+.deliverables-head span {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: #5b665d;
+}
+.deliverables-close {
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  padding: 0 6px;
+  font-size: 20px;
+  line-height: 1;
+  color: #7a8575;
+}
+.deliverables .deliverables-list {
+  max-height: none;
+  overflow: visible;
+  padding: 0 10px 10px;
+}
+@media (max-width: 760px) {
+  .status-area .state-actions {
+    flex-wrap: wrap;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+  .deliverables {
+    width: 100%;
+    max-height: 58vh;
+  }
+  .deliverables .deliverables-list {
+    max-height: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .signal .bar,
+  .signal svg,
+  .signal::after,
+  .state-banner.arrived::before {
+    animation: none !important;
+  }
+}
+
+/* A quiet message index, separate from the conversation's scrolling surface. */
+.has-rail .messages { padding-right: 42px; }
+.message-rail {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  z-index: 5;
+}
+.rail-list {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+}
+.rail-list::-webkit-scrollbar { display: none; }
+.rail-dash {
+  --speaker-color: #293e35;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 28px;
+  height: var(--rail-step, 10px);
+  min-height: 4px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+}
+.rail-dash.claude { --speaker-color: #a5694d; }
+.rail-dash.astra { --speaker-color: #476958; }
+.rail-dash::before {
+  content: "";
+  width: 10px;
+  height: 2px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: #cfd7c6;
+  transition: background-color 120ms, width 120ms;
+}
+.rail-dash.human::before { width: 16px; }
+.rail-dash.in-view::before,
+.rail-dash:hover::before,
+.rail-dash:focus-visible::before { background: var(--speaker-color); }
+.rail-dash:hover::before,
+.rail-dash:focus-visible::before { width: 18px; }
+.rail-dash:focus-visible { outline: 1px solid var(--speaker-color); outline-offset: -1px; }
+.rail-preview {
+  position: absolute;
+  right: calc(100% + 10px);
+  width: 250px;
+  padding: 12px 14px;
+  border: 1px solid #e0e6d9;
+  border-radius: 10px;
+  background: #fbfcf7;
+  box-shadow: 0 5px 20px #293e3518;
+  color: #49574d;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+.rail-preview strong { display: block; margin-bottom: 5px; color: #293e35; font-size: 11px; }
+.message { transition: background-color 600ms; }
+.message.jump-target { background: #eef2e4; }
+@media (prefers-reduced-motion: reduce) {
+  .rail-dash::before, .message { transition: none; }
 }

@@ -8,7 +8,7 @@ Owners follow the usual split: Claude takes the web UI, copy, skill, README and 
 
 ## Already addressed
 
-- **A1 idle wake.** Instant wake shipped and was verified live today. It covered idle wake without a listener, a ChatGPT restart while idle, and an off-screen chat. Still open from A1's check: a 10+ minute idle test, a native approval prompt, and the paused queue after an interrupted turn, which is now shown as "press Send there".
+- **A1 idle wake.** Instant wake shipped and was verified live on 24 September. It covered idle wake without a listener, a ChatGPT restart while idle, and an off-screen chat. The 10+ minute idle check passed on 25 September after over 21 hours idle; see [the recorded stages](instant-wake.md#long-idle-round-25-september-2026). A real native approval prompt and the paused queue after an interrupted turn remain open.
 - **A2 waiting noise.** Largely gone for rooms with automatic wake, because Astra no longer polls. The skill's guidance to report the connection once still applies to listener fallback.
 
 ## Batch 1: correctness (small, independent)

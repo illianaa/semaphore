@@ -17,10 +17,12 @@ const state = {
   invites: {},
   startMembers: new Set(SEATS),
   startRecipient: rememberedRecipient(),
-  expanded: new Set(),
   owners: {},
   approvals: {},
   readySeen: {},
+  holders: {},
+  deliverablesOpen: null,
+  freshDeliverables: new Set(),
   // Preview links issued in this page, by artifact. They are capabilities, so never stored.
   previewLinks: {},
 };
@@ -122,14 +124,6 @@ function openingNote(message, room) {
     uncertain: "Check before continuing · it may have reached its chat",
   }[opening.state];
   return note ? `<div class="message-note">${escape(note)}</div>` : "";
-}
-// Long messages fold to a readable preview; "Show all" opens them in place.
-function messageText(message, room) {
-  const lines = message.text.split("\n").length + message.text.length / 90;
-  if (lines < 16)
-    return `<div class="message-text">${formatMessage(message.text)}</div>`;
-  const open = state.expanded.has(`${room.name}:${message.seq}`);
-  return `<div class="message-text${open ? "" : " folded"}">${formatMessage(message.text)}</div><button type="button" class="expand" data-expand="${Number(message.seq)}">${open ? "Show less" : "Show all"}</button>`;
 }
 function destination(message, room) {
   if (message.opening) return labels[room.opening?.to] || "You";
@@ -372,6 +366,84 @@ function startCard(room) {
   return `<section class="start-card" aria-label="Get the group together"><h2>Get the group together</h2><div class="start-step"><span class="step-number${everyone ? " done" : ""}">${everyone ? "✓" : "1"}</span><div><h3>Invite ${members.map((speaker) => labels[speaker]).join(" and ")}</h3>${seats}<p class="start-note">Each app opens a new chat with the invitation filled in. Press Send there, and we’ll show you when it joins.</p></div></div><div class="start-step"><span class="step-number${opening ? " done" : ""}">${opening ? "✓" : "2"}</span><div><h3>Say what you need</h3>${say}</div></div></section>`;
 }
 
+// Whose turn it is, in one compact bar. The Semaphore mark signals while an AI works and
+// pings when the stick comes back to the person; deliverables open over the conversation.
+function renderStatus(room, setup) {
+  const pending = room.pending;
+  const stale = room.lock?.state === "stale";
+  const paused = pending?.state === "uncertain" || stale;
+  const banner = $("#state-banner");
+  const changedRoom = banner.dataset.room !== room.name;
+  banner.dataset.room = room.name;
+  const note = paused ? null : currentNote(room);
+  const approval = note?.kind === "approval";
+  const chatURL = approval ? room.connections[pending.speaker]?.url : null;
+  const holder = paused ? "paused" : (pending?.speaker ?? "human");
+  // The stick coming back from an AI plays the arrival once; later redraws stay calm.
+  const arrived = holder === "human" && ["astra", "claude"].includes(state.holders[room.name]);
+  state.holders[room.name] = holder;
+  trackDeliverables(room);
+  banner.classList.toggle("paused", paused);
+  banner.classList.toggle("approval", approval);
+  if (arrived) banner.classList.add("arrived");
+  else if (holder !== "human" || changedRoom) banner.classList.remove("arrived");
+  banner.dataset.holder = holder;
+  const who = paused
+    ? `<i class="state-dot"></i><span>${stale ? "A previous app process stopped. Your conversation is saved." : "Paused · a previous delivery needs your review"}</span>`
+    : pending
+      ? `${signalMark(pending.speaker, approval ? "" : "working")}<span>${approval ? `<strong>${labels[pending.speaker]} is waiting for your approval in ${hostApp(pending.speaker)}</strong>` : `<strong>${labels[pending.speaker]} has the stick</strong><span class="state-detail"> · ${escape(pendingDetail(pending, room))}${Number.isInteger(room.maxTurns) ? ` · reply ${Math.min((room.autoTurns ?? 0) + 1, room.maxTurns)} of ${room.maxTurns}` : ""}</span>`}${note ? `<span class="state-note">“${escape(note.text)}” · ${escape(relativeTime(note.updatedAt))}</span>` : ""}</span>`
+      : `${signalMark("human")}<span><strong>Your turn</strong><span class="state-detail"> · reply, or hand the stick to one of them</span></span>`;
+  // During the guided start, the start card is the only call to action.
+  const markup = setup
+    ? ""
+    : `<span class="state-who">${who}</span><div class="state-actions">${deliverablesPill(room)}${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${chatURL ? `<a class="state-link" href="${escape(chatURL)}">Open chat ↗</a>` : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
+  if (changedRoom || banner.renderedMarkup !== markup) {
+    const signal = changedRoom ? null : banner.querySelector(".signal");
+    const focused = !changedRoom && banner.contains(document.activeElement) ? document.activeElement : null;
+    const action = focused?.dataset.action;
+    const pill = focused?.hasAttribute("data-deliverables");
+    banner.innerHTML = markup;
+    banner.renderedMarkup = markup;
+    const nextSignal = banner.querySelector(".signal");
+    // Keep an existing animation running through polling, notes and pill toggles.
+    if (signal && nextSignal && signal.className.replace(/\s+ping\b/, "") === nextSignal.className)
+      nextSignal.replaceWith(signal);
+    if (focused) {
+      const replacement = pill ? banner.querySelector("[data-deliverables]")
+        : action ? banner.querySelector(`[data-action="${CSS.escape(action)}"]`) : banner.querySelector(".state-link");
+      replacement?.focus({ preventScroll: true });
+    }
+  }
+  if (arrived) banner.querySelector(".signal")?.classList.add("ping");
+  renderDeliverables(room, setup);
+}
+// The Semaphore mark, drawn inline so its bars can move.
+function signalMark(holder, motion = "") {
+  return `<span class="signal ${holder}${motion ? ` ${motion}` : ""}" aria-hidden="true"><svg viewBox="0 0 40 40"><rect class="signal-bg" width="40" height="40" rx="12"/><rect class="bar b1" x="10" y="10" width="5" height="20" rx="2.5"/><rect class="bar b2" x="18" y="16" width="5" height="14" rx="2.5"/><rect class="bar b3" x="26" y="10" width="5" height="14" rx="2.5"/></svg></span>`;
+}
+// Newly finished work marks the Deliverables pill instead of covering the conversation.
+function trackDeliverables(room) {
+  const ready = (room.artifacts ?? []).filter((item) => item.ready).length;
+  const seen = state.readySeen[room.name];
+  state.readySeen[room.name] = ready;
+  if (seen !== undefined && ready > seen) state.freshDeliverables.add(room.name);
+}
+function deliverablesPill(room) {
+  const items = room.artifacts ?? [];
+  if (!items.length) return "";
+  const ready = items.filter((item) => item.ready).length;
+  const attention = items.some((item) => item.availability !== "current");
+  const fresh = state.freshDeliverables.has(room.name);
+  return `<button type="button" class="deliverables-pill${fresh ? " fresh" : ""}${attention ? " attention" : ""}" data-deliverables aria-expanded="${state.deliverablesOpen === room.name}" aria-controls="deliverables"${fresh ? ' aria-description="New finished work"' : ""}>Deliverables <span>${ready ? `${ready} ready` : items.length}</span></button>`;
+}
+function setDeliverablesOpen(open, { focus = true } = {}) {
+  const room = state.room;
+  if (!room || (!open && state.deliverablesOpen === null)) return;
+  state.deliverablesOpen = open ? room.name : null;
+  if (open) state.freshDeliverables.delete(room.name);
+  renderStatus(room, false);
+  if (focus) (open ? $("#deliverables .deliverables-close") : $(".deliverables-pill"))?.focus();
+}
 function renderRoom(room, force = false) {
   if (room.name !== state.selected) return;
   state.room = room;
@@ -422,40 +494,169 @@ function renderRoom(room, force = false) {
   guide.hidden = setup || (!missing.length && !needsListener && !room.legacy);
   if (!guide.hidden)
     guide.innerHTML = `<div><strong>${room.legacy ? "This is an earlier headless conversation" : missing.length ? `Make room for ${missing.map((s) => labels[s]).join(" and ")}` : `${resting.map((s) => labels[s]).join(" and ")} ${resting.length > 1 ? "aren’t" : "isn’t"} listening`}</strong><p>${room.legacy ? "Create a new conversation to connect your live desktop chats." : missing.length ? "Invite each model from its desktop chat. We’ll show you when they join." : `Open ${resting.map((s) => labels[s]).join(" and ")}’s chat and ask it to listen to this room again. Messages wait in its inbox until then.`}</p></div><button data-action="connect">${missing.length ? "Connect apps" : "View connection"} ↗</button>`;
-  const pending = room.pending;
-  const stale = room.lock?.state === "stale";
-  const paused = pending?.state === "uncertain" || stale;
-  const banner = $("#state-banner");
-  const note = paused ? null : currentNote(room);
-  const approval = note?.kind === "approval";
-  const chatURL = approval ? room.connections[pending.speaker]?.url : null;
-  banner.classList.toggle("paused", paused);
-  banner.classList.toggle("approval", approval);
-  banner.dataset.holder = paused ? "paused" : (pending?.speaker ?? "human");
-  const who = paused
-    ? `<i class="state-dot"></i><span>${stale ? "A previous app process stopped. Your conversation is saved." : "Paused · a previous delivery needs your review"}</span>`
-    : pending
-      ? `${avatar(pending.speaker)}<span>${approval ? `<strong>${labels[pending.speaker]} is waiting for your approval in ${hostApp(pending.speaker)}</strong>` : `<strong>${labels[pending.speaker]} has the stick</strong><span class="state-detail"> · ${escape(pendingDetail(pending, room))}${Number.isInteger(room.maxTurns) ? ` · reply ${Math.min((room.autoTurns ?? 0) + 1, room.maxTurns)} of ${room.maxTurns}` : ""}</span>`}${note ? `<span class="state-note">“${escape(note.text)}” · ${escape(relativeTime(note.updatedAt))}</span>` : ""}</span>`
-      : `${avatar("human")}<span><strong>Your turn</strong><span class="state-detail"> · ${room.deliverables?.ready ? `${room.deliverables.ready} ${room.deliverables.ready === 1 ? "deliverable" : "deliverables"} ready below · ` : ""}reply, or hand the stick to one of them</span></span>`;
-  // During the guided start, the start card is the only call to action.
-  banner.innerHTML = setup
-    ? ""
-    : `<span class="state-who">${who}</span><div class="state-actions">${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${chatURL ? `<a class="state-link" href="${escape(chatURL)}">Open chat ↗</a>` : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
-  renderDeliverables(room, setup);
-  const scroller = $("#message-scroll");
-  const atBottom =
-    scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 90;
-  const oldScroll = scroller.scrollTop;
-  $("#messages").innerHTML = (setup ? startCard(room) : "") +
-    (setup ? room.messages.filter((message) => !message.opening) : room.messages)
+  renderStatus(room, setup);
+  const messages = setup ? room.messages.filter((message) => !message.opening) : room.messages;
+  const markup = (setup ? startCard(room) : "") + messages
         .map(
           (message) =>
-            `<article class="message" id="message-${Number(message.seq)}">${avatar(message.speaker)}<div class="message-body"><div class="message-header"><strong>${labels[message.speaker] || "Unknown"}</strong><span class="to">→ ${destination(message, room)}</span><time datetime="${escape(message.at)}">${formatTime(message.at)}</time></div>${messageText(message, room)}${message.via ? `<div class="message-via">Shared from ${labels[message.via]}’s desktop chat</div>` : ""}${openingNote(message, room)}${interjectionNote(message, room)}</div></article>`,
+            `<article class="message" id="message-${Number(message.seq)}" tabindex="-1">${avatar(message.speaker)}<div class="message-body"><div class="message-header"><strong>${labels[message.speaker] || "Unknown"}</strong><span class="to">→ ${destination(message, room)}</span><time datetime="${escape(message.at)}">${formatTime(message.at)}</time></div><div class="message-text">${formatMessage(message.text)}</div>${message.via ? `<div class="message-via">Shared from ${labels[message.via]}’s desktop chat</div>` : ""}${openingNote(message, room)}${interjectionNote(message, room)}</div></article>`,
         )
         .join("");
-  scroller.scrollTop = setup ? 0 : force || atBottom ? scroller.scrollHeight : oldScroll;
+  const container = $("#messages");
+  const changedRoom = container.dataset.room !== room.name;
+  // Status polling must not replace the text being read or the focused rail button.
+  if (changedRoom || container.renderedMarkup !== markup) {
+    const scroller = $("#message-scroll");
+    const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 90;
+    const oldScroll = scroller.scrollTop;
+    container.innerHTML = markup;
+    container.renderedMarkup = markup;
+    container.dataset.room = room.name;
+    scroller.scrollTop = setup ? 0 : changedRoom || atBottom ? scroller.scrollHeight : oldScroll;
+    renderMessageRail(messages, changedRoom);
+    // Composer sizing completes after a room opens. Keep its final paragraph in view.
+    if (!setup && (changedRoom || atBottom)) requestAnimationFrame(() => {
+      if (state.selected === room.name && !rail.contains(document.activeElement))
+        scroller.scrollTop = scroller.scrollHeight;
+    });
+  }
   updateComposer();
 }
+
+// One quiet dash per message. The rail is outside the scroller, so it stays in place.
+let railEntries = [];
+let railObserver;
+let jumpTimer;
+let jumpedMessage;
+const rail = $("#message-rail");
+const railList = rail.querySelector(".rail-list");
+const railPreview = rail.querySelector(".rail-preview");
+function sizeMessageRail() {
+  const area = $("#message-area");
+  const height = area.clientHeight;
+  const hidden = railEntries.length < 4 || height < 200 || area.clientWidth < 400 || matchMedia("(max-width: 760px)").matches || companion;
+  if (hidden && rail.contains(document.activeElement)) {
+    const entry = railEntries.find((item) => item.button === document.activeElement);
+    entry?.article.focus({ preventScroll: true });
+  }
+  rail.hidden = hidden;
+  area.classList.toggle("has-rail", !hidden);
+  if (hidden) { railPreview.hidden = true; return; }
+  const available = Math.floor(height * 0.6);
+  const step = Math.max(4, Math.min(10, available / railEntries.length));
+  rail.style.height = `${Math.min(available, step * railEntries.length)}px`;
+  rail.style.setProperty("--rail-step", `${step}px`);
+}
+function previewMessage(button) {
+  const entry = railEntries.find((item) => item.button === button);
+  if (!entry || rail.hidden) return;
+  railPreview.replaceChildren();
+  const heading = document.createElement("strong");
+  heading.textContent = `${entry.speaker} · ${entry.time}`;
+  const text = document.createElement("span");
+  text.textContent = entry.excerpt;
+  railPreview.append(heading, text);
+  railPreview.hidden = false;
+  const offset = button.getBoundingClientRect().top - rail.getBoundingClientRect().top;
+  railPreview.style.top = `${Math.max(0, Math.min(offset, rail.clientHeight - railPreview.offsetHeight))}px`;
+}
+function keepRailButtonVisible(button) {
+  // Very long conversations keep every message reachable in a scrollable rail.
+  const top = button.offsetTop;
+  if (top < railList.scrollTop) railList.scrollTop = top;
+  else if (top + button.offsetHeight > railList.scrollTop + railList.clientHeight)
+    railList.scrollTop = top + button.offsetHeight - railList.clientHeight;
+}
+function focusRailButton(button) {
+  for (const entry of railEntries) entry.button.tabIndex = entry.button === button ? 0 : -1;
+  button.focus({ preventScroll: true });
+  keepRailButtonVisible(button);
+  previewMessage(button);
+}
+function jumpToMessage(button) {
+  const entry = railEntries.find((item) => item.button === button);
+  if (!entry) return;
+  focusRailButton(button);
+  const scroller = $("#message-scroll");
+  const top = scroller.scrollTop + entry.article.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  scroller.scrollTo({ top, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  clearTimeout(jumpTimer);
+  jumpedMessage?.classList.remove("jump-target");
+  jumpedMessage = entry.article;
+  jumpedMessage.classList.add("jump-target");
+  jumpTimer = setTimeout(() => jumpedMessage?.classList.remove("jump-target"), 1800);
+}
+function renderMessageRail(messages, changedRoom) {
+  const focusedSeq = !changedRoom && rail.contains(document.activeElement) ? document.activeElement.dataset.seq : null;
+  const tabSeq = !changedRoom ? railEntries.find((entry) => entry.button.tabIndex === 0)?.seq : null;
+  railObserver?.disconnect();
+  railPreview.hidden = true;
+  railList.replaceChildren();
+  railEntries = messages.map((message) => {
+    const button = document.createElement("button");
+    const seq = String(message.seq);
+    const speaker = labels[message.speaker] || "Unknown";
+    const time = formatTime(message.at);
+    const plain = Array.from(message.text.replace(/\s+/g, " ").trim());
+    const excerpt = plain.slice(0, 80).join("") + (plain.length > 80 ? "…" : "");
+    button.type = "button";
+    button.className = `rail-dash ${SEATS.includes(message.speaker) ? message.speaker : "human"}`;
+    button.dataset.seq = seq;
+    button.tabIndex = -1;
+    button.setAttribute("aria-label", `${speaker}, ${time}: ${excerpt}`);
+    button.setAttribute("aria-controls", `message-${seq}`);
+    railList.append(button);
+    return { seq, speaker, time, excerpt, button, article: document.getElementById(`message-${seq}`) };
+  });
+  const selected = railEntries.find((entry) => entry.seq === (focusedSeq || tabSeq)) ?? railEntries.at(-1);
+  if (selected) selected.button.tabIndex = 0;
+  sizeMessageRail();
+  const byArticle = new Map(railEntries.map((entry) => [entry.article, entry]));
+  railObserver = new IntersectionObserver((entries) => {
+    for (const item of entries) {
+      const button = byArticle.get(item.target)?.button;
+      if (!button) continue;
+      const visible = item.isIntersecting && item.intersectionRect.height > 0;
+      button.classList.toggle("in-view", visible);
+      if (visible) button.setAttribute("aria-current", "location");
+      else button.removeAttribute("aria-current");
+    }
+    if (!rail.hidden && !rail.matches(":hover, :focus-within")) {
+      const current = railEntries.find((entry) => entry.button.classList.contains("in-view"));
+      if (current) keepRailButtonVisible(current.button);
+    }
+  }, { root: $("#message-scroll"), threshold: [0, 0.01] });
+  for (const entry of railEntries) railObserver.observe(entry.article);
+  if (focusedSeq && selected && !rail.hidden) focusRailButton(selected.button);
+}
+railList.addEventListener("click", (event) => {
+  const button = event.target.closest(".rail-dash");
+  if (button) jumpToMessage(button);
+});
+railList.addEventListener("pointerover", (event) => previewMessage(event.target.closest(".rail-dash")));
+rail.addEventListener("pointerleave", () => {
+  if (rail.contains(document.activeElement)) previewMessage(document.activeElement);
+  else railPreview.hidden = true;
+});
+railList.addEventListener("focusin", (event) => previewMessage(event.target));
+rail.addEventListener("focusout", (event) => {
+  if (!rail.contains(event.relatedTarget)) railPreview.hidden = true;
+});
+railList.addEventListener("scroll", () => { railPreview.hidden = true; });
+railList.addEventListener("keydown", (event) => {
+  const index = railEntries.findIndex((entry) => entry.button === event.target);
+  if (index < 0) return;
+  const next = event.key === "ArrowDown" ? Math.min(index + 1, railEntries.length - 1)
+    : event.key === "ArrowUp" ? Math.max(index - 1, 0)
+    : event.key === "Home" ? 0 : event.key === "End" ? railEntries.length - 1 : null;
+  if (next !== null) { event.preventDefault(); focusRailButton(railEntries[next].button); }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    railEntries[index].article.focus({ preventScroll: true });
+    railPreview.hidden = true;
+  }
+});
+new ResizeObserver(sizeMessageRail).observe($("#message-area"));
 
 // Finished work the AIs registered: exactly which version is ready, who reviewed it and how,
 // and any link a participant reports publishing. Everything shown is escaped data.
@@ -499,7 +700,7 @@ function artifactCard(item) {
   const files = (item.files ?? [])
     .map((file) => `<li><span>${escape(file.name)}</span><span>${escape(formatBytes(file.bytes))}</span></li>`)
     .join("");
-  return `<article class="artifact" data-availability="${escape(item.availability)}"><div class="artifact-head"><strong class="artifact-title">${escape(item.title)}</strong><span class="artifact-status ${tone}">${escape(status)}</span></div><div class="artifact-meta">${escape(item.entry)}${extra > 0 ? ` + ${extra} ${extra === 1 ? "file" : "files"}` : ""} · ${escape(formatBytes(item.bytes))} · v${Number(item.revision)} · updated by ${escape(labels[item.updatedBy] ?? item.updatedBy)} ${escape(relativeTime(item.updatedAt).replace(/^Just now$/, "just now"))}</div><div class="artifact-line">${artifactReviews(item)}</div>${published}${item.preview?.available ? previewActions(item) : ""}<details class="artifact-files"><summary>${(item.files?.length ?? 1) === 1 ? "1 file" : `${item.files.length} files`}${item.preview?.available ? "" : ` · ${escape(item.preview?.reason ?? "No shared preview.")}`}</summary><code class="artifact-path">${escape(item.path)}</code><ul>${files}</ul><button type="button" data-copy-path="${escape(item.id)}">Copy path</button></details></article>`;
+  return `<article class="artifact" data-artifact-id="${escape(item.id)}" data-availability="${escape(item.availability)}"><div class="artifact-head"><strong class="artifact-title">${escape(item.title)}</strong><span class="artifact-status ${tone}">${escape(status)}</span></div><div class="artifact-meta">${escape(item.entry)}${extra > 0 ? ` + ${extra} ${extra === 1 ? "file" : "files"}` : ""} · ${escape(formatBytes(item.bytes))} · v${Number(item.revision)} · updated by ${escape(labels[item.updatedBy] ?? item.updatedBy)} ${escape(relativeTime(item.updatedAt).replace(/^Just now$/, "just now"))}</div><div class="artifact-line">${artifactReviews(item)}</div>${published}${item.preview?.available ? previewActions(item) : ""}<details class="artifact-files"><summary>${(item.files?.length ?? 1) === 1 ? "1 file" : `${item.files.length} files`}${item.preview?.available ? "" : ` · ${escape(item.preview?.reason ?? "No shared preview.")}`}</summary><code class="artifact-path">${escape(item.path)}</code><ul>${files}</ul><button type="button" data-copy-path="${escape(item.id)}">Copy path</button></details></article>`;
 }
 // A link issued for this exact version stays usable as a plain link until it expires, so a
 // blocked pop-up never strands the person.
@@ -517,29 +718,42 @@ function previewActions(item) {
 function renderDeliverables(room, setup) {
   const panel = $("#deliverables");
   const items = room.artifacts ?? [];
-  panel.hidden = setup || !items.length;
-  if (panel.hidden) return;
+  const open = !setup && items.length > 0 && state.deliverablesOpen === room.name;
+  panel.hidden = !open;
+  if (!open) return;
   const ready = items.filter((item) => item.ready).length;
   const attention = items.filter((item) => item.availability !== "current").length;
-  // Newly finished work opens the panel; otherwise it keeps the person's choice for this room.
-  const seen = state.readySeen[room.name];
-  state.readySeen[room.name] = ready;
-  if (seen !== undefined && ready > seen) storageSet(`semaphore:deliverables:${room.name}`, "open");
-  // Small or short windows start collapsed so the conversation keeps its room.
-  const saved = storageGet(`semaphore:deliverables:${room.name}`);
-  const open = saved ? saved === "open" : matchMedia("(min-width: 761px) and (min-height: 700px)").matches;
-  const summary =
-    items.length === 1
-      ? artifactStatus(items[0])[1]
-      : `${ready} of ${items.length} ready${attention ? ` · ${attention} ${attention === 1 ? "needs" : "need"} a look` : ""}`;
-  panel.innerHTML = `<button type="button" class="deliverables-toggle" aria-expanded="${open}" aria-controls="deliverables-list"><span class="deliverables-label">Deliverables</span><span class="deliverables-summary">${escape(summary)}</span><span class="deliverables-chevron" aria-hidden="true">${open ? "▾" : "▸"}</span></button><div id="deliverables-list" class="deliverables-list"${open ? "" : " hidden"}>${items.map(artifactCard).join("")}</div>`;
+  const summary = `${ready} of ${items.length} ready${attention ? ` · ${attention} ${attention === 1 ? "needs" : "need"} a look` : ""}`;
+  const markup = `<div class="deliverables-head"><strong>Deliverables</strong><span>${escape(summary)}</span><button type="button" class="deliverables-close" data-close-deliverables aria-label="Close deliverables">×</button></div><div class="deliverables-list">${items.map(artifactCard).join("")}</div>`;
+  if (panel.renderedMarkup === markup && panel.dataset.room === room.name) return;
+  const sameRoom = panel.dataset.room === room.name;
+  const focused = panel.contains(document.activeElement) ? document.activeElement : null;
+  const artifactId = focused?.closest("[data-artifact-id]")?.dataset.artifactId;
+  const control = focused?.matches("summary") ? "summary" : focused?.matches("[data-copy-path]") ? "[data-copy-path]"
+    : focused?.matches("[data-preview]") ? "[data-preview]" : focused?.matches(".artifact-open") ? ".artifact-open" : null;
+  const expanded = sameRoom ? [...panel.querySelectorAll("details[open]")].map((node) => node.closest("[data-artifact-id]").dataset.artifactId) : [];
+  const scroll = sameRoom ? panel.scrollTop : 0;
+  panel.innerHTML = markup;
+  panel.renderedMarkup = markup;
+  panel.dataset.room = room.name;
+  for (const id of expanded) {
+    const details = panel.querySelector(`[data-artifact-id="${CSS.escape(id)}"] details`);
+    if (details) details.open = true;
+  }
+  panel.scrollTop = scroll;
+  if (focused && sameRoom) {
+    const replacement = artifactId && control ? panel.querySelector(`[data-artifact-id="${CSS.escape(artifactId)}"] ${control}`) : null;
+    (replacement || panel.querySelector(".deliverables-close"))?.focus({ preventScroll: true });
+  }
 }
 
 function renderLimit(room, setup) {
   const limit = room.turnLimit === undefined ? 4 : room.turnLimit;
   const bar = $("#limit-switch");
   bar.hidden = !!room.legacy;
-  bar.innerHTML = `<span id="limit-label">Check in after</span>${LIMITS.map((value) => `<button type="button" role="radio" aria-checked="${value === limit}" class="${value === limit ? "selected" : ""}" data-limit="${value ?? "none"}">${value === null ? "No limit" : `${value} replies`}</button>`).join("")}<small>${limit === null ? "They keep going until one hands you the stick. You can speak or take it anytime." : `The stick comes back to you after ${limit} AI ${limit === 1 ? "reply" : "replies"} in a row.`}</small>`;
+  const help = limit === null ? "They keep going until one hands you the stick. You can speak or take it anytime." : `The stick comes back to you after ${limit} AI ${limit === 1 ? "reply" : "replies"} in a row.`;
+  bar.title = help;
+  bar.innerHTML = `<span id="limit-label">Check in after</span>${LIMITS.map((value) => `<button type="button" role="radio" aria-checked="${value === limit}" class="${value === limit ? "selected" : ""}" data-limit="${value ?? "none"}">${value === null ? "No limit" : `${value} replies`}</button>`).join("")}<span id="limit-help" class="sr-only">${help}</span>`;
 }
 // What sending does right now: start the conversation, speak mid-turn, or send normally.
 function composerMode(room) {
@@ -733,6 +947,7 @@ function closeRename() {
 }
 async function selectRoom(name, { route = "push" } = {}) {
   closeRename();
+  setDeliverablesOpen(false, { focus: false });
   if (state.selected)
     storageSet(`semaphore:draft:${state.selected}`, $("#message").value);
   state.selected = name;
@@ -772,6 +987,7 @@ async function selectRoom(name, { route = "push" } = {}) {
 
 // Home is where a new conversation starts: one message, who joins, who replies first.
 function showHome(prefill, { route = "push" } = {}) {
+  setDeliverablesOpen(false, { focus: false });
   if (state.selected)
     storageSet(`semaphore:draft:${state.selected}`, $("#message").value);
   state.selected = null;
@@ -1002,11 +1218,7 @@ $("#rename-form").addEventListener("submit", async (event) => {
 $("#deliverables").addEventListener("click", async (event) => {
   const room = state.room;
   if (!room) return;
-  if (event.target.closest(".deliverables-toggle")) {
-    const open = $(".deliverables-toggle").getAttribute("aria-expanded") === "true";
-    storageSet(`semaphore:deliverables:${room.name}`, open ? "closed" : "open");
-    return renderDeliverables(room, false);
-  }
+  if (event.target.closest("[data-close-deliverables]")) return setDeliverablesOpen(false);
   const preview = event.target.closest("[data-preview]");
   if (preview) return openPreview(room, preview);
   const button = event.target.closest("[data-copy-path]");
@@ -1019,7 +1231,18 @@ $("#deliverables").addEventListener("click", async (event) => {
     toast("Select the path above and copy it.");
   }
 });
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.deliverablesOpen) setDeliverablesOpen(false);
+});
+// The pill redraws the bar during its own click, so test the event's original path, not
+// its (now detached) target.
+document.addEventListener("click", (event) => {
+  if (state.deliverablesOpen && !event.composedPath().some((node) => node.classList?.contains("status-area")))
+    setDeliverablesOpen(false, { focus: false });
+});
 $("#state-banner").addEventListener("click", (event) => {
+  if (event.target.closest("[data-deliverables]"))
+    return setDeliverablesOpen(state.deliverablesOpen !== state.room?.name);
   const button = event.target.closest("[data-action]");
   if (button) action(button.dataset.action);
 });
@@ -1110,13 +1333,6 @@ $("#start-form").addEventListener("submit", async (event) => {
   }
 });
 $("#messages").addEventListener("click", async (event) => {
-  const expand = event.target.closest("[data-expand]");
-  if (expand && state.room) {
-    const key = `${state.room.name}:${expand.dataset.expand}`;
-    if (!state.expanded.delete(key)) state.expanded.add(key);
-    renderRoom(state.room, true);
-    return;
-  }
   const button = event.target.closest("[data-copy-start], [data-copy-full]");
   if (!button || !state.room) return;
   const full = "copyFull" in button.dataset;

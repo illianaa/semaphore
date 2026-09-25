@@ -202,18 +202,29 @@
               Manage members <span aria-hidden="true">↗</span>
             </button>
           </div>
-          <div class="members" id="members"></div>
-          <div
-            class="limit-switch"
-            id="limit-switch"
-            role="radiogroup"
-            aria-labelledby="limit-label"
-          ></div>
+          <div class="room-controls">
+            <div class="members" id="members"></div>
+            <div
+              class="limit-switch"
+              id="limit-switch"
+              role="radiogroup"
+              aria-labelledby="limit-label"
+              aria-describedby="limit-help"
+            ></div>
+          </div>
           <div id="connection-guide" class="connection-guide" hidden></div>
-          <div id="state-banner" class="state-banner" role="status"></div>
-          <section id="deliverables" class="deliverables" aria-label="Deliverables" hidden></section>
-          <div class="message-scroll" id="message-scroll">
-            <div id="messages" class="messages"></div>
+          <div class="status-area">
+            <div id="state-banner" class="state-banner" role="status"></div>
+            <section id="deliverables" class="deliverables" aria-label="Deliverables" hidden></section>
+          </div>
+          <div class="message-area" id="message-area">
+            <div class="message-scroll" id="message-scroll">
+              <div id="messages" class="messages"></div>
+            </div>
+            <nav class="message-rail" id="message-rail" aria-label="Jump to a message" hidden>
+              <div class="rail-list"></div>
+              <div class="rail-preview" aria-hidden="true" hidden></div>
+            </nav>
           </div>
           <div class="composer-area">
             <form id="composer" class="composer">

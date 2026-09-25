@@ -56,3 +56,18 @@ This room is connected and automatic. The existing Astra seat in Illiana's other
 2. Claude holds the stick for activation; no room may have a received Astra turn during restart. Claude, outside ChatGPT, enables wake and restarts ChatGPT using the reviewed switch. The human already authorized this; do not ask again.
 3. Reopen this same Astra chat in ChatGPT. A native join or listener command verifies its new engine. Do not resume it using an external app-server client.
 4. Check a full room round, idle between turns, native tools/permissions, hidden-chat delivery and a ChatGPT restart. Report only what actually passes. If attachment fails, turn off and restart through the same switch to restore the prior workflow.
+
+## Long-idle round, 25 September 2026
+
+Astra ended this same native task after reply 51 at `2026-09-24T21:20:03.284Z`. The next legitimate UI-polish handoff was queued at `2026-09-25T18:39:32.085Z`, **21 hours, 19 minutes, 28.801 seconds later**. It automatically woke the existing task `01a0cffb-3b55-7013-9ab8-a3e8890f4d36` once; Astra ran no listener or periodic model check during the idle interval, and no manual Send, reconnect or second runtime was used to start this turn.
+
+Room `room-a6ee5d38-1d6`, turn `965dde0d-2b55-461a-993a-c4adec01ee9a`, receive revision 55, Semaphore release `0.4.0-8d1283fc35812076`, protocol 1. `semaphore timings` recorded:
+
+| Stage | UTC |
+|---|---|
+| Queued in room | 2026-09-25T18:39:32.085Z |
+| Queued in native task | 2026-09-25T18:39:33.296Z |
+| Native turn start observed | 2026-09-25T18:39:34.966Z |
+| Explicit receive acknowledgment | 2026-09-25T18:39:39.327Z |
+
+Queue to acknowledgment was 7.242 seconds. Listener observation is absent because none was running; exact host delivery remains unknown. These are observed stages for one successful wake, not a latency guarantee. The native task used its normal shell and browser tools afterward. This closes the long-idle acceptance check. Real desktop approval and interrupted-queue acceptance remain untested; neither is inferred from this result.
