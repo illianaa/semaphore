@@ -815,15 +815,17 @@ test('human rename during an active delivery is retained when the delivery finis
   assert.equal((await f.request(`/api/rooms/${room.name}`)).body.room.title,'Renamed while busy');
 });
 
-test("the bundled wordmark font is served byte for byte", async (t) => {
+test("the bundled fonts are served byte for byte", async (t) => {
   const f = await fixture(t);
-  const response = await fetch(f.url + "/fonts/jersey-10.ttf");
-  assert.equal(response.status, 200);
-  assert.equal(response.headers.get("content-type"), "font/ttf");
-  const served = Buffer.from(await response.arrayBuffer());
-  const bundled = fs.readFileSync(new URL("../web/fonts/Jersey10-Regular.ttf", import.meta.url));
-  assert.equal(served.length, bundled.length);
-  assert.ok(served.equals(bundled));
+  for (const [route, file] of [["/fonts/jersey-10.ttf", "Jersey10-Regular.ttf"], ["/fonts/outfit.ttf", "Outfit-Variable.ttf"]]) {
+    const response = await fetch(f.url + route);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "font/ttf");
+    const served = Buffer.from(await response.arrayBuffer());
+    const bundled = fs.readFileSync(new URL(`../web/fonts/${file}`, import.meta.url));
+    assert.equal(served.length, bundled.length);
+    assert.ok(served.equals(bundled));
+  }
   // The page itself still gets its per-run token.
   assert.doesNotMatch(f.html, /__SEMAPHORE_TOKEN__/);
 });

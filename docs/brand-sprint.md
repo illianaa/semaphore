@@ -38,7 +38,7 @@ Illiana already named Jersey 10 in the request. Claude initially asked for separ
 Before handoff, room revision 66 recorded Illiana’s direct reply to Claude: “YES! You have my approval entirely claude”. The requested font download is explicitly approved; Astra’s tool restriction still applies to Astra and was not bypassed.
 
 **Bundled (Claude, 25 September).** With Illiana's approval to Claude, Claude downloaded exactly the two files from `raw.githubusercontent.com/google/fonts/main/ofl/jersey10/` with Claude's own tools. This was Claude's own access, not a route around Astra's restriction.
-- **The files.** `web/fonts/Jersey10-Regular.ttf` is 77,732 bytes, TrueType, © 2023 The Soft Type Project Authors (github.com/scfried/soft-type-jersey), SHA-256 `db9cbd09…3e82`. `web/fonts/OFL.txt` is 4,395 bytes, SIL Open Font License 1.1. Both sizes match the headers checked before asking.
+- **The files.** `web/fonts/Jersey10-Regular.ttf` is 77,732 bytes, TrueType, © 2023 The Soft Type Project Authors (github.com/scfried/soft-type-jersey), SHA-256 `db9cbd09…3e82`. `web/fonts/Jersey10-OFL.txt` is 4,395 bytes, SIL Open Font License 1.1. Both sizes match the headers checked before asking.
 - **Serving.** The server serves `/fonts/jersey-10.ttf` as `font/ttf`. The static handler now reads assets as bytes, so the font isn't corrupted; only `index.html` is edited as text.
 - **CSS.** `@font-face` uses `font-display: block` to briefly hide the fallback while the bundled local font loads. Slow or failed font loading can still show the fallback.
 - **Size.** The wordmark is 30 px, on Jersey 10's 10 px grid, and replaces the temporary sizes set for the fallback. It is 122 px wide and fits the sidebar at every checked width.
@@ -103,7 +103,7 @@ Requests: one focus ring on the composer, Outfit as the main font, richer markdo
 - **Focus.** The composer keeps its green border and 3 px glow; its textarea now draws no outline of its own.
 - **Stop after.** The caption reads "Stop after [4 replies ▾]". The no-limit option reads "Never", so it scans as "Stop after: Never". The help says they stop after N AI replies in a row and hand the stick back, or have no automatic reply limit while still allowing either AI to return the stick. The README matches.
 - **Top bar.** The + was a full-width text glyph ("＋") beside an SVG toggle. It is now an SVG in the same 19 px box and stroke, and the toggle, the + and the title all centre at y=37 at 800×500.
-- **Outfit.** `Outfit[wght].ttf` (110,884 bytes, a variable font) and `OFL.txt` (4,389 bytes) from github.com/google/fonts, `ofl/outfit`. Illiana explicitly requested Outfit. Claude asked a separate download question; the implementation remains with Claude under his normal tool rules.
+- **Outfit.** `Outfit[wght].ttf` (110,884 bytes, a variable font) and `OFL.txt` (4,389 bytes) from github.com/google/fonts, `ofl/outfit`. Illiana explicitly requested Outfit. Claude asked a separate download question; the implementation remains with Claude under Claude's normal tool rules.
 - **Tests.** 170 pass.
 
 ## Astra’s Markdown and UI review
@@ -123,3 +123,16 @@ Chrome used a disposable room with no native delivery. At 1280×900 the message�
 The scratch server and browser tabs were closed, and the viewport override reset. Claude’s first three tweaks pass Astra’s review. Outfit and Claude’s final Markdown/design review remain before the proposed 0.8.0 release; nothing from this pass is deployed yet.
 
 Before handoff, revision 73 recorded Illiana’s “yes!” to Claude’s Outfit download question. The requested download is explicitly approved; no further confirmation is pending.
+
+## Outfit and Markdown review (Claude), 25 September
+
+- **Outfit bundled.** Illiana approved the download, and Claude fetched exactly the two files from `google/fonts`, `ofl/outfit`.
+  - `web/fonts/Outfit-Variable.ttf`: 110,884 bytes, a TrueType variable font (weights 100–900), © 2021 The Outfit Project Authors, SHA-256 `fc728727…aeade`.
+  - `web/fonts/Outfit-OFL.txt`: 4,389 bytes, SIL OFL 1.1. Jersey's licence is now `web/fonts/Jersey10-OFL.txt`.
+  - It is served at `/fonts/outfit.ttf`, and `@font-face` declares the full weight range with `font-display: swap`.
+  - Outfit is the root typeface and the heading face. Mono stays for details and Jersey 10 for the wordmark. The README credits both fonts, and the font test now checks both files byte for byte.
+- **Emphasis.** Outfit has no italic and `font-synthesis: none` was set, so `em` looked upright. `em` now allows a synthesized slant.
+- **Markdown: approved.** Astra's sample, run in a disposable harness at 1280×900:
+  - **Links.** Five links rendered, all http(s) with `target=_blank rel="noopener noreferrer"`. No script, img or iframe elements and no `on*` attributes. `javascript:` and raw `<img>` stay text, and code spans and blocks stay literal.
+  - **Blocks.** Headings, strikethrough, snake_case, one nested list level and an ordered list starting at 3 all render. The aligned table scrolls inside its own box in Companion at 420×720, with no page overflow.
+- **0.8.0.** The version is bumped for the release. 178 tests pass.

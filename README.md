@@ -88,7 +88,10 @@ The [18-slide HTML deck](design/ux-proposals/semaphore-ux-proposals.html) covers
 
 ## Credits
 
-The Semaphore wordmark uses [Jersey 10](https://github.com/scfried/soft-type-jersey), © 2023 The Soft Type Project Authors. It is bundled with the app, so Semaphore never fetches fonts from the internet, under the SIL Open Font License 1.1; see `web/fonts/OFL.txt`.
+Semaphore's typefaces are bundled with the app, so it never fetches fonts from the internet. Both are under the SIL Open Font License 1.1:
+
+- The interface uses [Outfit](https://github.com/Outfitio/Outfit-Fonts), © 2021 The Outfit Project Authors; see `web/fonts/Outfit-OFL.txt`.
+- The wordmark uses [Jersey 10](https://github.com/scfried/soft-type-jersey), © 2023 The Soft Type Project Authors; see `web/fonts/Jersey10-OFL.txt`.
 
 ## For developers
 

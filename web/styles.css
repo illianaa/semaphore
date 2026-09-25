@@ -2630,7 +2630,7 @@ select {
 .start-card h2,
 .dialog h2 {
   color: var(--text);
-  font-family: Inter, ui-sans-serif, -apple-system, sans-serif;
+  font-family: Outfit, Inter, ui-sans-serif, -apple-system, sans-serif;
   font-weight: 650;
 }
 .conversation-heading h1 {
@@ -2656,7 +2656,7 @@ select {
   border-color: var(--line-strong);
   border-radius: var(--radius);
   color: var(--text);
-  font-family: Inter, ui-sans-serif, sans-serif;
+  font-family: inherit;
 }
 .rename-form button {
   background: var(--surface-2);
@@ -3303,7 +3303,7 @@ select {
 @media (max-width: 520px) {
   .composer-caption { flex-direction: column; align-items: flex-start; gap: 6px; }
 }
-/* The wordmark: Jersey 10, bundled with the app (SIL Open Font License, web/fonts/OFL.txt). */
+/* The wordmark: Jersey 10, bundled with the app (SIL Open Font License, web/fonts/Jersey10-OFL.txt). */
 @font-face {
   font-family: "Jersey 10";
   src: url("/fonts/jersey-10.ttf") format("truetype");
@@ -3376,3 +3376,28 @@ select {
 .markdown-table .align-left { text-align: left; }
 .markdown-table .align-center { text-align: center; }
 .markdown-table .align-right { text-align: right; }
+/* Outfit is the main typeface: one bundled variable file covers every weight
+   (SIL Open Font License, web/fonts/Outfit-OFL.txt). Mono stays for details and Jersey 10
+   for the wordmark. */
+@font-face {
+  font-family: Outfit;
+  src: url("/fonts/outfit.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+:root {
+  font-family:
+    Outfit,
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+/* Outfit has no italic, so emphasis uses a synthesized slant (weights come from the font). */
+em,
+.message-text em {
+  font-style: italic;
+  font-synthesis: style;
+}
