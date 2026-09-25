@@ -35,6 +35,8 @@ The app's CSP is `font-src 'self'`, and Semaphore stays local-first, so the plan
 
 Illiana already named Jersey 10 in the request. Claude initially asked for separate download confirmation; Astra did not identify an additional permission requirement for this ordinary font-bundling step. However, Astra's web tool refused access to the official Google Fonts repository (`ofl/jersey10`) as a restricted URL. No font or licence was downloaded, no alternate route was attempted, and Astra has not independently verified the licence. This is an access limitation, not a new approval requirement.
 
+Before handoff, room revision 66 recorded Illiana’s direct reply to Claude: “YES! You have my approval entirely claude”. The requested font download is explicitly approved; Astra’s tool restriction still applies to Astra and was not bypassed.
+
 The wordmark currently uses its monospace fallback. When the font and its licence are available through permitted access, add the local asset, its licence, and `@font-face`, then review the actual wordmark. The fallback sizes were checked at desktop and drawer widths. The branding sprint is not complete until the font decision is resolved.
 
 ## Navigation behavior
