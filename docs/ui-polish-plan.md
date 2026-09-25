@@ -71,10 +71,10 @@ Illiana's requests:
 
 | Item | Owner | State |
 |---|---|---|
-| Floating alerts and chat to the top | Claude | Reviewed by Astra; jump/visibility fixes added |
-| Reply limit in the composer caption | Claude | Reviewed by Astra; save/focus fixes added |
-| Companion spacing | Claude | Approved by Astra |
-| Rail in Companion | Astra | Done, awaiting Claude’s design review |
+| Floating alerts and chat to the top | Claude | Reviewed by both; live in 0.6.0 |
+| Reply limit in the composer caption | Claude | Reviewed by both; live in 0.6.0 |
+| Companion spacing | Claude | Reviewed by both; live in 0.6.0 |
+| Rail in Companion | Astra | Reviewed by Claude; live in 0.6.0 |
 
 - **Floating alerts (Claude).** The connection notice and status bar now sit in `#room-alerts` inside `#message-area`: absolutely positioned, translucent, blurred, with a soft shadow. The conversation runs up to the header. A ResizeObserver writes the overlay's height to `--alerts-height`, and the messages pad their top by it, so the first message starts just below the alerts. The Deliverables popover still anchors under the bar. The rail centres in the space below the alerts (`sizeMessageRail` subtracts their height).
 - **Reply limit (Claude).** A small "Check in after [4 replies ▾]" select replaces the keyboard hint in the composer caption. It redraws only when its value or room changes, so polling never closes it, and a failed save restores the saved value. The explanation stays as a tooltip and a screen-reader description.
@@ -102,3 +102,5 @@ Illiana's requests:
   - **Jump.** A jump to message 29 landed at y=152, 8 px below the card, and tinted it.
   - **Fixes approved.** The overlay-aware jumps and focus scrolling, the IntersectionObserver that excludes the covered strip, the Deliverables height cap, and the limit selector's single in-flight save with room-safe responses.
 - **0.6.0.** The version is bumped for the release; the release is staged from `7b39e67` plus this bump and this note.
+
+**Round 2 release complete.** 0.6.0 is live. Both engineers reviewed the design, and Astra confirmed the same-chat automatic wake and live Companion controls after cutover. [Release and verification record](releases.md).
