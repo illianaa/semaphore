@@ -28,6 +28,7 @@ const state = {
 };
 // Message requests still in flight, by request ID. The box clears as soon as one is sent.
 const inFlight = new Map();
+const pendingLimits = new Map();
 const loadingInvites = new Set();
 let startBusy = false;
 
@@ -523,33 +524,48 @@ function renderRoom(room, force = false) {
   updateComposer();
 }
 
+// Alerts float over the conversation. The messages start below them, and the rail centres
+// in the space that remains.
+new ResizeObserver(sizeMessageRail).observe($("#room-alerts"));
 // One quiet dash per message. The rail is outside the scroller, so it stays in place.
 let railEntries = [];
 let railObserver;
+let railInset = -1;
+let previewedButton;
 let jumpTimer;
 let jumpedMessage;
 const rail = $("#message-rail");
 const railList = rail.querySelector(".rail-list");
 const railPreview = rail.querySelector(".rail-preview");
+const messageInset = () => $("#room-alerts").offsetHeight + 16;
 function sizeMessageRail() {
   const area = $("#message-area");
-  const height = area.clientHeight;
-  const hidden = railEntries.length < 4 || height < 200 || area.clientWidth < 400 || matchMedia("(max-width: 760px)").matches || companion;
+  const alertsHeight = $("#room-alerts").offsetHeight;
+  area.style.setProperty("--alerts-height", `${alertsHeight}px`);
+  const height = Math.max(0, area.clientHeight - messageInset());
+  area.style.setProperty("--deliverables-height", `${Math.max(80, height - 8)}px`);
+  // Companion is a deliberately compact desktop window. Ordinary phone/touch layouts
+  // keep their full reading width instead of exposing tiny navigation targets.
+  const compactWidth = companion ? area.clientWidth < 240 : area.clientWidth < 400 || matchMedia("(max-width: 760px), (pointer: coarse)").matches;
+  const hidden = railEntries.length < 4 || height < 200 || compactWidth;
   if (hidden && rail.contains(document.activeElement)) {
     const entry = railEntries.find((item) => item.button === document.activeElement);
     entry?.article.focus({ preventScroll: true });
   }
   rail.hidden = hidden;
   area.classList.toggle("has-rail", !hidden);
+  observeRailMessages();
   if (hidden) { railPreview.hidden = true; return; }
   const available = Math.floor(height * 0.6);
   const step = Math.max(4, Math.min(10, available / railEntries.length));
   rail.style.height = `${Math.min(available, step * railEntries.length)}px`;
   rail.style.setProperty("--rail-step", `${step}px`);
+  if (!railPreview.hidden && previewedButton) previewMessage(previewedButton);
 }
 function previewMessage(button) {
   const entry = railEntries.find((item) => item.button === button);
   if (!entry || rail.hidden) return;
+  previewedButton = button;
   railPreview.replaceChildren();
   const heading = document.createElement("strong");
   heading.textContent = `${entry.speaker} · ${entry.time}`;
@@ -557,8 +573,14 @@ function previewMessage(button) {
   text.textContent = entry.excerpt;
   railPreview.append(heading, text);
   railPreview.hidden = false;
-  const offset = button.getBoundingClientRect().top - rail.getBoundingClientRect().top;
-  railPreview.style.top = `${Math.max(0, Math.min(offset, rail.clientHeight - railPreview.offsetHeight))}px`;
+  const buttonRect = button.getBoundingClientRect();
+  const railRect = rail.getBoundingClientRect();
+  const areaRect = $("#message-area").getBoundingClientRect();
+  const minimum = areaRect.top + messageInset();
+  const maximum = areaRect.bottom - railPreview.offsetHeight - 4;
+  const above = buttonRect.top - railPreview.offsetHeight - 8;
+  const preferred = companion ? (above >= minimum ? above : buttonRect.bottom + 8) : buttonRect.top;
+  railPreview.style.top = `${Math.max(minimum, Math.min(preferred, maximum)) - railRect.top}px`;
 }
 function keepRailButtonVisible(button) {
   // Very long conversations keep every message reachable in a scrollable rail.
@@ -578,7 +600,7 @@ function jumpToMessage(button) {
   if (!entry) return;
   focusRailButton(button);
   const scroller = $("#message-scroll");
-  const top = scroller.scrollTop + entry.article.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  const top = scroller.scrollTop + entry.article.getBoundingClientRect().top - scroller.getBoundingClientRect().top - messageInset();
   scroller.scrollTo({ top, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   clearTimeout(jumpTimer);
   jumpedMessage?.classList.remove("jump-target");
@@ -590,6 +612,8 @@ function renderMessageRail(messages, changedRoom) {
   const focusedSeq = !changedRoom && rail.contains(document.activeElement) ? document.activeElement.dataset.seq : null;
   const tabSeq = !changedRoom ? railEntries.find((entry) => entry.button.tabIndex === 0)?.seq : null;
   railObserver?.disconnect();
+  railObserver = null;
+  previewedButton = null;
   railPreview.hidden = true;
   railList.replaceChildren();
   railEntries = messages.map((message) => {
@@ -611,12 +635,23 @@ function renderMessageRail(messages, changedRoom) {
   const selected = railEntries.find((entry) => entry.seq === (focusedSeq || tabSeq)) ?? railEntries.at(-1);
   if (selected) selected.button.tabIndex = 0;
   sizeMessageRail();
+  if (focusedSeq && selected && !rail.hidden) focusRailButton(selected.button);
+}
+function observeRailMessages() {
+  const inset = messageInset();
+  if (railObserver && railInset === inset) return;
+  railObserver?.disconnect();
+  railInset = inset;
   const byArticle = new Map(railEntries.map((entry) => [entry.article, entry]));
+  for (const { button } of railEntries) {
+    button.classList.remove("in-view");
+    button.removeAttribute("aria-current");
+  }
   railObserver = new IntersectionObserver((entries) => {
     for (const item of entries) {
       const button = byArticle.get(item.target)?.button;
       if (!button) continue;
-      const visible = item.isIntersecting && item.intersectionRect.height > 0;
+      const visible = item.isIntersecting && item.intersectionRect.height > 0.5;
       button.classList.toggle("in-view", visible);
       if (visible) button.setAttribute("aria-current", "location");
       else button.removeAttribute("aria-current");
@@ -625,9 +660,8 @@ function renderMessageRail(messages, changedRoom) {
       const current = railEntries.find((entry) => entry.button.classList.contains("in-view"));
       if (current) keepRailButtonVisible(current.button);
     }
-  }, { root: $("#message-scroll"), threshold: [0, 0.01] });
+  }, { root: $("#message-scroll"), rootMargin: `-${inset}px 0px 0px 0px`, threshold: [0, 0.000001, 0.01] });
   for (const entry of railEntries) railObserver.observe(entry.article);
-  if (focusedSeq && selected && !rail.hidden) focusRailButton(selected.button);
 }
 railList.addEventListener("click", (event) => {
   const button = event.target.closest(".rail-dash");
@@ -747,13 +781,22 @@ function renderDeliverables(room, setup) {
   }
 }
 
+// Keep the native select mounted through saves and polling, including room switches.
 function renderLimit(room, setup) {
   const limit = room.turnLimit === undefined ? 4 : room.turnLimit;
   const bar = $("#limit-switch");
   bar.hidden = !!room.legacy;
+  const saving = pendingLimits.has(room.name);
+  const value = String((saving ? pendingLimits.get(room.name) : limit) ?? "none");
+  bar.dataset.room = room.name;
+  bar.setAttribute("aria-busy", String(saving));
   const help = limit === null ? "They keep going until one hands you the stick. You can speak or take it anytime." : `The stick comes back to you after ${limit} AI ${limit === 1 ? "reply" : "replies"} in a row.`;
   bar.title = help;
-  bar.innerHTML = `<span id="limit-label">Check in after</span>${LIMITS.map((value) => `<button type="button" role="radio" aria-checked="${value === limit}" class="${value === limit ? "selected" : ""}" data-limit="${value ?? "none"}">${value === null ? "No limit" : `${value} replies`}</button>`).join("")}<span id="limit-help" class="sr-only">${help}</span>`;
+  if (!$("#limit-select")) bar.innerHTML = `<label for="limit-select">Check in after</label><select id="limit-select" aria-describedby="limit-help">${LIMITS.map((option) => `<option value="${option ?? "none"}">${option === null ? "No limit" : `${option} replies`}</option>`).join("")}</select><span id="limit-help" class="sr-only"></span>`;
+  const select = $("#limit-select");
+  if (select.value !== value) select.value = value;
+  select.disabled = saving;
+  $("#limit-help").textContent = help;
 }
 // What sending does right now: start the conversation, speak mid-turn, or send normally.
 function composerMode(room) {
@@ -1101,21 +1144,33 @@ function sendOnEnter(box, form) {
 }
 
 $("#new-room").addEventListener("click", () => showHome());
-$("#limit-switch").addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-limit]");
-  if (!button || !state.room || button.classList.contains("selected")) return;
-  const maxTurns =
-    button.dataset.limit === "none" ? null : Number(button.dataset.limit);
+$("#limit-switch").addEventListener("change", async (event) => {
+  if (event.target.id !== "limit-select" || !state.room) return;
+  const name = state.room.name;
+  if (pendingLimits.has(name)) return;
+  const maxTurns = event.target.value === "none" ? null : Number(event.target.value);
+  const hadFocus = document.activeElement === event.target;
+  pendingLimits.set(name, maxTurns);
+  renderLimit(state.room);
   try {
-    const { room } = await api(`/rooms/${state.room.name}/limit`, {
+    const { room } = await api(`/rooms/${name}/limit`, {
       method: "POST",
       body: { maxTurns },
     });
+    pendingLimits.delete(name);
     renderRoom(room, true);
   } catch (err) {
-    if (err.room) renderRoom(err.room);
+    pendingLimits.delete(name);
+    if (state.selected === name) {
+      if (err.room) renderRoom(err.room, true);
+      else if (state.room) renderLimit(state.room);
+    }
     toast(err.message);
   }
+  // Disabling during a save prevents out-of-order writes. Restore keyboard focus only
+  // if the person hasn't moved to another control or conversation in the meantime.
+  if (hadFocus && state.selected === name && document.activeElement === document.body)
+    $("#limit-select")?.focus({ preventScroll: true });
 });
 $("#open-companion").addEventListener("click", () =>
   window.open(

@@ -2338,3 +2338,116 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .rail-dash::before, .message { transition: none; }
 }
+/* Alerts float over the top of the conversation, which now runs up to the header. The
+   messages start below the alerts (their height is tracked in --alerts-height). */
+.room-alerts {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  right: 14px;
+  z-index: 20;
+  display: grid;
+  gap: 6px;
+  pointer-events: none;
+}
+.room-alerts > :not([hidden]) {
+  pointer-events: auto;
+}
+.room-alerts .status-area {
+  margin: 0;
+}
+.room-alerts .state-banner,
+.room-alerts .connection-guide {
+  margin: 0;
+  box-shadow:
+    0 8px 28px #1e2d2716,
+    0 1px 3px #1e2d2712;
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
+}
+.room-alerts .state-banner {
+  background: #f3f6eee0;
+}
+.room-alerts .state-banner[data-holder="astra"] {
+  background: #e8f0e6e0;
+}
+.room-alerts .state-banner[data-holder="claude"] {
+  background: #f7eee7e0;
+}
+.room-alerts .state-banner.paused {
+  background: #f6efdfeb;
+}
+.room-alerts .state-banner.approval {
+  background: #f8edd9f0;
+}
+.room-alerts .connection-guide {
+  background: #f0f4e8e6;
+}
+.message-area .messages {
+  padding-top: calc(var(--alerts-height, 0px) + 16px);
+}
+.message-area .message-rail {
+  top: calc(50% + var(--alerts-height, 0px) / 2);
+}
+/* The reply limit, small, where the keyboard hint used to be. */
+.composer-caption .limit-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin: 0;
+  font-size: 12px;
+  color: #6a7464;
+}
+.composer-caption .limit-switch select {
+  font: inherit;
+  font-size: 12px;
+  color: #344e3e;
+  background: #fffefa;
+  border: 1px solid #dfe5d6;
+  border-radius: 999px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+/* Companion: Semaphore's main window for Illiana, so no empty rows above the conversation. */
+.companion .room-controls {
+  display: none;
+}
+.companion .conversation {
+  padding-top: 6px;
+}
+/* Narrow windows and Companion: keep the floating card short so it covers little. */
+@media (max-width: 760px) {
+  .room-alerts .state-actions {
+    gap: 6px;
+  }
+  .room-alerts .state-actions button,
+  .room-alerts .state-actions .state-link,
+  .room-alerts .deliverables-pill {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+  .room-alerts .state-banner[data-holder="human"] .state-detail {
+    display: none;
+  }
+}
+
+/* Companion keeps the same message navigation in a smaller footprint. */
+.companion .has-rail .messages { padding-right: 28px; }
+.companion .message-rail { right: 8px; width: 20px; }
+.companion .rail-dash { width: 20px; padding: 0 4px; }
+.companion .rail-dash::before { width: 8px; }
+.companion .rail-dash.human::before { width: 12px; }
+.companion .rail-dash:hover::before,
+.companion .rail-dash:focus-visible::before { width: 12px; }
+.companion .rail-preview {
+  right: 0;
+  width: min(210px, calc(100vw - 64px));
+  padding: 10px 12px;
+}
+.message-area .message-rail {
+  top: calc(50% + var(--alerts-height, 0px) / 2 + 8px);
+}
+.message-scroll { scroll-padding-top: calc(var(--alerts-height, 0px) + 16px); }
+.room-alerts .deliverables { max-height: min(62vh, 560px, var(--deliverables-height, 560px)); }
+.composer-caption .limit-switch select:disabled { cursor: wait; opacity: 0.65; }

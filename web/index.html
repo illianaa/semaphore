@@ -204,20 +204,16 @@
           </div>
           <div class="room-controls">
             <div class="members" id="members"></div>
-            <div
-              class="limit-switch"
-              id="limit-switch"
-              role="radiogroup"
-              aria-labelledby="limit-label"
-              aria-describedby="limit-help"
-            ></div>
-          </div>
-          <div id="connection-guide" class="connection-guide" hidden></div>
-          <div class="status-area">
-            <div id="state-banner" class="state-banner" role="status"></div>
-            <section id="deliverables" class="deliverables" aria-label="Deliverables" hidden></section>
           </div>
           <div class="message-area" id="message-area">
+            <!-- Alerts float over the top of the conversation instead of taking their own space. -->
+            <div class="room-alerts" id="room-alerts">
+              <div id="connection-guide" class="connection-guide" hidden></div>
+              <div class="status-area">
+                <div id="state-banner" class="state-banner" role="status"></div>
+                <section id="deliverables" class="deliverables" aria-label="Deliverables" hidden></section>
+              </div>
+            </div>
             <div class="message-scroll" id="message-scroll">
               <div id="messages" class="messages"></div>
             </div>
@@ -271,7 +267,7 @@
               <span id="composer-hint"
                 >One speaker at a time. You can take the stick whenever you
                 like.</span
-              ><span><kbd>Enter</kbd> to send · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line</span>
+              ><div class="limit-switch" id="limit-switch"></div>
             </div>
           </div>
         </section>

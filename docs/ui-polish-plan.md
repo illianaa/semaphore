@@ -61,3 +61,35 @@ Illiana's requests, in room `test chat`:
 - **0.5.0.** The version is bumped for the release; the release is staged from `59df114` plus this bump and this note.
 
 **Release complete.** 0.5.0 is live and the final same-chat wake and live UI checks passed. See [the cutover record](releases.md) for release identity, backup and verification.
+
+## Round 2: Companion first (Illiana, 25 September)
+
+Illiana's requests:
+- Bring the polish to Companion, now her primary window.
+- Move "Check in after" to where the Enter/Shift+Enter hint was, smaller, and drop the hint.
+- Let the chat run to the top, with the alerts hovering over the messages instead of taking their own space.
+
+| Item | Owner | State |
+|---|---|---|
+| Floating alerts and chat to the top | Claude | Reviewed by Astra; jump/visibility fixes added |
+| Reply limit in the composer caption | Claude | Reviewed by Astra; save/focus fixes added |
+| Companion spacing | Claude | Approved by Astra |
+| Rail in Companion | Astra | Done, awaiting Claude’s design review |
+
+- **Floating alerts (Claude).** The connection notice and status bar now sit in `#room-alerts` inside `#message-area`: absolutely positioned, translucent, blurred, with a soft shadow. The conversation runs up to the header. A ResizeObserver writes the overlay's height to `--alerts-height`, and the messages pad their top by it, so the first message starts just below the alerts. The Deliverables popover still anchors under the bar. The rail centres in the space below the alerts (`sizeMessageRail` subtracts their height).
+- **Reply limit (Claude).** A small "Check in after [4 replies ▾]" select replaces the keyboard hint in the composer caption. It redraws only when its value or room changes, so polling never closes it, and a failed save restores the saved value. The explanation stays as a tooltip and a screen-reader description.
+- **Companion (Claude).** The empty controls row is hidden and the top padding is 6 px. On narrow windows the floating card uses small buttons and drops the your-turn help text, which the buttons make redundant. At 420×720, messages went from 261 px to 463 px and the card from 125 px to 78 px.
+- **Harness checks.**
+  - At 1280×800: messages 389 px (from 337); the popover opens over the conversation; the limit saved 10, then 4, through the server; scrolled to the top, the first message starts at 282 px, below the alerts at 274 px.
+  - No horizontal overflow; 169 tests pass.
+- **Rail in Companion (Astra, next).** Enable the rail in Companion, perhaps slimmer, since Companion is Illiana's main window. Today it's hidden by the `companion` flag and the 400 px and 760 px checks. Keep phones without it.
+
+
+### Round 2 implementation and review (Astra)
+
+- **Companion rail.** Companion now gets the same message navigation with a 20 px hit strip, 8 px AI dashes, 12 px human dashes and 28 px message gutter. The 210 px plain-text preview sits above or below the selected dash, clamped into the unobscured message area. Ordinary narrow/touch layouts outside Companion still hide the rail. Companion hides it below 240 px of message width or 200 px of unobscured message height, and all modes hide it below four messages.
+- **Overlay review: approved with corrections.** DOM order puts the status and deliverables before messages; existing status announcements, native buttons and popover focus/dismissal behavior remain. Jumps and scroll padding now account for the floating alert height, placing the target 8 px below the card. IntersectionObserver excludes that covered region and refreshes its root margin when the card changes size, so hidden text isn't marked visible. A near-zero threshold also clears a previous message that only touches the viewport edge. The deliverables popover is capped to the remaining message height so the composer remains accessible in the tested sizes.
+- **Limit review: approved with corrections.** The labelled native select remains mounted through polling, saves and room switches. The description remains attached with `aria-describedby`. Only one save per room can be in flight; the control is disabled while saving to prevent out-of-order writes, then restores focus only if the person hasn't moved elsewhere. A failed save restores the saved value. Responses for a room left behind cannot change the new room's selector or steal focus.
+- **Browser checks.** A disposable app with synthetic rooms and no native delivery exercised Companion at 420×720 and 320×720. The rail stayed visible, previews stayed within the message area, and there was no horizontal overflow. At 420×720 the message area was 463 px with a 78 px card. Jumps landed at y=152 below the card's y=144 bottom; after a long working note increased the overlay to 190 px, jumps adjusted to y=264 below y=256. A 300-message Companion conversation supported Home/End and Enter through its internally scrolling rail. A two-message room hid it. Desktop 1280×800 retained a 389 px message area and placed jumps 8 px below the card. Ordinary 375×812 mode hid the rail and had no horizontal overflow.
+- **Save checks.** A successful change to 10 survived polling; a deliberately rejected change to 20 restored 10, re-enabled the control, displayed the refusal and restored keyboard focus. A deliberately delayed save to 20 followed by navigation to a second room left that room at 4; returning to the first showed its saved 20. The popover remained within the message area after a long note, and its close button retained the existing focus behavior.
+- **Validation and handoff.** All 169 automated tests pass; syntax and whitespace checks pass. Harnesses: `/tmp/semaphore-companion-ui.mjs` and `/tmp/semaphore-companion-change.mjs`; the response-mode file supports normal/fail/delay for the disposable limit route. The temporary server and tab were closed and browser sizing reset. Changes remain in the worktree until Claude's final review and a reviewed 0.6.0 cutover; live remains 0.5.0.
