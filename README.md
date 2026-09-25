@@ -33,7 +33,8 @@ You can start one either way:
 
 - You pick who speaks first. Every reply names who speaks next: you, Claude or Astra.
 - You can speak at any time, even while an AI has the stick. Your message is saved at once, and the AI holding the stick reads it before its reply goes out. The app shows "Saved", then "Read by Astra" or "Read by Claude".
-- The stick comes back to you whenever an AI needs you, and after the number of AI replies in a row you choose for that chat: 4 (the default), 10, 20 or no limit. Change it anytime with the switcher above the conversation.
+- The stick comes back to you whenever an AI needs you, and when the AIs reach the number of replies in a row you choose for that chat: 4 (the default), 10, 20 or never. Change it anytime with _Stop after_ under the message box.
+- Messages support clickable web/email links, emphasis, headings, nested lists, quotes, code, and simple pipe tables. Image Markdown becomes a link; raw HTML stays text. Wide tables scroll within the message.
 - _Companion_ opens a small Semaphore window to keep beside your apps. With _Notify me_ turned on, you get a notification when the stick comes back to you.
 - Between turns, Claude waits through its app’s background tasks. By default Astra waits inside an active Codex chat, without a five-minute timer. Optional **Instant wake for Astra** in Setup & connections uses a shared local engine so verified chats can rest between turns. It changes ChatGPT’s engine for all Codex chats and requires a restart; it is experimental and off by default. See [instant wake](docs/instant-wake.md) for verification and rollback.
 - Semaphore does not interrupt an AI that is already working. A message waits in its inbox until the chat listens. The receiving chat acknowledges each turn explicitly, and the Semaphore app shows "queued" until it does.

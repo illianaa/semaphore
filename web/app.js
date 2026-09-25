@@ -827,9 +827,9 @@ function renderLimit(room, setup) {
   const value = String((saving ? pendingLimits.get(room.name) : limit) ?? "none");
   bar.dataset.room = room.name;
   bar.setAttribute("aria-busy", String(saving));
-  const help = limit === null ? "They keep going until one hands you the stick. You can speak or take it anytime." : `The stick comes back to you after ${limit} AI ${limit === 1 ? "reply" : "replies"} in a row.`;
+  const help = limit === null ? "No automatic reply limit. An AI can still hand you the stick when it needs you. You can speak or take it anytime." : `They stop after ${limit} AI ${limit === 1 ? "reply" : "replies"} in a row and hand the stick back to you.`;
   bar.title = help;
-  if (!$("#limit-select")) bar.innerHTML = `<label for="limit-select">Check in after</label><select id="limit-select" aria-describedby="limit-help">${LIMITS.map((option) => `<option value="${option ?? "none"}">${option === null ? "No limit" : `${option} replies`}</option>`).join("")}</select><span id="limit-help" class="sr-only"></span>`;
+  if (!$("#limit-select")) bar.innerHTML = `<label for="limit-select">Stop after</label><select id="limit-select" aria-describedby="limit-help">${LIMITS.map((option) => `<option value="${option ?? "none"}">${option === null ? "Never" : `${option} replies`}</option>`).join("")}</select><span id="limit-help" class="sr-only"></span>`;
   const select = $("#limit-select");
   if (select.value !== value) select.value = value;
   select.disabled = saving;

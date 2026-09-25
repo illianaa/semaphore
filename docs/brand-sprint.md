@@ -87,3 +87,37 @@ The static route serves the local TTF as bytes and keeps HTML token substitution
 Chrome rendered the pixel wordmark in the 220 px sidebar at 800×500. The status text uses a readable row with buttons below (83 px card), and the page has no horizontal overflow. The final review approves Claude’s font-serving change and medium-width layout fix.
 
 Astra reran the complete suite: **170 passed**, zero failed (31.37 seconds). Final review fixtures were stopped, the browser tab closed, and its viewport override reset. Version 0.7.0 is prepared for the app-only cutover; its outcome is recorded separately in `docs/releases.md`.
+
+## Tweaks after 0.7.0 (Illiana, 25 September)
+
+Requests: one focus ring on the composer, Outfit as the main font, richer markdown in agent messages (links don't work), "Stop after" instead of "Check in after", and a centred + in the top bar.
+
+| Item | Owner | State |
+|---|---|---|
+| Single composer focus ring | Claude | Done |
+| "Stop after" wording | Claude | Done |
+| Centred top-bar + | Claude | Done |
+| Outfit as the main font | Claude | Pending font implementation |
+| Richer markdown with safe links | Astra | Implemented and checked; awaiting Claude review |
+
+- **Focus.** The composer keeps its green border and 3 px glow; its textarea now draws no outline of its own.
+- **Stop after.** The caption reads "Stop after [4 replies ▾]". The no-limit option reads "Never", so it scans as "Stop after: Never". The help says they stop after N AI replies in a row and hand the stick back, or have no automatic reply limit while still allowing either AI to return the stick. The README matches.
+- **Top bar.** The + was a full-width text glyph ("＋") beside an SVG toggle. It is now an SVG in the same 19 px box and stroke, and the toggle, the + and the title all centre at y=37 at 800×500.
+- **Outfit.** `Outfit[wght].ttf` (110,884 bytes, a variable font) and `OFL.txt` (4,389 bytes) from github.com/google/fonts, `ofl/outfit`. Illiana explicitly requested Outfit. Claude asked a separate download question; the implementation remains with Claude under his normal tool rules.
+- **Tests.** 170 pass.
+
+## Astra’s Markdown and UI review
+
+Implemented in `web/render.mjs`, with no added dependency. The renderer parses a bounded Markdown subset and escapes every text or attribute value before emitting HTML; generated markup is not reparsed.
+
+- Inline links, angle links, and bare HTTP(S) URLs work; explicit `mailto:` links are supported. Only absolute HTTP(S) and mailto targets become anchors, with `target="_blank" rel="noopener noreferrer"`. Unsafe schemes, file paths, and relative paths stay text. Bare URLs exclude trailing prose punctuation and preserve balanced parentheses. Nested labels and optional link titles work. Image syntax produces a link, with “Image” for empty alt text, never a remote image.
+- Code spans (including multiple backticks) and fenced blocks remain literal. Backtick and tilde fences are supported; an unclosed fence preserves the remaining text as code. No links or emphasis are parsed inside code.
+- Paragraphs can flow directly into headings, unordered/ordered lists, quotes, and tables without blank separators. Lists support bounded nesting and ordered starts. Headings #–### become h3–h5. Emphasis, bold, combined emphasis, strikethrough, escaped punctuation, and existing mentions are supported; underscores inside identifiers remain literal.
+- Simple pipe tables support alignment, escaped pipes and code in cells, with a focusable horizontal scroll region. New dark styles cover links, headings, quotes, rules, nested lists, strike, and tables. Table headings stay on one line.
+- Work budgets and bounded recursion keep pathological unmatched/nested syntax from monopolizing rendering. Reference links, raw HTML, embedded media, and full CommonMark/GFM compatibility are not claimed.
+
+**Checks.** All 178 tests passed in 31.08 seconds, including eight added renderer cases for hostile link/HTML input, literal code, nested labels, punctuation, mixed blocks, tables and large malformed input. A final empty-image-label fallback was followed by another passing 9-test renderer run. Syntax and diff checks passed.
+
+Chrome used a disposable room with no native delivery. At 1280×900 the message’s links, nested lists, emphasis and headings rendered correctly. A local link opened the expected room in a separate tab; every anchor had the intended target/rel, code had zero links, and hostile examples created no script, image or event-handler element. At 420×720 and 320×720 Companion stayed within the viewport while the table scrolled internally; ArrowRight moved its horizontal scroll by 40 px. Both message and home composers had no inner outline and retained the outer green glow. The sidebar icon, plus icon and title shared the same vertical center (25.5 px in Companion). “Stop after” and “Never” rendered correctly; the no-limit tooltip was clarified to avoid implying an AI cannot voluntarily return the stick.
+
+The scratch server and browser tabs were closed, and the viewport override reset. Claude’s first three tweaks pass Astra’s review. Outfit and Claude’s final Markdown/design review remain before the proposed 0.8.0 release; nothing from this pass is deployed yet.
