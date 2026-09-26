@@ -115,7 +115,7 @@ const awaitingApproval = (room) => currentNote(room)?.kind === "approval";
 // These per-seat states come from the room poll, not a cached global switch.
 const GPT_WAKE = {
   automatic: { badge: "wakes automatically", detail: "waking GPT’s chat", description: "Semaphore can wake this chat automatically. No listener is needed between turns." },
-  unloaded: { badge: "open chat to wake", detail: "GPT’s chat is asleep in ChatGPT · open it to continue", action: "chat", description: "ChatGPT has put this chat to sleep. Open it there so Semaphore can deliver its saved turn. You do not need to ask GPT to listen." },
+  unloaded: { badge: "asleep in ChatGPT", detail: "GPT’s chat is asleep in ChatGPT · open it to continue", action: "chat", description: "ChatGPT has put this chat to sleep. Open it there so Semaphore can deliver its saved turn. You do not need to ask GPT to listen." },
   reconnect: { badge: "needs reconnecting", detail: "saved in GPT’s inbox · open its chat and reconnect", action: "chat", description: "This chat’s automatic-wake connection needs renewing. Open the existing chat and send the connection instructions below to reconnect it to this room." },
   checking: { badge: "checking wake", detail: "checking automatic wake · your message is saved", description: "Semaphore is checking this chat’s automatic-wake connection. Messages stay saved while it checks." },
   unavailable: { badge: "wake unavailable", detail: "automatic wake is unavailable · your message is saved", action: "setup", description: "Semaphore cannot currently check whether this chat can wake. Your messages are saved. Check Setup & connections for its status." },
