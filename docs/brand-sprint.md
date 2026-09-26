@@ -136,3 +136,17 @@ Before handoff, revision 73 recorded Illiana’s “yes!” to Claude’s Outfit
   - **Links.** Five links rendered, all http(s) with `target=_blank rel="noopener noreferrer"`. No script, img or iframe elements and no `on*` attributes. `javascript:` and raw `<img>` stay text, and code spans and blocks stay literal.
   - **Blocks.** Headings, strikethrough, snake_case, one nested list level and an ordered list starting at 3 all render. The aligned table scrolls inside its own box in Companion at 420×720, with no page overflow.
 - **0.8.0.** The version is bumped for the release. 178 tests pass.
+
+## GPT naming, colours and connection alerts, 26 September
+
+Illiana requested GPT as Astra's display name, white for GPT, bright green for human rail marks, and accurate alerts with automatic wake.
+
+Claude implemented the display changes: web labels now say GPT; the seat ID, commands, transports and native envelopes still use Astra/`astra`. Both `@GPT` and `@Astra` select that seat. GPT's avatar, selected reply chip, working mark and status tint use black and white. Rail colors are human `#5fd38d`, GPT `#f2f2f2` and Claude `#e39a72`.
+
+A real missed handoff exposed why simply hiding the listener warning was insufficient. Claude observed a verified chat absent from the loaded list, although the old API called that state `reconnect`. Astra replaced that ambiguous classification with separate `automatic`, `unloaded`, `reconnect`, `off`, `checking`, `unavailable` and `listening` states. A complete, recent engine inspection is required before claiming automatic wake or diagnosing unloading/reconnection. The UI uses the ordinary room poll; no separate cached global switch decides its advice.
+
+The member badge, pending-turn banner and Manage members explanation agree. An unloaded chat offers Open chat. Stale verification explains reconnecting inside the existing chat. Disabled or unavailable wake offers Check setup. A received turn reads working in ChatGPT and suppresses listener/reconnect warnings; paused queues and uncertain sends retain their own recovery advice. Setup also acknowledges that a chat put to sleep by ChatGPT may need opening.
+
+Astra's review: 181 tests pass. In a disposable browser fixture at 1280×800, the requested colors and GPT labels rendered correctly, the misleading listener alert was absent, and polling changed unloaded to automatic without reloading. Open chat targeted the existing bound chat; Check setup opened the setup dialog. Manage members showed the correct automatic, unloaded, reconnect and working descriptions. At 420×720 Companion, the reconnect banner and actions fit without horizontal overflow. Native Send advice retained priority, then cleared on receipt. The Off state offered Check setup without a listener warning, and typing `@GPT` selected GPT while the human composer remained usable during its turn. No real delivery, native resume or engine changes were used for these UI tests.
+
+The wake-client allowlist and queue behavior are unchanged. Opening the existing native chat is still the supported recovery for an unloaded chat. See [instant wake](instant-wake.md#unloaded-chat-and-accurate-connection-states-26-september-2026) for evidence and limitations. Review is ready for Claude; 0.9 has not been released by Astra.

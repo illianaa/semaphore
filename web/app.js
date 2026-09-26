@@ -112,25 +112,54 @@ function currentNote(room) {
   return note;
 }
 const awaitingApproval = (room) => currentNote(room)?.kind === "approval";
+// These per-seat states come from the room poll, not a cached global switch.
+const GPT_WAKE = {
+  automatic: { badge: "wakes automatically", detail: "waking GPT’s chat", description: "Semaphore can wake this chat automatically. No listener is needed between turns." },
+  unloaded: { badge: "open chat to wake", detail: "GPT’s chat is asleep in ChatGPT · open it to continue", action: "chat", description: "ChatGPT has put this chat to sleep. Open it there so Semaphore can deliver its saved turn. You do not need to ask GPT to listen." },
+  reconnect: { badge: "needs reconnecting", detail: "saved in GPT’s inbox · open its chat and reconnect", action: "chat", description: "This chat’s automatic-wake connection needs renewing. Open the existing chat and send the connection instructions below to reconnect it to this room." },
+  checking: { badge: "checking wake", detail: "checking automatic wake · your message is saved", description: "Semaphore is checking this chat’s automatic-wake connection. Messages stay saved while it checks." },
+  unavailable: { badge: "wake unavailable", detail: "automatic wake is unavailable · your message is saved", action: "setup", description: "Semaphore cannot currently check whether this chat can wake. Your messages are saved. Check Setup & connections for its status." },
+  off: { badge: "automatic wake off", detail: "automatic wake is off · your message is saved", action: "setup", description: "Automatic wake is off. Turn it on in Setup & connections, or open GPT’s chat and ask it to listen to this room." },
+  listening: { badge: "listening", detail: "waiting for GPT’s chat to pick it up", description: "GPT is listening inside its native chat. Keep that chat active to receive room turns." },
+};
+const receivedBy = (room, speaker) => room.pending?.speaker === speaker && room.pending.progress === "received";
+function memberDetail(room, speaker) {
+  const seat = room.connections[speaker];
+  if (!seat?.connected) return speaker === "human" ? "" : "not connected";
+  if (receivedBy(room, speaker)) return "";
+  return speaker === "astra" ? GPT_WAKE[seat.wake]?.badge ?? "" : "";
+}
+function connectionDescription(room, speaker) {
+  const seat = room.connections[speaker];
+  if (receivedBy(room, speaker)) return `${labels[speaker]} has received this turn and is working in ${hostApp(speaker)}.`;
+  if (speaker === "claude") return "Keep this chat open and listening. You can continue speaking to Claude in its app.";
+  if (seat.manual) return "Manual delivery: messages wait in GPT’s Codex chat until you press Send there.";
+  return GPT_WAKE[seat.wake]?.description ?? "Open GPT’s chat and ask it to listen to this room. Messages wait in its inbox until then.";
+}
 // Queue acceptance is distinct from acknowledgment by the bound native chat.
 function pendingDetail(pending, room) {
   const who = labels[pending.speaker];
   if (pending.state === "delivering") return "sending";
   if (pending.progress === "received") return `working in ${hostApp(pending.speaker)}`;
-  if (pending.wake?.status === "uncertain") return "wake status uncertain · check Astra’s chat";
-  if (pending.wake?.status === "needs-send") return "wake queued in Astra’s chat · press Send there";
+  if (pending.wake?.status === "uncertain") return "wake status uncertain · check GPT’s chat";
+  if (pending.wake?.status === "needs-send") return "wake queued in GPT’s chat · press Send there";
   const seat = room.connections[pending.speaker];
-  if (pending.progress === "queued")
-    return seat?.manual
-      ? `queued in ${who}’s Codex chat · press Send there`
-      : seat?.wake === "automatic"
-        ? `waking ${who}’s chat`
-        : seat?.wake === "reconnect"
-          ? `saved in ${who}’s inbox · its chat needs reconnecting`
-          : seat?.listening === false
-            ? `waiting in ${who}’s inbox until its chat listens again`
-            : `waiting for ${who}’s chat to pick it up`;
+  if (pending.progress === "queued") {
+    if (seat?.manual) return `queued in ${who}’s Codex chat · press Send there`;
+    if (pending.speaker === "astra" && GPT_WAKE[seat?.wake]) return GPT_WAKE[seat.wake].detail;
+    if (pending.wake?.status === "blocked") return "saved in GPT’s inbox · open its chat and reconnect";
+    return seat?.listening === false
+      ? `waiting in ${who}’s inbox until its chat listens again`
+      : `waiting for ${who}’s chat to pick it up`;
+  }
   return "waiting for a reply";
+}
+function pendingAction(pending, room) {
+  if (!pending || pending.state === "delivering" || pending.progress === "received") return null;
+  if (["uncertain", "needs-send"].includes(pending.wake?.status)) return "chat";
+  const seat = room.connections[pending.speaker];
+  if (seat?.manual) return "chat";
+  return pending.speaker === "astra" ? GPT_WAKE[seat?.wake]?.action ?? (pending.wake?.status === "blocked" ? "chat" : null) : null;
 }
 function waitingOn(room) {
   return (room.members ?? SEATS).filter(
@@ -415,7 +444,8 @@ function renderStatus(room, setup) {
   banner.dataset.room = room.name;
   const note = paused ? null : currentNote(room);
   const approval = note?.kind === "approval";
-  const chatURL = approval ? room.connections[pending.speaker]?.url : null;
+  const recoveryAction = paused ? null : pendingAction(pending, room);
+  const chatURL = approval || recoveryAction === "chat" ? room.connections[pending.speaker]?.url : null;
   const holder = paused ? "paused" : (pending?.speaker ?? "human");
   // The stick coming back from an AI plays the arrival once; later redraws stay calm.
   const arrived = holder === "human" && ["astra", "claude"].includes(state.holders[room.name]);
@@ -434,7 +464,7 @@ function renderStatus(room, setup) {
   // During the guided start, the start card is the only call to action.
   const markup = setup
     ? ""
-    : `<span class="state-who">${who}</span><div class="state-actions">${deliverablesPill(room)}${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${chatURL ? `<a class="state-link" href="${escape(chatURL)}">Open chat ↗</a>` : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
+    : `<span class="state-who">${who}</span><div class="state-actions">${deliverablesPill(room)}${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${chatURL ? `<a class="state-link" href="${escape(chatURL)}">Open chat ↗</a>` : recoveryAction === "setup" ? '<button data-action="setup">Check setup</button>' : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
   if (changedRoom || banner.renderedMarkup !== markup) {
     const signal = changedRoom ? null : banner.querySelector(".signal");
     const focused = !changedRoom && banner.contains(document.activeElement) ? document.activeElement : null;
@@ -504,7 +534,7 @@ function renderRoom(room, force = false) {
   $("#members").innerHTML = ["human", ...(room.members ?? SEATS)]
     .map(
       (speaker) =>
-        `<span class="member ${room.owner === speaker ? "holder" : ""}">${avatar(speaker)}${labels[speaker]}${speaker !== "human" && !room.connections[speaker].connected ? "<small>not connected</small>" : room.connections[speaker]?.wake === "automatic" ? "<small>wakes automatically</small>" : room.connections[speaker]?.wake === "reconnect" ? "<small>needs reconnecting</small>" : ""}${room.owner === speaker ? '<span class="member-dot" aria-label="Holds the stick"></span>' : ""}</span>`,
+        `<span class="member ${room.owner === speaker ? "holder" : ""}">${avatar(speaker)}${labels[speaker]}${memberDetail(room, speaker) ? `<small>${escape(memberDetail(room, speaker))}</small>` : ""}${room.owner === speaker ? '<span class="member-dot" aria-label="Holds the stick"></span>' : ""}</span>`,
     )
     .join("");
   const opening = room.opening;
@@ -524,8 +554,9 @@ function renderRoom(room, force = false) {
     (speaker) =>
       room.connections[speaker].connected &&
       room.connections[speaker].listening === false &&
-      room.connections[speaker].wake !== "automatic" &&
-      !(room.pending?.speaker === speaker && room.pending.progress === "received"),
+      // Known GPT wake states have their own truthful guidance, including Off.
+      !(speaker === "astra" && GPT_WAKE[room.connections[speaker].wake]) &&
+      !receivedBy(room, speaker),
   );
   const needsListener = resting.length > 0;
   const guide = $("#connection-guide");
@@ -1123,7 +1154,7 @@ async function connections() {
         const safeURL = /^(codex|claude):\/\//.test(invite.url)
           ? invite.url
           : "#";
-        return `<section class="connect-card"><div class="connect-person">${avatar(speaker)}<div><strong>${labels[speaker]}</strong><small>${speaker === "astra" ? "Codex chat in ChatGPT" : "Code chat in Claude"}</small></div>${connected ? '<span class="connected-badge">Connected</span>' : ""}</div><p>${connected ? (speaker === "claude" ? "Keep this chat open and listening. You can continue speaking to Claude in its app." : state.room.connections.astra.manual ? "Manual delivery: messages wait in Astra’s Codex chat until you press Send there." : state.room.connections.astra.wake === "automatic" ? "Semaphore wakes this chat automatically when it is Astra’s turn. No listener is needed between turns." : "Astra waits quietly inside its active Codex chat. There is no five-minute restart. If it stops listening, ask it there to listen to this room again.") : speaker === "claude" ? "Open Claude, confirm the project folder, then send the invitation. Or copy it into a Code chat you already have." : "Open a new chat with the invitation filled in, then send it. Or copy the invitation into a chat you already have."}</p><div class="connect-actions">${!connected ? `<a href="${escape(safeURL)}">${escape(invite.label || "Open app")} ↗</a>` : state.room.connections[speaker].url ? `<a href="${escape(state.room.connections[speaker].url)}">Open chat ↗</a>` : ""}<button data-copy-invite="${speaker}">${connected ? "Copy connection instructions" : "Copy invitation"}</button></div><details class="invite-details"><summary>View invitation</summary><pre class="invite-prompt">${escape(invite.prompt)}</pre></details></section>`;
+        return `<section class="connect-card"><div class="connect-person">${avatar(speaker)}<div><strong>${labels[speaker]}</strong><small>${speaker === "astra" ? "Codex chat in ChatGPT" : "Code chat in Claude"}</small></div>${connected ? '<span class="connected-badge">Connected</span>' : ""}</div><p>${connected ? escape(connectionDescription(state.room, speaker)) : speaker === "claude" ? "Open Claude, confirm the project folder, then send the invitation. Or copy it into a Code chat you already have." : "Open a new chat with the invitation filled in, then send it. Or copy the invitation into a chat you already have."}</p><div class="connect-actions">${!connected ? `<a href="${escape(safeURL)}">${escape(invite.label || "Open app")} ↗</a>` : state.room.connections[speaker].url ? `<a href="${escape(state.room.connections[speaker].url)}">Open chat ↗</a>` : ""}<button data-copy-invite="${speaker}">${connected ? "Copy connection instructions" : "Copy invitation"}</button></div><details class="invite-details"><summary>View invitation</summary><pre class="invite-prompt">${escape(invite.prompt)}</pre></details></section>`;
       })
       .join("");
   } catch (err) {
@@ -1132,6 +1163,7 @@ async function connections() {
 }
 
 async function action(kind) {
+  if (kind === "setup") return openSettings();
   if (!state.room) return;
   const name = state.room.name;
   if (kind === "connect") return connections();
@@ -1354,9 +1386,11 @@ $("#message").addEventListener("input", () => {
   if (state.selected) storageSet(`semaphore:restored:${state.selected}`, "null");
   if (state.selected)
     storageSet(`semaphore:draft:${state.selected}`, $("#message").value);
-  const mention = [
-    ...$("#message").value.matchAll(/(?:^|\s)@(claude|astra)\b/gi),
+  // @GPT and @Astra both pick the ChatGPT seat.
+  const mentioned = [
+    ...$("#message").value.matchAll(/(?:^|\s)@(claude|astra|gpt)\b/gi),
   ].at(-1)?.[1].toLowerCase();
+  const mention = mentioned === "gpt" ? "astra" : mentioned;
   if (
     mention &&
     mention !== state.recipient &&
@@ -1623,7 +1657,7 @@ $("#wake-actions").addEventListener("click", async (event) => {
     await loadWake();
   }
 });
-$("#settings").addEventListener("click", async () => {
+async function openSettings() {
   showDialog("#settings-dialog");
   loadWake();
   $("#diagnostics").textContent = "Checking your setup…";
@@ -1638,7 +1672,8 @@ $("#settings").addEventListener("click", async () => {
   } catch (err) {
     $("#diagnostics").textContent = err.message;
   }
-});
+}
+$("#settings").addEventListener("click", openSettings);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !$("dialog[open]") && sidebarIsDrawer() && $("#sidebar").classList.contains("open"))
     closeSidebarDrawer();

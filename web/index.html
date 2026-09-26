@@ -8,7 +8,7 @@
     <meta name="semaphore-token" content="__SEMAPHORE_TOKEN__" />
     <meta
       name="description"
-      content="One conversation with you, Astra, and Claude. Each in your own app."
+      content="One conversation with you, GPT, and Claude. Each in your own app."
     />
     <title>Semaphore</title>
     <link rel="icon" href="/icon.svg" />
@@ -101,7 +101,7 @@
             <div class="eyebrow">ONE MESSAGE TO START</div>
             <h1>What should we work on?</h1>
             <p>
-              Tell Claude and Astra what you need. Semaphore saves it, helps you
+              Tell Claude and GPT what you need. Semaphore saves it, helps you
               connect both apps, and sends it once they’ve joined.
             </p>
             <form id="start-form" class="composer start-composer">
@@ -134,7 +134,7 @@
                       data-member="astra"
                       aria-pressed="true"
                     >
-                      <span class="mini-astra">✳</span> Astra
+                      <span class="mini-astra">✳</span> GPT
                     </button>
                   </div>
                   <div
@@ -156,7 +156,7 @@
                       data-start-recipient="astra"
                       aria-pressed="false"
                     >
-                      <span class="mini-astra">✳</span> Astra
+                      <span class="mini-astra">✳</span> GPT
                     </button>
                   </div>
                 </div>
@@ -251,7 +251,7 @@
                     class="recipient selected"
                     aria-pressed="true"
                   >
-                    <span class="mini-astra">✳</span> Astra</button
+                    <span class="mini-astra">✳</span> GPT</button
                   ><button
                     type="button"
                     data-recipient="claude"
@@ -311,10 +311,10 @@
       <section class="wake-card" id="wake-card" hidden>
         <div class="wake-head">
           <div>
-            <strong>Instant wake for Astra</strong>
+            <strong>Instant wake for GPT</strong>
             <p>
-              Astra’s ChatGPT chat rests between turns, like Claude’s.
-              Semaphore wakes it when it’s Astra’s turn.
+              GPT’s ChatGPT chat can rest between turns.
+              If ChatGPT puts it to sleep, open that chat to continue.
             </p>
           </div>
           <button
@@ -323,7 +323,7 @@
             id="wake-toggle"
             role="switch"
             aria-checked="false"
-            aria-label="Instant wake for Astra"
+            aria-label="Instant wake for GPT"
           >
             <span></span>
           </button>

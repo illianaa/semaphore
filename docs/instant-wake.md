@@ -22,7 +22,7 @@ The switch refuses to overwrite foreign connection settings or login items. Fail
 
 `lib/codex-runtime.mjs` is an unsubscribed WebSocket client with a small method allowlist. It cannot resume/create a thread, change model or permission settings, start/steer a turn, or answer approval requests.
 
-An Astra command inside the native chat verifies that `server/diagnostics.process.id` is in its own process ancestry and that its thread is loaded. The binding records the socket, PID and process start time. `join`, `receive`, `reply` and a newly started listener refresh this verification. It expires if the engine is replaced. `connections.astra.wake` reports `automatic`, `listening` or `reconnect`; an active unverified Astra turn is not mislabeled as disconnected.
+An Astra command inside the native chat verifies that `server/diagnostics.process.id` is in its own process ancestry and that its thread is loaded. The binding records the socket, PID and process start time. `join`, `receive`, `reply` and a newly started listener refresh this verification. It expires if the engine is replaced. `connections.astra.wake` reports the current per-seat state described below. The UI prioritizes an acknowledged turn as working instead of displaying reconnect or listening warnings.
 
 `lib/wake-delivery.mjs` runs a local service loop, with no model calls for checking. It reads durable room inbox entries and wakes only a verified, loaded, idle native chat. It appends a short receive notice through **`thread/queue/add`**, which the tested engine consumes automatically. If a native turn starts in the meantime, the message waits until that turn ends. It does not use `turn/start`, which can steer, or `thread/queue/start`, which could jump past a person's earlier queued message.
 
@@ -32,7 +32,7 @@ A restart that interrupts an active native turn can pause the native queue. If a
 
 The `ws` dependency loads only when a wake connection is needed; the default CLI and app can start in a fresh checkout without it. Setup instructions include `npm ci --omit=dev`. Activation checks the dependency before changing host settings and explains the fix if it is missing.
 
-When automatic wake is confirmed, Astra ends its native turn after passing the stick. The ordinary inbox listener remains available when automatic wake is off or unverified. If an idle chat loses its runtime, a listener cannot start itself: the UI reports reconnecting, and the inbox stays saved.
+When automatic wake is confirmed, Astra ends its native turn after passing the stick. The ordinary inbox listener remains available when automatic wake is off or unverified. A verified chat that is no longer loaded needs opening in ChatGPT; an engine replacement needs a native rejoin. The inbox stays saved in both cases.
 
 ## Evidence and tests
 
@@ -71,3 +71,28 @@ Room `room-a6ee5d38-1d6`, turn `965dde0d-2b55-461a-993a-c4adec01ee9a`, receive r
 | Explicit receive acknowledgment | 2026-09-25T18:39:39.327Z |
 
 Queue to acknowledgment was 7.242 seconds. Listener observation is absent because none was running; exact host delivery remains unknown. These are observed stages for one successful wake, not a latency guarantee. The native task used its normal shell and browser tools afterward. This closes the long-idle acceptance check. Real desktop approval and interrupted-queue acceptance remain untested; neither is inferred from this result.
+
+
+## Unloaded chat and accurate connection states, 26 September 2026
+
+Claude reported that the 18:55Z handoff `2e399330…` to task `01a0cffb-3b55-7013-9ab8-a3e8890f4d36` was never woken: its recorded socket, engine PID 99808 and start time still matched, but the task was absent from the loaded list. The human recovered the stick about 31 minutes later. The pump's loaded-thread guard explains why no notice was queued. The recovered inbox entry is retained, not replayed or removed by this review.
+
+This does **not** prove a particular desktop timeout. The [official app-server API overview](https://developers.openai.com/codex/app-server#api-overview) documents in-memory loaded threads and unloading after the last subscriber leaves and an inactivity grace period expires. That lifecycle is consistent with the observation; we did not observe the desktop's subscription change. The previous 21-hour wake demonstrates successful idle delivery while the chat was loaded at handoff; it does not establish recovery after unloading.
+
+The proposed 0.9 UI reads these states from each ordinary room poll, without caching the global wake switch:
+
+| State | Evidence | Guidance |
+| --- | --- | --- |
+| `automatic` | Recent engine inspection, matching verification, thread loaded | Can wake automatically; no listener alert |
+| `unloaded` | Recent inspection and matching verification, thread absent | Open the existing chat in ChatGPT |
+| `reconnect` | Recent inspection, absent or mismatched verification | Open the existing chat and send its connection instructions |
+| `off` | Wake disabled, no active foreground listener | Check setup; enable wake or use a listener |
+| `checking` | Wake enabled, no completed engine inspection yet | Checking; message remains saved |
+| `unavailable` | Inspection failed or the snapshot is older than 10 seconds (or four configured tick intervals, whichever is longer) | Check setup; message remains saved |
+| `listening` | A foreground listener is active | Wait for that native chat to pick up the turn |
+
+Snapshots publish only after both process and loaded-thread inspection succeed. A failed probe clears the snapshot; a successful probe clears its previous error. Manual delivery remains outside this classification. An acknowledged turn and native approval note take priority in the UI. Paused native queues and uncertain sends retain their specific advice and gain an Open chat action.
+
+The wake client still cannot call `thread/resume`, `turn/start` or `thread/queue/start`. Opening the native chat remains the recovery path for an unloaded thread. The documented ability to resume a thread does not establish that an external resume preserves the desktop's viewer and approval ownership. No new loading behavior, engine restart, queue retry policy or runtime was introduced.
+
+Validation: 181 tests pass, including new fake-engine regressions for unloading then loading (one delivery), stale verification, disabled wake, startup checking, failed/expired inspections, recovery and active listeners. Browser checks used disposable rooms only. Automatic, unloaded, reconnect, unavailable, native Send and received-turn guidance were inspected; Check setup opened the setup dialog. GPT/human/Claude rail colors were white/green/orange. The reconnect banner and actions fit a 420×720 Companion viewport without horizontal overflow.

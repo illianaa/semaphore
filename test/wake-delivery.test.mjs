@@ -20,10 +20,11 @@ function fixture(t) {
   fs.writeFileSync(path.join(store.dir,'inbox','astra','room-turn.json'),'{}');
   const run=(_cmd,args)=>({status:0,stdout:`${args[1]==='42'?1:42} Thu Sep 24 09:00:00 2026`});
   const native={queue:[],state:'idle',calls:[],addMode:null,autoConsume:true,history:[],started:0,
+    loaded:['native-thread'],initialize:async()=>{},close:()=>{},
     async request(method,params){
       this.calls.push({method,params});
       if(method==='server/diagnostics')return{process:{id:42}};
-      if(method==='thread/loaded/list')return{data:['native-thread']};
+      if(method==='thread/loaded/list')return{data:this.loaded};
       if(method==='thread/read')return{thread:{status:{type:this.state},turns:[]}};
       if(method==='thread/turns/list')return{data:this.history,nextCursor:null};
       if(method==='thread/queue/list')return{data:this.queue,nextCursor:null};
@@ -143,5 +144,58 @@ test('service cleanup cancels a paused room notice and preserves the human queue
   assert.equal(f.store.read().owner,'human');
   assert.equal(pump.mode(f.store.read().participants.astra,f.store.dir),'automatic');
   pump.settings=()=>({enabled:false});await pump.tick();
-  assert.equal(pump.mode(f.store.read().participants.astra,f.store.dir),'reconnect');
+  assert.equal(pump.mode(f.store.read().participants.astra,f.store.dir),'off');
+});
+
+test('an unloaded verified chat needs opening, then a later loaded tick delivers the saved turn once',async t=>{
+  const f=fixture(t);f.store.release();f.native.loaded=[];
+  const pump=new WakePump({root:path.dirname(f.store.dir),paths:{socket:'/tmp/test.sock'},settings:()=>({enabled:true}),clientFactory:()=>f.native,run:f.run});
+  const mode=()=>pump.mode(f.store.read().participants.astra,f.store.dir);
+  assert.equal(mode(),'checking');
+  await pump.tick();
+  assert.equal(mode(),'unloaded');
+  assert.equal(f.store.read().pending.id,'room-turn');
+  assert.equal(f.store.read().pending.receivedAt,null);
+  assert.equal(f.native.calls.some(call=>call.method==='thread/queue/add'),false);
+  f.native.loaded=['native-thread'];
+  await pump.tick();await pump.tick();
+  assert.equal(mode(),'automatic');
+  assert.equal(f.native.started,1);
+  assert.equal(f.native.calls.filter(call=>call.method==='thread/queue/add').length,1);
+  assert.ok(f.native.calls.every(call=>!['thread/resume','turn/start','thread/queue/start'].includes(call.method)));
+});
+
+test('engine inspection failure and stale snapshots never claim automatic wake, unloading or a bad binding',async t=>{
+  const f=fixture(t);f.store.release();let now=1000;
+  const pump=new WakePump({root:path.dirname(f.store.dir),paths:{socket:'/tmp/test.sock'},settings:()=>({enabled:true}),clientFactory:()=>f.native,run:f.run,now:()=>now});
+  const mode=()=>pump.mode(f.store.read().participants.astra,f.store.dir);
+  await pump.tick();assert.equal(mode(),'automatic');
+  now+=11000;assert.equal(mode(),'unavailable');
+  await pump.tick();assert.equal(mode(),'automatic');
+  f.native.initialize=async()=>{throw new Error('socket unavailable');};
+  await pump.tick();assert.equal(mode(),'unavailable');
+  assert.equal(pump.runtime,null);
+  f.native.initialize=async()=>{};
+  await pump.tick();assert.equal(mode(),'automatic');assert.equal(pump.lastError,null);
+  pump.run=()=>({status:1,stdout:''});
+  await pump.tick();assert.equal(mode(),'unavailable');
+  pump.run=f.run;
+  await pump.tick();assert.equal(mode(),'automatic');
+});
+
+test('renewing a binding is distinct from disabled wake, an unloaded chat and a live listener',async t=>{
+  const f=fixture(t);f.store.release();f.native.loaded=[];let enabled=true;
+  const pump=new WakePump({root:path.dirname(f.store.dir),paths:{socket:'/tmp/test.sock'},settings:()=>({enabled}),clientFactory:()=>f.native,run:f.run});
+  const seat=f.store.read().participants.astra;
+  await pump.tick();assert.equal(pump.mode(seat,f.store.dir),'unloaded');
+  for(const change of [{pid:99},{socket:'/tmp/other.sock'},{started:'replaced process'}]) {
+    assert.equal(pump.mode({...seat,wakeVerification:{...seat.wakeVerification,...change}},f.store.dir),'reconnect');
+  }
+  assert.equal(pump.mode({...seat,wakeVerification:undefined},f.store.dir),'reconnect');
+  enabled=false;assert.equal(pump.mode(seat,f.store.dir),'off');
+  await pump.tick();enabled=true;assert.equal(pump.mode(seat,f.store.dir),'checking');
+  assert.equal(pump.mode({...seat,transport:'codex-queue'},f.store.dir),undefined);
+  assert.equal(pump.mode({...seat,id:null},f.store.dir),undefined);
+  fs.writeFileSync(path.join(f.store.dir,'inbox','astra','listener.pid'),JSON.stringify({pid:process.pid}));
+  assert.equal(pump.mode(seat,f.store.dir),'listening');
 });

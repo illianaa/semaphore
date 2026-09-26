@@ -1,4 +1,5 @@
-export const labels = { human: "You", astra: "Astra", claude: "Claude" };
+// Display names. Astra's seat shows as GPT; the internal id stays "astra".
+export const labels = { human: "You", astra: "GPT", claude: "Claude" };
 const marks = { human: "Y", astra: "✳", claude: "✺" };
 export const escape = (value) =>
   String(value ?? "").replace(
@@ -168,7 +169,7 @@ function inline(value, { links = true, depth = 0, budget = { left: Math.max(1024
         i = end + delimiter.length; continue;
       }
     }
-    const mention = character === "@" && (i === 0 || /\s/.test(value[i - 1])) && /^@(Claude|Astra)\b/.exec(value.slice(i));
+    const mention = character === "@" && (i === 0 || /\s/.test(value[i - 1])) && /^@(Claude|Astra|GPT)\b/.exec(value.slice(i));
     if (mention) { html += `<span class="mention">${mention[0]}</span>`; i += mention[0].length; continue; }
     html += character === "\n" ? "<br>" : escape(character); i++;
   }
