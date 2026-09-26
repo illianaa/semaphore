@@ -79,7 +79,7 @@ Claude reported that the 18:55Z handoff `2e399330…` to task `01a0cffb-3b55-701
 
 This does **not** prove a particular desktop timeout. The [official app-server API overview](https://developers.openai.com/codex/app-server#api-overview) documents in-memory loaded threads and unloading after the last subscriber leaves and an inactivity grace period expires. That lifecycle is consistent with the observation; we did not observe the desktop's subscription change. The previous 21-hour wake demonstrates successful idle delivery while the chat was loaded at handoff; it does not establish recovery after unloading.
 
-The proposed 0.9 UI reads these states from each ordinary room poll, without caching the global wake switch:
+The 0.9 UI reads these states from each ordinary room poll, without caching the global wake switch:
 
 | State | Evidence | Guidance |
 | --- | --- | --- |
