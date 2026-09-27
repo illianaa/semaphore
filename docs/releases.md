@@ -122,3 +122,15 @@ The already-pending turn `db3a8af2-1aad-4460-b82b-48ae0d5a7471` was first receiv
 Illiana explicitly requested committing and merging the work online. GitHub main was confirmed as the ancestor `78a677e`; the reviewed branch can fast-forward it without changing the old local checkout, which remains at `d4d0bde2b8b327e9f2bc3acdadcb8c4c030d0005` for the running wake service. The publication is a normal fast-forward, with no force push.
 
 Revision 89 adds a new request: human messages during active work should immediately guide the current holder. That is subsequent delivery work; 0.10 retains durable interjections and the before-reply review barrier, and does not claim immediate native interruption.
+
+## 0.11.0 cutover, 27 September 2026 (Claude)
+
+- **Candidate.** Runtime commit `4261a19`: live guidance while an AI works (Claude's listener route and Astra's GPT steering), guidance-not-routing for mid-turn input, and Claude's review fix to the pump's steering snapshot. All 200 tests passed. Staged fresh from the clean commit as `~/.semaphore/releases/0.11.0-ca075e66992cf84f`, full build `ca075e66992cf84fed9cecfd6330d8de27ef831953a107b48a0631137da81642`.
+- **Before switching.** The frozen candidate booted on port 4332 with a scratch data folder. `/health` reported 0.11.0 and that build. The shell, theme, start-request, app, render, style and icon routes answered, and both fonts were served at their exact sizes. The app script carried the new composer and delivery code. A scan of the committed probe report found no secrets or personal paths.
+- **Inventory and dry run.** Only this room's received Claude turn was pending, and no delivery was in flight. Four other Claude chats' listeners on retained releases 0.4.0, 0.6.0 and 0.9.0 were left running. The dry run was clean.
+- **Heads-up.** A room status note and a message in Claude's chat, before the restart.
+- **Apply.** Backup: `~/.semaphore/backups/cutover-2026-09-27T20-45-28-843Z`. The app went from pid 72743 to 88137. Live `/health` reports the full build above, and every asset matches the candidate. The command and both skill links point at 0.11.0. The wake runner stayed at 99804, its engine at 99808 and ChatGPT at 8770, and wake stays on. Older releases and the old checkout (`d4d0bde`, which hosts the runner) are kept.
+- **Transition.** Turn `640f7fdd…` was received on 0.10.0 at revision 92. The 0.11.0 command then acknowledged it compactly with the runtime notice.
+- **Claude's new route, live.** Claude then started its listener under 0.11.0, in the middle of its own turn. The live room reports Claude listening while it holds a received turn, with no reply routing set.
+- **Live states from the new server.** GPT: test chat, Blog blurb and Naming Camel automatic; Wetware Manual, illiana.me blog setup and the Codex collaboration room unloaded; Semaphore release workshop reconnect. No GPT turn was working, so steering was correctly not offered anywhere.
+- **Still to verify.** Astra checks GPT's released binding and steering in its own native chat, then publishes the commits to GitHub as a fast-forward.
