@@ -1,10 +1,28 @@
 import { labels, avatar, escape, formatMessage } from "./render.mjs";
+import { prepareStartRequest } from "./start-request.mjs";
 
 const $ = (selector) => document.querySelector(selector);
 const token = $("meta[name=semaphore-token]").content;
 const SEATS = ["astra", "claude"];
 // How many model replies in a row run before the stick comes back to the person.
 const LIMITS = [4, 10, 20, null];
+function limitValue(limit) {
+  return String(limit ?? "none");
+}
+function limitFromValue(value) {
+  return value === "none" ? null : Number(value);
+}
+function limitOptions() {
+  return LIMITS.map((option) => `<option value="${limitValue(option)}">${option === null ? "Never" : `${option} replies`}</option>`).join("");
+}
+function limitHelp(limit) {
+  return limit === null ? "No automatic reply limit. An AI can still hand you the stick when it needs you. You can speak or take it anytime." : `They stop after ${limit} AI ${limit === 1 ? "reply" : "replies"} in a row and hand the stick back to you.`;
+}
+// A new conversation starts with 4 unless this draft picked another limit.
+function savedStartLimit() {
+  const saved = storageGet("semaphore:start-limit");
+  return saved && LIMITS.map(limitValue).includes(saved) ? limitFromValue(saved) : 4;
+}
 const companion = new URLSearchParams(location.search).get("view") === "companion";
 document.body.classList.toggle("companion", companion);
 const state = {
@@ -17,6 +35,7 @@ const state = {
   invites: {},
   startMembers: new Set(SEATS),
   startRecipient: rememberedRecipient(),
+  startLimit: savedStartLimit(),
   owners: {},
   approvals: {},
   readySeen: {},
@@ -123,6 +142,16 @@ const GPT_WAKE = {
   listening: { badge: "listening", detail: "waiting for GPT’s chat to pick it up", description: "GPT is listening inside its native chat. Keep that chat active to receive room turns." },
 };
 const receivedBy = (room, speaker) => room.pending?.speaker === speaker && room.pending.progress === "received";
+// A listener exits once it hands its chat a turn, and the chat acknowledges when it starts, which
+// can take a minute or more. In that gap the chat has the turn; it isn't "not listening".
+const handedToChat = (room, speaker) =>
+  room.pending?.speaker === speaker && room.pending.progress === "queued" && !!room.pending.timing?.listenerObservedAt;
+// After replying, a chat takes a few moments to start listening again.
+const LISTEN_AGAIN_MS = 90_000;
+function justReplied(room, speaker) {
+  const last = room.messages.findLast((message) => message.speaker === speaker);
+  return !!last && Date.now() - Date.parse(last.at) < LISTEN_AGAIN_MS;
+}
 function memberDetail(room, speaker) {
   const seat = room.connections[speaker];
   if (!seat?.connected) return speaker === "human" ? "" : "not connected";
@@ -148,6 +177,7 @@ function pendingDetail(pending, room) {
     if (seat?.manual) return `queued in ${who}’s Codex chat · press Send there`;
     if (pending.speaker === "astra" && GPT_WAKE[seat?.wake]) return GPT_WAKE[seat.wake].detail;
     if (pending.wake?.status === "blocked") return "saved in GPT’s inbox · open its chat and reconnect";
+    if (handedToChat(room, pending.speaker)) return `starting in ${hostApp(pending.speaker)}`;
     return seat?.listening === false
       ? `waiting in ${who}’s inbox until its chat listens again`
       : `waiting for ${who}’s chat to pick it up`;
@@ -516,7 +546,8 @@ function renderRoom(room, force = false) {
   if (room.name !== state.selected) return;
   state.room = room;
   settleCommitted(room);
-  const signature = JSON.stringify(room);
+  // The pause after a reply ends without any change to the room, so it is part of the signature.
+  const signature = JSON.stringify(room) + SEATS.map((speaker) => justReplied(room, speaker)).join();
   if (!force && signature === state.signatures[room.name]) {
     updateComposer();
     return;
@@ -556,7 +587,9 @@ function renderRoom(room, force = false) {
       room.connections[speaker].listening === false &&
       // Known GPT wake states have their own truthful guidance, including Off.
       !(speaker === "astra" && GPT_WAKE[room.connections[speaker].wake]) &&
-      !receivedBy(room, speaker),
+      !receivedBy(room, speaker) &&
+      !handedToChat(room, speaker) &&
+      !justReplied(room, speaker),
   );
   const needsListener = resting.length > 0;
   const guide = $("#connection-guide");
@@ -855,16 +888,27 @@ function renderLimit(room, setup) {
   const bar = $("#limit-switch");
   bar.hidden = !!room.legacy;
   const saving = pendingLimits.has(room.name);
-  const value = String((saving ? pendingLimits.get(room.name) : limit) ?? "none");
+  const value = limitValue(saving ? pendingLimits.get(room.name) : limit);
   bar.dataset.room = room.name;
   bar.setAttribute("aria-busy", String(saving));
-  const help = limit === null ? "No automatic reply limit. An AI can still hand you the stick when it needs you. You can speak or take it anytime." : `They stop after ${limit} AI ${limit === 1 ? "reply" : "replies"} in a row and hand the stick back to you.`;
+  const help = limitHelp(limit);
   bar.title = help;
-  if (!$("#limit-select")) bar.innerHTML = `<label for="limit-select">Stop after</label><select id="limit-select" aria-describedby="limit-help">${LIMITS.map((option) => `<option value="${option ?? "none"}">${option === null ? "Never" : `${option} replies`}</option>`).join("")}</select><span id="limit-help" class="sr-only"></span>`;
+  if (!$("#limit-select")) bar.innerHTML = `<label for="limit-select">Stop after</label><select id="limit-select" aria-describedby="limit-help">${limitOptions()}</select><span id="limit-help" class="sr-only"></span>`;
   const select = $("#limit-select");
   if (select.value !== value) select.value = value;
   select.disabled = saving;
   $("#limit-help").textContent = help;
+}
+// The new-conversation screen offers the same choice, and the conversation starts with it.
+function renderStartLimit() {
+  const bar = $("#start-limit");
+  if (!$("#start-limit-select")) bar.innerHTML = `<label for="start-limit-select">Stop after</label><select id="start-limit-select" aria-describedby="start-limit-help">${limitOptions()}</select><span id="start-limit-help" class="sr-only"></span>`;
+  const select = $("#start-limit-select");
+  const value = limitValue(state.startLimit);
+  if (select.value !== value) select.value = value;
+  select.disabled = startBusy;
+  bar.title = limitHelp(state.startLimit);
+  $("#start-limit-help").textContent = limitHelp(state.startLimit);
 }
 // What sending does right now: start the conversation, speak mid-turn, or send normally.
 function composerMode(room) {
@@ -937,6 +981,7 @@ function updateStart() {
     button.setAttribute("aria-pressed", String(selected));
   }
   $("#start-send").disabled = startBusy || !$("#start-message").value.trim();
+  renderStartLimit();
 }
 
 const canNotify = () =>
@@ -1123,6 +1168,7 @@ function showHome(prefill, { route = "push" } = {}) {
       if (saved.text === box.value.trim()) {
         state.startMembers = new Set(saved.members);
         state.startRecipient = saved.to;
+        state.startLimit = saved.maxTurns === undefined ? 4 : saved.maxTurns;
       }
     } catch {}
   }
@@ -1217,7 +1263,7 @@ $("#limit-switch").addEventListener("change", async (event) => {
   if (event.target.id !== "limit-select" || !state.room) return;
   const name = state.room.name;
   if (pendingLimits.has(name)) return;
-  const maxTurns = event.target.value === "none" ? null : Number(event.target.value);
+  const maxTurns = limitFromValue(event.target.value);
   const hadFocus = document.activeElement === event.target;
   pendingLimits.set(name, maxTurns);
   renderLimit(state.room);
@@ -1423,6 +1469,12 @@ for (const button of document.querySelectorAll("[data-start-recipient]"))
     updateStart();
     $("#start-message").focus();
   });
+$("#start-limit").addEventListener("change", (event) => {
+  if (event.target.id !== "start-limit-select") return;
+  state.startLimit = limitFromValue(event.target.value);
+  storageSet("semaphore:start-limit", event.target.value);
+  updateStart();
+});
 $("#start-message").addEventListener("input", () => {
   storageSet("semaphore:start-draft", $("#start-message").value);
   fitBox($("#start-message"));
@@ -1435,21 +1487,22 @@ $("#start-form").addEventListener("submit", async (event) => {
   if (!text || startBusy) return;
   const members = SEATS.filter((speaker) => state.startMembers.has(speaker));
   const to = state.startRecipient;
+  const maxTurns = state.startLimit;
   startBusy = true;
   updateStart();
-  const fingerprint = JSON.stringify({ text, to, members });
-  let request;
-  try { request = JSON.parse(storageGet("semaphore:start-request")); } catch {}
-  if (request?.fingerprint !== fingerprint)
-    request = { fingerprint, clientId: crypto.randomUUID() };
+  let previous;
+  try { previous = JSON.parse(storageGet("semaphore:start-request")); } catch {}
+  const { request, body } = prepareStartRequest({ text, to, members, maxTurns }, previous);
   storageSet("semaphore:start-request", JSON.stringify(request));
   try {
     const { room } = await api("/rooms/start", {
       method: "POST",
-      body: { text, to, members, clientId: request.clientId },
+      body,
     });
     storageSet(`semaphore:recipient:${room.name}`, to);
     storageSet("semaphore:start-request", "");
+    storageSet("semaphore:start-limit", "");
+    state.startLimit = 4;
     box.value = "";
     storageSet("semaphore:start-draft", "");
     await selectRoom(room.name);

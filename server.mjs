@@ -44,6 +44,8 @@ export function createAppServer({
   const token = randomBytes(32).toString("hex");
   const assets = new Map([
     ["/", ["index.html", "text/html; charset=utf-8"]],
+    ["/theme.js", ["theme.js", "text/javascript; charset=utf-8"]],
+    ["/start-request.mjs", ["start-request.mjs", "text/javascript; charset=utf-8"]],
     ["/app.js", ["app.js", "text/javascript; charset=utf-8"]],
     ["/render.mjs", ["render.mjs", "text/javascript; charset=utf-8"]],
     ["/styles.css", ["styles.css", "text/css; charset=utf-8"]],

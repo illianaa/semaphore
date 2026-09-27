@@ -97,6 +97,10 @@ test("web shell is available, uses restrictive headers, and never exposes raw ro
   );
   assert.equal(f.page.headers.get("cache-control"), "no-store");
   assert.equal((await fetch(f.url + "/app.js")).status, 200);
+  // The theme script runs before the page paints, so it must be a same-origin file.
+  assert.match(f.html, /<script src="\/theme\.js"><\/script>/);
+  assert.equal((await fetch(f.url + "/theme.js")).status, 200);
+  assert.equal((await fetch(f.url + "/start-request.mjs")).status, 200);
   assert.equal(
     (await fetch(f.url + "/.semaphore/rooms/hello/room.json")).status,
     401,
@@ -487,6 +491,34 @@ test("one start request atomically saves the opening and survives concurrent ret
   for (const bad of [{ ...input, clientId: "bad" }, { ...input, members: [] }, { ...input, text: " " }, { ...input, to: "human" }])
     assert.equal((await f.request("/api/rooms/start", { method: "POST", body: bad })).status, 409);
   assert.equal((await f.request("/api/rooms")).body.rooms.length, 1);
+});
+
+test("a conversation starts with the reply limit chosen on the start screen", async (t) => {
+  const f = await fixture(t);
+  const base = { text: "Keep going until the plan is done", to: "claude", members: ["claude"] };
+  const start = (clientId, extra = {}) => f.request("/api/rooms/start", { method: "POST", body: { ...base, clientId, ...extra } });
+  const never = await start("start-limit-never", { maxTurns: null });
+  assert.equal(never.status, 201);
+  assert.equal(never.body.room.turnLimit, null);
+  const ten = await start("start-limit-ten", { maxTurns: 10 });
+  assert.equal(ten.body.room.turnLimit, 10);
+  assert.equal((await start("start-limit-default")).body.room.turnLimit, 4);
+  // A retry must repeat the same choice; a different one is a different request.
+  assert.equal((await start("start-limit-ten", { maxTurns: 20 })).status, 409);
+  assert.equal((await start("start-limit-ten", { maxTurns: 10 })).status, 200);
+  for (const [i, maxTurns] of [0, 21, 2.5, "4"].entries())
+    assert.equal((await start(`start-limit-bad-${i}`, { maxTurns })).status, 409);
+  assert.equal((await f.request("/api/rooms")).body.rooms.length, 3);
+  // The first exchange runs with it once everyone has joined.
+  f.bind(ten.body.room.name);
+  const { Semaphore } = await import("../lib/core.mjs");
+  const store = new RoomStore(f.root, ten.body.room.name); store.acquire();
+  try {
+    const app = new Semaphore(store, { claude: { kind: "claude-inbox", async deliver({ turn }) { return { status: "queued", transport: "claude-inbox", turnId: turn.id }; } } });
+    await app.startOpening();
+    assert.equal(app.room.opening.state, "started");
+    assert.equal(app.room.maxTurns, 10);
+  } finally { store.release(); }
 });
 
 test("human context is saved during setup and travels in the first delivery", async (t) => {

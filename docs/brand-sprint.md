@@ -25,9 +25,9 @@ Illiana's brief: a more hacker vibe, probably dark mode, less border radius, kee
   - Headings are Inter 650 instead of the old serif.
   - Status notes and the composer caption stay in regular type for reading, and notes clamp to two lines with the full text in a tooltip.
 - **Mark.** The logo and inline signal are a dark square with a green outline and green bars; they take Claude's or Astra's colours while that AI works. The arrival sweep is a faint green glow.
-- **Page.** `color-scheme: dark` and `theme-color` are set so native controls and the browser frame match.
+- **Page.** `color-scheme` and `theme-color` follow the active palette so native controls and the browser frame match.
 
-The theme is one layer at the end of `web/styles.css`, overriding the light defaults.
+The theme is one layer at the end of `web/styles.css`, overriding the light defaults. Since 27 September these values are the dark palette; the light one is under [Light and dark](#light-and-dark-27-september).
 
 ## Jersey 10
 
@@ -155,3 +155,42 @@ The wake-client allowlist and queue behavior are unchanged. Opening the existing
 - **Approved.** The server-derived wake states are the right model. `off`, `checking` and `unavailable` never pose as `unloaded` or `reconnect`, `automatic` needs a fresh, complete inspection, and a received turn takes precedence.
 - **One copy change.** The idle `unloaded` member badge read "open chat to wake", a call to action with nothing waiting. It now reads "asleep in ChatGPT". The pending detail, "open it to continue", and the _Open chat_ action still appear when a GPT turn is actually waiting.
 - **0.9.0.** The version is bumped for the release.
+
+## Light and dark, 27 September
+
+Illiana asked for three changes: light and dark modes that follow the system by default, with a top-right toggle cycling System → Light → Dark; no "Workspace /" before the chat title, because a user wondered which workspace they were in; and _Stop after_ on the new-chat screen too.
+
+**Themes (Claude).**
+- **Palettes.** Every colour in the brand layer is now a token, with a dark and a light palette. The dark values are exactly the old ones: the refactor checked each replaced colour against its dark token, and rules that later rules had fully replaced were removed.
+- **Light palette.** The same brand on paper: `--paper` #fafbf9, `--surface` #ffffff, `--text` #0e1812. Buttons keep a bright green fill (#34c472) with dark ink. Green used for text, links, focus and your rail marks is deeper (`--green-text` #13773d, 5.4:1 on the page). Claude's text is #b0552c and amber #8a5a00, both at least 4.5:1. GPT turns black (#111) with white on its avatar. Toasts invert. The logo and working marks keep their dark tiles in both themes, like the app icon.
+- **Before the first paint.** `web/theme.js` is a small classic script in `<head>`, served same-origin like the other assets, so the strict CSP still allows no inline script. It resolves the saved choice (`semaphore:theme`: light or dark; none means System) against `prefers-color-scheme` and sets `data-theme` and `data-theme-preference` on `<html>`. It follows system changes while on System, and other Semaphore windows through the `storage` event. The button's icon comes from CSS, so the right one shows before the app script runs. During a switch, transitions are paused for two frames so the page changes all at once.
+- **Toggle.** The last item in the top bar, in Companion too: a monitor, sun or moon for the current choice, with a label such as "Theme: System (dark). Switch to Light".
+
+**Title.** The top bar shows only the conversation's name ("New conversation" on the start screen). Companion hides the large heading, so the top bar keeps the name there.
+
+**Start screen limit (Claude, including the small server part for Astra to review).**
+- The start box now has the conversation composer's caption: the Enter hint on the left and _Stop after_ on the right. Companion hides the hint but keeps the menu.
+- The choice travels in the start request as `maxTurns`: an integer from 1 to 20, `null` for Never, or omitted for the default of 4. It is part of the request identity, so a retry must repeat it, and the room's first exchange uses it. The menu resets to 4 after each start, and until then it is kept with the draft.
+
+**Fixed along the way.** A closed sidebar drawer (Companion and narrow windows) cast its shadow into the window's left edge. That shadow was invisible on the dark theme and grey on light. The drawer now casts it only while open.
+
+**Checks.** 182 tests pass, with a new server test for the start limit (Never, 10, default, retry conflict, invalid values, and the first exchange). In a disposable harness, a colour audit of every visible element on the home screen, all five fixture rooms and Setup found only the intended dark marks in light mode and only the intended bright fills in dark mode. The layouts were checked at 1280×820, in Companion at 420×720 and at phone width (375 px), with no horizontal overflow. The toggle cycled and was remembered, and a Companion window followed the main window. Starting a chat with _Never_ created it with no limit, and the start menu went back to 4.
+
+## False “Claude isn’t listening”, 27 September
+
+Illiana saw “Claude isn’t listening” while Claude was listening. It cleared by itself about 90 seconds later, when Claude acknowledged her message. The live room's timing confirmed the cause: her turn was queued at 19:41:34.096Z. Claude's listener handed it to the chat at 19:41:34.578Z and exited, as a listener does once it delivers. The chat acknowledged it at 19:43:06.466Z; it was compacting its context. The app read “no listener process” as “not listening” for the whole gap.
+
+- **The fix (web only).** A seat isn't flagged when its listener has already handed it the current turn (`pending.timing.listenerObservedAt`, recorded by the listener). The status then reads “starting in the Claude app” instead of “waiting in Claude's inbox until its chat listens again”. A seat also isn't flagged for 90 seconds after its own last reply, which is the time a chat takes to restart its listener. That pause is part of the render signature, so the alert returns on the next poll if no listener starts.
+- **Checks.** In the harness:
+  - A queued Claude turn with no listener and no handoff still shows the alert.
+  - With the handoff recorded, the alert goes away and the status reads “starting in the Claude app”.
+  - A reply 20 seconds old with no listener shows no alert; the same room after 90 seconds shows it again.
+- GPT's seats keep their own wake states.
+
+### Astra's 0.10 review, 27 September
+
+The title simplification, start-screen limit and theme implementation pass review. Server-side request identity preserves omitted limits for older clients. One upgrade edge case needed a fix in the browser: a persisted pre-0.10 start request would otherwise get a new ID when its fingerprint gained `maxTurns`, potentially creating a duplicate after a lost response. `web/start-request.mjs` now preserves the old ID and omitted field when retrying that unchanged default-limit draft; changing the selected limit creates a new request. Two regression tests cover legacy and current retries.
+
+All 184 tests pass. Disposable Chrome checks independently verified the light home screen, creating a chat with Never, theme synchronization across two windows, the System → Light → Dark cycle, and Companion at 375×720 without overflow. A queued Claude turn without a listener raised the expected warning; recording listener pickup cleared it and showed “starting in the Claude app” before receipt. Native approvals and delivery acknowledgment remain separate from this advisory observation.
+
+The requested release preserves the existing explicit Reply next semantics. Claude's proposed reinterpretation of selecting the current holder is a separate product decision, not part of the title/theme/limit/alert changes.

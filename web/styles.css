@@ -296,9 +296,6 @@ textarea {
   font-size: 14px;
   min-width: 0;
 }
-.breadcrumb > span {
-  color: #8a9284;
-}
 .breadcrumb strong {
   font-weight: 500;
   overflow: hidden;
@@ -1495,10 +1492,6 @@ textarea {
     flex: 1;
     gap: 10px;
   }
-  .breadcrumb > span:first-child,
-  .breadcrumb > span:nth-child(2) {
-    display: none;
-  }
   .local-pill {
     font-size: 12px;
   }
@@ -2458,25 +2451,6 @@ textarea {
    last layer in this file, so it overrides the light defaults above.
    ========================================================================== */
 :root {
-  color-scheme: dark;
-  --ink: #d8e4d9;
-  --muted: #8a9a8e;
-  --line: #1d2923;
-  --green: #5fd38d;
-  --paper: #0a0f0c;
-  --sidebar: #0d1310;
-  --accent: #14231a;
-  --claude: #e39a72;
-  --astra: #7fc49b;
-  --surface: #0f1612;
-  --surface-2: #141d18;
-  --surface-3: #1a261f;
-  --line-strong: #2a3b31;
-  --text: #d8e4d9;
-  --text-2: #a8b8ac;
-  --text-3: #75877a;
-  --accent-ink: #04100a;
-  --amber: #e2b35e;
   --radius: 4px;
   --radius-sm: 3px;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
@@ -2484,16 +2458,158 @@ textarea {
   background: var(--paper);
   color: var(--text);
 }
+/* Two palettes share everything else in the brand. web/theme.js sets data-theme before the
+   first paint: the system's choice by default, or the one picked with the top-bar button.
+   Dark is also the fallback if the script never runs. */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0a0f0c;
+  --sidebar: #0d1310;
+  --surface: #0f1612;
+  --surface-2: #141d18;
+  --surface-3: #1a261f;
+  --line: #1d2923;
+  --line-strong: #2a3b31;
+  --text: #d8e4d9;
+  --text-2: #a8b8ac;
+  --text-3: #75877a;
+  --ink: #d8e4d9;
+  --muted: #8a9a8e;
+  --accent: #14231a;
+  --green: #5fd38d;
+  --green-text: #5fd38d;
+  --accent-ink: #04100a;
+  --amber: #e2b35e;
+  --claude: #e39a72;
+  --astra: #f2f2f2;
+  --astra-ink: #0a0a0a;
+  --you-soft: #1d2620;
+  --claude-soft: #2a1a12;
+  --selection-bg: #2c5a3f;
+  --selection-ink: #effff5;
+  --banner-bg: #111a15e8;
+  --banner-claude-bg: #21150fe8;
+  --banner-claude-line: #3d2619;
+  --banner-astra-bg: #141414e8;
+  --banner-astra-line: #3a3a3a;
+  --guide-bg: #101913e8;
+  --paused-bg: #221b0fee;
+  --paused-line: #4a3a1a;
+  --paused-ink: #e2c48a;
+  --approval-bg: #2a200ff2;
+  --approval-line: #5a4418;
+  --approval-ink: #f0cf8a;
+  --approval-strong: #f5d89a;
+  --shimmer: #6ee7a02e;
+  --ok-bg: #123222;
+  --ok-ink: #7ee2a8;
+  --amber-bg: #2e2410;
+  --code-ink: #a6f0c4;
+  --pre-bg: #0c130f;
+  --jump-bg: #13241a;
+  --rail-idle: #25332b;
+  --focus-glow: #5fd38d1f;
+  --claude-chip-bg: #26170f;
+  --claude-chip-line: #5a3420;
+  --claude-chip-ink: #f0b08a;
+  --astra-chip-bg: #1b1b1b;
+  --astra-chip-line: #d9d9d9;
+  --astra-chip-ink: #f5f5f5;
+  --toast-bg: #16241c;
+  --toast-line: #2e5c43;
+  --toast-ink: #c9f5da;
+  --offline-bg: #2a2112;
+  --offline-ink: #e8c38a;
+  --switch-track: #2a3b31;
+  --switch-knob: #d8e4d9;
+  --backdrop: #000000a6;
+  --shadow-float: 0 10px 30px #00000070, 0 0 0 1px #00000040;
+  --shadow-pop: 0 18px 50px #00000080;
+  --shadow-menu: 0 8px 24px #00000080;
+  --shadow-dialog: 0 24px 80px #000000a0;
+  --shadow-drawer: 8px 0 40px #0008;
+}
+/* Light is the same brand on paper. Green used for text, links, focus and your rail marks is
+   deeper than the button green, and Claude's and amber text are darker, so all stay readable. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --paper: #fafbf9;
+  --sidebar: #f1f4f1;
+  --surface: #ffffff;
+  --surface-2: #eff3f0;
+  --surface-3: #e3eae5;
+  --line: #dfe6e1;
+  --line-strong: #c3cfc6;
+  --text: #0e1812;
+  --text-2: #3a4840;
+  --text-3: #5d6c62;
+  --ink: #0e1812;
+  --muted: #5d6c62;
+  --accent: #e2eee5;
+  --green: #34c472;
+  --green-text: #13773d;
+  --accent-ink: #04100a;
+  --amber: #8a5a00;
+  --claude: #b0552c;
+  --astra: #111111;
+  --astra-ink: #ffffff;
+  --you-soft: #e2e8e3;
+  --claude-soft: #f7e6dc;
+  --selection-bg: #bfe8cf;
+  --selection-ink: #04100a;
+  --banner-bg: #fffffff0;
+  --banner-claude-bg: #fdf6f2f0;
+  --banner-claude-line: #edd5c8;
+  --banner-astra-bg: #fafafaf0;
+  --banner-astra-line: #d4d4d4;
+  --guide-bg: #fffffff0;
+  --paused-bg: #fdf7e9f2;
+  --paused-line: #e9d7a6;
+  --paused-ink: #6b4a00;
+  --approval-bg: #fff4dcf5;
+  --approval-line: #e0c170;
+  --approval-ink: #6b4700;
+  --approval-strong: #553800;
+  --shimmer: #34c47233;
+  --ok-bg: #dcf3e4;
+  --ok-ink: #0f6634;
+  --amber-bg: #fbf0d4;
+  --code-ink: #0f6634;
+  --pre-bg: #f2f5f3;
+  --jump-bg: #e3f4e9;
+  --rail-idle: #cfd8d1;
+  --focus-glow: #13773d24;
+  --claude-chip-bg: #fbefe8;
+  --claude-chip-line: #dfae94;
+  --claude-chip-ink: #8f4220;
+  --astra-chip-bg: #f4f4f4;
+  --astra-chip-line: #1a1a1a;
+  --astra-chip-ink: #111111;
+  --toast-bg: #0e1812;
+  --toast-line: #0e1812;
+  --toast-ink: #e8f6ed;
+  --offline-bg: #fbf0d4;
+  --offline-ink: #6b4700;
+  --switch-track: #bccabf;
+  --switch-knob: #ffffff;
+  --backdrop: #0e18124d;
+  --shadow-float: 0 10px 30px #0e18121f, 0 0 0 1px #0e18120d;
+  --shadow-pop: 0 18px 50px #0e181229;
+  --shadow-menu: 0 8px 24px #0e181224;
+  --shadow-dialog: 0 24px 80px #0e181233;
+  --shadow-drawer: 8px 0 40px #0e181229;
+}
 body {
   background: var(--paper);
   color: var(--text);
 }
 * {
-  scrollbar-color: #2a3b31 transparent;
+  scrollbar-color: var(--line-strong) transparent;
 }
 ::selection {
-  background: #2c5a3f;
-  color: #effff5;
+  background: var(--selection-bg);
+  color: var(--selection-ink);
 }
 button:focus-visible,
 a:focus-visible,
@@ -2501,7 +2617,7 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
 summary:focus-visible {
-  outline: 2px solid var(--green);
+  outline: 2px solid var(--green-text);
   outline-offset: 2px;
 }
 input,
@@ -2523,7 +2639,7 @@ select {
   line-height: 1;
 }
 .brand-period {
-  color: var(--green);
+  color: var(--green-text);
 }
 .new-room {
   background: var(--green);
@@ -2563,7 +2679,7 @@ select {
 .room-item.selected {
   background: var(--surface-3);
   border-color: var(--line-strong);
-  box-shadow: inset 2px 0 0 var(--green);
+  box-shadow: inset 2px 0 0 var(--green-text);
 }
 .room-copy strong {
   color: var(--text);
@@ -2601,9 +2717,6 @@ select {
 .topbar {
   border-bottom-color: var(--line);
 }
-.breadcrumb > span {
-  color: var(--text-3);
-}
 .breadcrumb strong {
   color: var(--text);
 }
@@ -2619,7 +2732,7 @@ select {
   color: var(--text-2);
 }
 .eyebrow {
-  color: var(--green);
+  color: var(--green-text);
   font-family: var(--mono);
   font-weight: 500;
   letter-spacing: 1.5px;
@@ -2673,18 +2786,14 @@ select {
 .avatar {
   border-radius: var(--radius);
   background: var(--surface-3);
-  color: var(--green);
+  color: var(--green-text);
 }
 .avatar.you {
-  background: #1d2620;
+  background: var(--you-soft);
   color: var(--text-2);
 }
-.avatar.astra {
-  background: #13261c;
-  color: var(--astra);
-}
 .avatar.claude {
-  background: #2a1a12;
+  background: var(--claude-soft);
   color: var(--claude);
 }
 .hero-avatars .avatar {
@@ -2727,13 +2836,6 @@ select {
 .signal.claude .bar {
   fill: #f0a77e;
 }
-.signal.astra .signal-bg {
-  fill: #10251a;
-  stroke: #2e5c43;
-}
-.signal.astra .bar {
-  fill: #8fd6ab;
-}
 @keyframes signal-ping {
   from {
     box-shadow: 0 0 0 0 #5fd38d99;
@@ -2745,40 +2847,34 @@ select {
 /* Floating alerts */
 .state-banner,
 .room-alerts .state-banner {
-  background: #111a15e8;
+  background: var(--banner-bg);
   border-color: var(--line-strong);
   border-radius: var(--radius);
   color: var(--text-2);
 }
-.room-alerts .state-banner[data-holder="astra"] {
-  background: #0f1f17e8;
-  border-color: #1f3a2b;
-}
 .room-alerts .state-banner[data-holder="claude"] {
-  background: #21150fe8;
-  border-color: #3d2619;
+  background: var(--banner-claude-bg);
+  border-color: var(--banner-claude-line);
 }
 .room-alerts .state-banner.paused {
-  background: #221b0fee;
-  border-color: #4a3a1a;
-  color: #e2c48a;
+  background: var(--paused-bg);
+  border-color: var(--paused-line);
+  color: var(--paused-ink);
 }
 .room-alerts .state-banner.approval {
-  background: #2a200ff2;
-  border-color: #5a4418;
-  color: #f0cf8a;
+  background: var(--approval-bg);
+  border-color: var(--approval-line);
+  color: var(--approval-ink);
 }
 .room-alerts .state-banner,
 .room-alerts .connection-guide {
-  box-shadow:
-    0 10px 30px #00000070,
-    0 0 0 1px #00000040;
+  box-shadow: var(--shadow-float);
 }
 .state-who strong {
   color: var(--text);
 }
 .state-banner.approval .state-who strong {
-  color: #f5d89a;
+  color: var(--approval-strong);
 }
 .state-detail {
   color: var(--text-2);
@@ -2793,7 +2889,7 @@ select {
   background: var(--amber);
 }
 .state-banner.arrived::before {
-  background: linear-gradient(105deg, transparent 42%, #6ee7a02e 50%, transparent 58%) no-repeat;
+  background: linear-gradient(105deg, transparent 42%, var(--shimmer) 50%, transparent 58%) no-repeat;
   background-size: 260% 100%;
 }
 .state-actions button,
@@ -2806,7 +2902,7 @@ select {
 }
 .state-actions button:hover,
 .deliverables-pill:hover {
-  border-color: var(--green);
+  border-color: var(--green-text);
 }
 .state-actions button.primary {
   background: var(--green);
@@ -2819,7 +2915,7 @@ select {
 }
 .deliverables-pill[aria-expanded="true"] {
   background: var(--surface-3);
-  border-color: var(--green);
+  border-color: var(--green-text);
 }
 .deliverables-pill.attention span {
   color: var(--amber);
@@ -2830,7 +2926,7 @@ select {
 }
 .connection-guide,
 .room-alerts .connection-guide {
-  background: #101913e8;
+  background: var(--guide-bg);
   border-color: var(--line-strong);
   border-radius: var(--radius);
 }
@@ -2851,7 +2947,7 @@ select {
   background: var(--surface);
   border-color: var(--line-strong);
   border-radius: var(--radius);
-  box-shadow: 0 18px 50px #00000080;
+  box-shadow: var(--shadow-pop);
 }
 .deliverables-head {
   background: var(--surface);
@@ -2874,7 +2970,7 @@ select {
   color: var(--text-2);
 }
 .artifact:not([data-availability="current"]) {
-  border-color: #4a3a1a;
+  border-color: var(--paused-line);
 }
 .artifact-title {
   color: var(--text);
@@ -2896,21 +2992,21 @@ select {
   border-radius: var(--radius-sm);
 }
 .artifact-status.ready {
-  background: #123222;
-  color: #7ee2a8;
+  background: var(--ok-bg);
+  color: var(--ok-ink);
 }
 .artifact-status.draft {
   background: var(--surface-3);
   color: var(--text-2);
 }
 .artifact-status.attention {
-  background: #2e2410;
+  background: var(--amber-bg);
   color: var(--amber);
 }
 .artifact-line a,
 .artifact-actions .artifact-open,
 .text-link {
-  color: var(--green);
+  color: var(--green-text);
 }
 .artifact-warning {
   color: var(--amber);
@@ -2948,7 +3044,7 @@ select {
   font-size: 12px;
 }
 .message-note.read {
-  color: var(--green);
+  color: var(--green-text);
 }
 .message-text {
   color: var(--text-2);
@@ -2959,25 +3055,22 @@ select {
 }
 .message-text code {
   background: var(--surface-3);
-  color: #a6f0c4;
+  color: var(--code-ink);
   border-radius: var(--radius-sm);
 }
 .message-text pre {
-  background: #0c130f;
+  background: var(--pre-bg);
   border-color: var(--line);
   border-radius: var(--radius);
   color: var(--text-2);
 }
 .mention {
-  color: var(--green);
+  color: var(--green-text);
 }
 .message.jump-target {
-  background: #13241a;
+  background: var(--jump-bg);
 }
 /* The rail */
-.rail-dash {
-  --speaker-color: #cfe9d6;
-}
 .rail-dash.claude {
   --speaker-color: var(--claude);
 }
@@ -2985,14 +3078,14 @@ select {
   --speaker-color: var(--astra);
 }
 .rail-dash::before {
-  background: #25332b;
+  background: var(--rail-idle);
 }
 .rail-preview {
   background: var(--surface-2);
   border-color: var(--line-strong);
   border-radius: var(--radius);
   color: var(--text-2);
-  box-shadow: 0 8px 24px #00000080;
+  box-shadow: var(--shadow-menu);
 }
 .rail-preview strong {
   color: var(--text);
@@ -3006,8 +3099,8 @@ select {
   box-shadow: none;
 }
 .composer:focus-within {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px #5fd38d1f;
+  border-color: var(--green-text);
+  box-shadow: 0 0 0 3px var(--focus-glow);
 }
 .composer textarea {
   background: transparent;
@@ -3024,16 +3117,11 @@ select {
   border-radius: var(--radius-sm);
   color: var(--text-2);
 }
-.recipient.selected {
-  background: #13261c;
-  border-color: #2e5c43;
-  color: #9fe3bc;
-}
 .recipient.selected[data-recipient="claude"],
 .recipient.selected[data-start-recipient="claude"] {
-  background: #26170f;
-  border-color: #5a3420;
-  color: #f0b08a;
+  background: var(--claude-chip-bg);
+  border-color: var(--claude-chip-line);
+  color: var(--claude-chip-ink);
 }
 .send-button {
   background: var(--green);
@@ -3120,8 +3208,8 @@ select {
 }
 .joined-pill,
 .connected-badge {
-  background: #123222;
-  color: #7ee2a8;
+  background: var(--ok-bg);
+  color: var(--ok-ink);
   border-radius: var(--radius-sm);
 }
 /* Dialogs, notices and setup */
@@ -3130,10 +3218,10 @@ select {
   border-color: var(--line-strong);
   border-radius: var(--radius);
   color: var(--text);
-  box-shadow: 0 24px 80px #000000a0;
+  box-shadow: var(--shadow-dialog);
 }
 .dialog::backdrop {
-  background: #000000a6;
+  background: var(--backdrop);
 }
 .dialog p,
 .dialog label {
@@ -3147,7 +3235,7 @@ select {
 }
 .dialog-icon {
   background: var(--surface-3);
-  color: var(--green);
+  color: var(--green-text);
   border-radius: var(--radius);
 }
 .dialog-note {
@@ -3175,21 +3263,21 @@ select {
   color: var(--text);
 }
 .invite-prompt {
-  background: #0c130f;
+  background: var(--pre-bg);
   border-color: var(--line);
   border-radius: var(--radius);
   color: var(--text-2);
   font-family: var(--mono);
 }
 .toast {
-  background: #16241c;
-  border: 1px solid #2e5c43;
+  background: var(--toast-bg);
+  border: 1px solid var(--toast-line);
   border-radius: var(--radius);
-  color: #c9f5da;
+  color: var(--toast-ink);
 }
 .offline {
-  background: #2a2112;
-  color: #e8c38a;
+  background: var(--offline-bg);
+  color: var(--offline-ink);
 }
 .wake-card,
 .diagnostic {
@@ -3208,11 +3296,11 @@ select {
   color: var(--text-2);
 }
 .switch {
-  background: #2a3b31;
+  background: var(--switch-track);
   border-radius: var(--radius-sm);
 }
 .switch span {
-  background: #d8e4d9;
+  background: var(--switch-knob);
   border-radius: 2px;
 }
 .switch[aria-checked="true"] {
@@ -3225,16 +3313,16 @@ select {
   rx: 1px;
 }
 .message-scroll {
-  scrollbar-color: #2a3b31 transparent;
+  scrollbar-color: var(--line-strong) transparent;
 }
 .recipient.selected[data-member="claude"] {
-  background: #26170f;
-  border-color: #5a3420;
-  color: #f0b08a;
+  background: var(--claude-chip-bg);
+  border-color: var(--claude-chip-line);
+  color: var(--claude-chip-ink);
 }
 .starter-icon {
   background: var(--surface-3);
-  color: var(--green);
+  color: var(--green-text);
   border-radius: var(--radius-sm);
 }
 .welcome-note kbd,
@@ -3280,9 +3368,10 @@ select {
   z-index: 40;
   transform: translateX(-100%);
   transition: transform 150ms;
-  box-shadow: 8px 0 40px #0008;
+  box-shadow: none;
 }
-.sidebar-drawer .sidebar.open { transform: translateX(0); }
+/* The shadow only while open: a closed drawer's shadow would show at the window's left edge. */
+.sidebar-drawer .sidebar.open { transform: translateX(0); box-shadow: var(--shadow-drawer); }
 @media (prefers-reduced-motion: reduce) { .sidebar-drawer .sidebar { transition: none; } }
 @media (max-width: 760px) {
   .topbar { gap: 10px; }
@@ -3295,10 +3384,10 @@ select {
 .seat-row, .opening-preview { background: var(--surface-2); border-radius: var(--radius); color: var(--text); }
 .seat-actions button.quiet { color: var(--text-2); }
 .seat-actions a.primary { border-color: var(--green); }
-.recipient.selected[data-start-recipient="claude"] { background: #26170f; border-color: #5a3420; color: #f0b08a; }
+.recipient.selected[data-start-recipient="claude"] { background: var(--claude-chip-bg); border-color: var(--claude-chip-line); color: var(--claude-chip-ink); }
 .wake-status[data-state="attention"], .wake-status[data-state="needs-engine"] { color: var(--amber); }
 .settings-note { border-top-color: var(--line); }
-.diagnostic-icon { color: var(--green); }
+.diagnostic-icon { color: var(--green-text); }
 .diagnostic-icon.warn { color: var(--amber); }
 @media (max-width: 520px) {
   .composer-caption { flex-direction: column; align-items: flex-start; gap: 6px; }
@@ -3352,9 +3441,9 @@ select {
 }
 
 /* Message Markdown: reading contrast, visible links, and contained wide content. */
-.message-text a { color: var(--green); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.message-text a { color: var(--green-text); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
 .message-text a:hover { color: var(--text); }
-.message-text a:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; border-radius: 2px; }
+.message-text a:focus-visible { outline: 2px solid var(--green-text); outline-offset: 3px; border-radius: 2px; }
 .message-text h3, .message-text h4, .message-text h5 { color: var(--text); font-family: inherit; font-weight: 650; line-height: 1.35; margin: 22px 0 10px; }
 .message-text h3 { font-size: 21px; }
 .message-text h4 { font-size: 18px; }
@@ -3367,7 +3456,7 @@ select {
 .message-text li > ul, .message-text li > ol { margin: 6px 0; }
 .message-text del { color: var(--text-2); }
 .markdown-table { max-width: 100%; overflow-x: auto; margin: 16px 0; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); }
-.markdown-table:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+.markdown-table:focus-visible { outline: 2px solid var(--green-text); outline-offset: 3px; }
 .markdown-table table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.55; }
 .markdown-table th, .markdown-table td { min-width: 120px; padding: 9px 12px; vertical-align: top; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); }
 .markdown-table th { background: var(--surface-2); color: var(--text); font-weight: 650; white-space: nowrap; }
@@ -3401,16 +3490,14 @@ em,
   font-style: italic;
   font-synthesis: style;
 }
-/* GPT follows OpenAI's black-and-white brand. Your own messages take the bright green. */
-:root {
-  --astra: #f2f2f2;
-}
+/* GPT follows OpenAI's black-and-white brand: white in the dark theme, black in the light one.
+   Your own rail marks take the green. */
 .avatar.astra {
-  background: #f2f2f2;
-  color: #0a0a0a;
+  background: var(--astra);
+  color: var(--astra-ink);
 }
 .mini-astra {
-  color: #f2f2f2;
+  color: var(--astra);
 }
 .signal.astra .signal-bg {
   fill: #121212;
@@ -3420,20 +3507,70 @@ em,
   fill: #f5f5f5;
 }
 .room-alerts .state-banner[data-holder="astra"] {
-  background: #141414e8;
-  border-color: #3a3a3a;
+  background: var(--banner-astra-bg);
+  border-color: var(--banner-astra-line);
 }
 .recipient.selected,
 .recipient.selected[data-recipient="astra"],
 .recipient.selected[data-start-recipient="astra"],
 .recipient.selected[data-member="astra"] {
-  background: #1b1b1b;
-  border-color: #d9d9d9;
-  color: #f5f5f5;
+  background: var(--astra-chip-bg);
+  border-color: var(--astra-chip-line);
+  color: var(--astra-chip-ink);
 }
 .rail-dash {
-  --speaker-color: var(--green);
+  --speaker-color: var(--green-text);
 }
-.rail-dash.astra {
-  --speaker-color: #f2f2f2;
+
+/* Theme: one button in the top-right corner cycles System → Light → Dark. It shows the current
+   choice; web/theme.js sets data-theme-preference before the first paint. */
+.theme-toggle {
+  width: 30px;
+  height: 30px;
+  padding: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--radius);
+  color: var(--text-2);
+}
+.theme-toggle:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.theme-icon {
+  display: none;
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+[data-theme-switching] *,
+[data-theme-switching] *::before,
+[data-theme-switching] *::after {
+  transition: none !important;
+}
+:root:not([data-theme-preference]) .theme-system,
+[data-theme-preference="system"] .theme-system,
+[data-theme-preference="light"] .theme-light,
+[data-theme-preference="dark"] .theme-dark {
+  display: block;
+}
+/* The new-conversation screen: the keyboard hint and the reply limit sit under the box, as they
+   do under a conversation's composer. */
+.start-caption {
+  width: min(632px, calc(100% - 8px));
+  margin: 8px auto 0;
+  text-align: left;
+}
+.start-caption .welcome-note {
+  margin: 0;
+  font-size: inherit;
+}
+.start-caption .limit-switch {
+  margin-left: auto;
 }
