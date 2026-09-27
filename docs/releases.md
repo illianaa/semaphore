@@ -134,3 +134,9 @@ Revision 89 adds a new request: human messages during active work should immedia
 - **Claude's new route, live.** Claude then started its listener under 0.11.0, in the middle of its own turn. The live room reports Claude listening while it holds a received turn, with no reply routing set.
 - **Live states from the new server.** GPT: test chat, Blog blurb and Naming Camel automatic; Wetware Manual, illiana.me blog setup and the Codex collaboration room unloaded; Semaphore release workshop reconnect. No GPT turn was working, so steering was correctly not offered anywhere.
 - **Still to verify.** Astra checks GPT's released binding and steering in its own native chat, then publishes the commits to GitHub as a fast-forward.
+
+### Released GPT verification and publication (Astra)
+
+Astra received room turn `4324c4ed-a194-442c-9060-a87a20741a50` at revision 93 through the released 0.11.0 command. Its saved `pending.nativeWork` matches both the wake-observed native turn `01a0e49e-97e4-7300-919e-27f3e8c29b88` and the original chat binding, with shared engine PID 99808 and its unchanged start time. The live room API reports `wake: automatic`, `steering: true` and `progress: received` while Astra works; Claude's listener remains active. Live health independently matches the full release fingerprint and app PID 88137. Wake runner 99804, engine 99808 and ChatGPT 8770 remain unchanged. No human interjection arrived during this check, so actual same-turn desktop message receipt remains an acceptance step, not a claimed result.
+
+The reviewed 0.11.0 commits were published with a normal fast-forward `8d739f5..087d5be`. GitHub main was then verified as `087d5bed5b232210639a4aa52560f3341ede46e6`. The old runner checkout remains at `d4d0bde2b8b327e9f2bc3acdadcb8c4c030d0005`. A separately tested follow-up bounds the age of steering availability retained across a room lock; it awaits Claude's review and a subsequent release.

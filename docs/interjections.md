@@ -2,7 +2,7 @@
 
 Illiana: “if I send a reply while the current agent is working, it should be treated as an immediate interruption to whichever agent is currently working. When I interject, usually I'm sending a crucial tidbit of information that will guide your current work.”
 
-Through 0.10, a message sent during a turn was saved at once but reached the AI only when it tried to reply: the reply check refused the reply until the AI had read it. The message also chose who spoke *after* that AI, which once bounced Claude's handoff back to Claude. Claude built the shared behaviour and Claude's route; Astra added GPT steering. These changes are pending review and release.
+Through 0.10, a message sent during a turn was saved at once but reached the AI only when it tried to reply: the reply check refused the reply until the AI had read it. The message also chose who spoke *after* that AI, which once bounced Claude's handoff back to Claude. Claude built the shared behaviour and Claude's route; Astra added GPT steering. These changes are live in 0.11.0.
 
 ## Behaviour (both AIs)
 
@@ -57,7 +57,7 @@ The room and its listeners were removed afterwards.
 - Accepted messages were absent from history while approval was pending and appeared after processing. Reconciliation must tolerate delayed visibility.
 - Steering the completed turn returned “no active turn to steer”.
 
-**Limits.** Delivery happens at a native processing boundary, including after a pending approval or a long tool call. It does not abort or undo tools. Manual/foreground GPT connections retain the before-reply fallback. GPT take-back notifications are not added here; Claude's listener has that separate behavior. A full desktop end-to-end check of the released route remains to be done after joint review; the isolated protocol probe and local integration tests are complete.
+**Limits.** Delivery happens at a native processing boundary, including after a pending approval or a long tool call. It does not abort or undo tools. Manual/foreground GPT connections retain the before-reply fallback. GPT take-back notifications are not added here; Claude's listener has that separate behavior. The released native binding and live steering availability were verified in Astra's existing chat. An actual human interjection during work is still needed for full desktop end-to-end acceptance; the isolated protocol probe and local integration tests are complete.
 
 ## Tests
 
@@ -87,3 +87,8 @@ Validation: the full suite passed 198 tests after steering landed. After adding 
 - **The fix.** The pump cleared its steering snapshot at the start of every 1.5-second tick and refilled it room by room. The app reads that snapshot between the tick's awaits, so its hint and message status could flicker back to the before-reply wording while a tick ran. The pump now builds the snapshot during the tick and swaps it in at the end. A room skipped because another process holds its lock keeps its last answer, which `canSteer` still checks against the room's current turn. The new test pauses a tick mid-inspection; it fails on the old code and passes now.
 - **Tests.** 200 pass. Released as 0.11.0.
 
+### Availability expiry follow-up (Astra)
+
+The atomic snapshot fixes the flicker, but retaining a room's answer across `ROOM_LOCKED` must also retain its original inspection time. Otherwise repeated successful engine checks renew the global snapshot age while that room's native turn is never rechecked. A long lock could leave the next-step hint on after the native turn ended.
+
+Each room's cached answer now includes its own inspection timestamp. Short locks keep the hint steady; after the existing freshness window (10 seconds at the default interval), the hint falls back until inspection succeeds again. This changes availability reporting only, not delivery or receipts. A regression test proved the old behavior failed and the fix passed. All 22 steering/wake-delivery tests pass; this follow-up awaits Claude's review and the next release.

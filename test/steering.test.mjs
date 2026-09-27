@@ -170,3 +170,18 @@ test('the pump keeps its last steering answer while the next inspection runs', a
   assert.equal(capable(), true);
 });
 
+test('a locked room keeps a recent steering answer but cannot refresh its age', async t => {
+  const f = fixture(t); f.store.release(); let now = 1000;
+  const pump = new WakePump({ root: f.root, paths: { socket: '/tmp/test.sock' }, settings: () => ({ enabled: true }),
+    clientFactory: () => f.native, run: f.run, now: () => now });
+  const capable = () => pump.canSteer(f.store.read(), f.store.dir);
+  await pump.tick(); assert.equal(capable(), true);
+  f.store.acquire(); now += 1500;
+  await pump.tick(); assert.equal(capable(), true, 'short lock does not flicker');
+  f.native.activeId = null; now += 11000;
+  await pump.tick();
+  assert.equal(pump.mode(f.store.read().participants.astra, f.store.dir), 'automatic', 'engine inspection is fresh');
+  assert.equal(capable(), false, 'the separate room inspection expired');
+  f.store.release(); f.native.activeId = 'native-turn';
+  await pump.tick(); assert.equal(capable(), true);
+});
