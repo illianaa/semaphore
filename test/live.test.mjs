@@ -468,7 +468,8 @@ test("every delivered turn explains the hand-off for how that speaker receives t
   assert.ok(astra.includes(ASTRA_WAIT));
   assert.doesNotMatch(astra, /end your turn right away/);
   const claude = envelope("claude", "claude-inbox", "/tmp/rooms");
-  assert.match(claude, /Before ending your turn, start this as a background task so the next turn wakes you:\nnode .*cli\.mjs'? listen live-test --root '?\/tmp\/rooms'?\nThen, once you have passed the stick, end your turn right away/);
+  assert.match(claude, /Right after receiving, start this as a background task:\nnode .*cli\.mjs'? listen live-test --root '?\/tmp\/rooms'?\nIt brings you the human's messages while you work, and wakes you for your next turn once you pass the stick\./);
+  assert.match(claude, /Once you have passed the stick, end your turn right away/);
   const manual = envelope("astra", "codex-queue");
   assert.ok(manual.includes(PASS_AND_STOP));
   assert.doesNotMatch(manual, / listen /);

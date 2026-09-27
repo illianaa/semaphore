@@ -473,15 +473,15 @@ test("interjections cannot reset the cap, unpause a room, or override a request 
   const app = new Semaphore(f.store, queuedAdapters(calls));
   await app.send("Start", "astra", { maxTurns: 1 });
   const id = app.room.pending.id;
+  await app.send("Keep it short", "astra"); // Guidance for the AI at work, not a routing choice.
   await app.send("Claude next", "claude");
-  await app.send("Actually Astra next", "astra");
-  const reply = { turnId: id, speaker: "astra", message: "Done", next: "claude" };
+  const reply = { turnId: id, speaker: "astra", message: "Done", next: "astra" };
   const review = await app.accept(reply);
   app.receive(id, "astra", review.revision);
   await app.accept(reply);
   assert.equal(app.room.owner, "human");
   assert.equal(app.room.autoTurns, 1);
-  assert.equal(app.room.replyNext.to, "astra");
+  assert.equal(app.room.replyNext.to, "claude");
   assert.equal(calls.length, 1);
   await app.pass("claude");
   const nextId = app.room.pending.id;
@@ -569,10 +569,10 @@ test("input journal replay after a partial drain cannot duplicate input or spend
   assert.equal(restarted.room.autoTurns, 0);
   assert.equal(restarted.room.pending.id, turnId);
   restarted.receive(turnId, "astra", review.revision);
-  await restarted.send("Newer routing choice", "astra", { clientId: "newer-input-123" });
+  await restarted.send("Newer routing choice", "claude", { clientId: "newer-input-123" });
   const second = await restarted.accept({ turnId, speaker: "astra", message: "Updated response", next: "claude" });
   assert.equal(second.status, "review-required");
-  assert.equal(restarted.room.replyNext.to, "astra");
+  assert.deepEqual(restarted.room.replyNext, { to: "claude", seq: 3 });
 });
 
 test("a direct human send drains older queued input before choosing the next speaker", async (t) => {
@@ -583,7 +583,8 @@ test("a direct human send drains older queued input before choosing the next spe
   queueHumanInput(f.store, { text: "Earlier queued thought", to: "claude", clientId: "ordering-early-123" });
   await app.send("Later direct thought", "astra", { clientId: "ordering-later-123" });
   assert.deepEqual(app.room.messages.map((m) => m.text), ["Start", "Earlier queued thought", "Later direct thought"]);
-  assert.deepEqual(app.room.replyNext, { to: "astra", seq: 3 });
+  // The later input is guidance for Astra, which is working, so it clears the earlier routing.
+  assert.equal(app.room.replyNext, undefined);
   assert.equal(app.room.owner, "astra");
 });
 
@@ -631,4 +632,73 @@ test("the per-conversation reply limit applies now, persists, and can be turned 
   reopened.takeStick();
   await reopened.pass("claude");
   assert.equal(reopened.room.maxTurns, 4, "the next exchange keeps the chosen limit");
+});
+
+test("input for the AI at work guides its turn; only naming the other AI moves the stick after it", async (t) => {
+  const { queueHumanInput } = await import("../lib/inputs.mjs");
+  const f = fixture(t);
+  const calls = [];
+  const app = new Semaphore(f.store, queuedAdapters(calls));
+  await app.send("Start", "claude");
+  const id = app.room.pending.id;
+  app.receive(id, "claude");
+  await app.send("Use the new colours", "claude", { clientId: "guidance-input-1" });
+  assert.equal(app.room.replyNext, undefined, "guidance for Claude leaves the handoff to Claude");
+  assert.equal(app.room.messages.at(-1).waitingFor, "claude");
+  await app.send("Then ask Astra to check", "astra", { clientId: "routing-input-1" });
+  assert.deepEqual(app.room.replyNext, { to: "astra", seq: 3 });
+  // Queued input (saved while another process held the room) follows the same rule, in order.
+  queueHumanInput(f.store, { text: "Actually, Claude decides", to: "claude", clientId: "guidance-input-2" });
+  app.drainInputs();
+  assert.equal(app.room.replyNext, undefined);
+  app.receive(id, "claude", (await app.accept({ turnId: id, speaker: "claude", message: "Done", next: "human" })).revision);
+  const reply = await app.accept({ turnId: id, speaker: "claude", message: "Done with the colours", next: "astra" });
+  assert.equal(reply.status, "accepted");
+  assert.equal(reply.message.next, "astra");
+  assert.equal(reply.message.nominatedNext, "astra");
+  assert.equal(app.room.owner, "astra");
+});
+
+test("setup input for the opening's first speaker never overrides that speaker's first handoff", async (t) => {
+  const f = fixture(t);
+  const calls = [];
+  const app = new Semaphore(f.store, queuedAdapters(calls));
+  app.room.participants.astra.id = null;
+  await app.setOpening("Plan the launch", "claude", { clientId: "opening-guidance-1", members: ["astra", "claude"] });
+  await app.send("Also keep it accessible", "claude", { clientId: "setup-guidance-1" });
+  assert.equal(app.room.replyNext, undefined);
+  app.room.participants.astra.id = THREAD;
+  await app.startOpening();
+  const id = app.room.pending.id;
+  app.receive(id, "claude");
+  const reply = await app.accept({ turnId: id, speaker: "claude", message: "Plan drafted", next: "astra" });
+  assert.equal(reply.message.next, "astra");
+  assert.equal(app.room.owner, "astra");
+});
+
+test("new input reaches a received turn at once: it is shown, then must be received before replying", async (t) => {
+  const { queueHumanInput } = await import("../lib/inputs.mjs");
+  const f = fixture(t);
+  const app = new Semaphore(f.store, queuedAdapters());
+  await app.send("Start", "claude");
+  const id = app.room.pending.id;
+  assert.equal(app.revealInput(id, "claude"), null, "a turn the chat hasn't received shows nothing yet");
+  app.receive(id, "claude");
+  assert.equal(app.revealInput(id, "claude"), null, "nothing new");
+  queueHumanInput(f.store, { text: "Crucial detail: use the staging database", to: "claude", clientId: "live-input-123" });
+  const shown = app.revealInput(id, "claude");
+  assert.equal(shown.revision, 2);
+  assert.deepEqual(shown.messages.map((m) => m.text), ["Crucial detail: use the staging database"]);
+  assert.equal(app.room.pending.reviewThrough, 2);
+  assert.equal(app.room.messages[1].readAt, undefined, "showing is not reading");
+  assert.deepEqual(app.revealInput(id, "claude"), shown, "showing again changes nothing");
+  assert.equal(app.revealInput(id, "astra"), null, "only the working chat's turn");
+  assert.equal(app.revealInput("00000000-0000-4000-8000-00000000dead", "claude"), null);
+  // The reply check still applies until this revision is received.
+  assert.equal((await app.accept({ turnId: id, speaker: "claude", message: "Done", next: "human" })).status, "review-required");
+  app.receive(id, "claude", 2);
+  assert.equal(app.room.messages[1].readBy, "claude");
+  assert.equal(app.revealInput(id, "claude"), null);
+  assert.equal((await app.accept({ turnId: id, speaker: "claude", message: "Done", next: "human" })).status, "accepted");
+  assert.equal(app.revealInput(id, "claude"), null, "a finished turn shows nothing");
 });

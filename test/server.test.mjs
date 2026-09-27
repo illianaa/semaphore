@@ -75,6 +75,26 @@ async function fixture(t, options = {}) {
   return { root, app, url, request, create, bind, calls, page, html };
 }
 
+test("GPT delivery status requires a native receipt, not just a prepared review revision", async (t) => {
+  let canSteer = false;
+  const f = await fixture(t, { wakePump: { start() {}, close() {}, mode: () => 'automatic', canSteer: () => canSteer } });
+  const created = await f.create('Steering status'); f.bind(created.name);
+  const store = new RoomStore(f.root, created.name);
+  const update = change => { store.acquire(); try { const room = store.read(); change(room); store.save(room); } finally { store.release(); } };
+  update(room => {
+    room.owner = 'astra'; room.pending = { id: 'turn', speaker: 'astra', state: 'awaiting-reply',
+      receivedAt: new Date().toISOString(), through: 1, reviewThrough: 2 };
+  });
+  const view = async () => (await f.request(`/api/rooms/${created.name}`)).body.room;
+  let result = await view();
+  assert.equal(result.pending.deliveredThrough, null);
+  assert.equal(result.connections.astra.steering, false);
+  update(room => { room.pending.steering = { deliveredThrough: 2 }; }); canSteer = true;
+  result = await view();
+  assert.equal(result.pending.deliveredThrough, 2);
+  assert.equal(result.connections.astra.steering, true);
+});
+
 test("the session reports the running version and invitations preserve a configured project folder", async (t) => {
   const workspace = "/Users/example/Project with spaces";
   const f = await fixture(t, { workspace });

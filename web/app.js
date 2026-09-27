@@ -142,6 +142,14 @@ const GPT_WAKE = {
   listening: { badge: "listening", detail: "waiting for GPT’s chat to pick it up", description: "GPT is listening inside its native chat. Keep that chat active to receive room turns." },
 };
 const receivedBy = (room, speaker) => room.pending?.speaker === speaker && room.pending.progress === "received";
+// Claude's live listener or a fresh inspection of GPT's exact active native turn.
+function reachesNow(room) {
+  const pending = room?.pending;
+  if (!pending || pending.progress !== "received") return false;
+  const seat = room.connections[pending.speaker];
+  return (seat?.transport === "claude-inbox" && seat.listening === true) ||
+    (seat?.transport === "astra-inbox" && seat.steering === true);
+}
 // A listener exits once it hands its chat a turn, and the chat acknowledges when it starts, which
 // can take a minute or more. In that gap the chat has the turn; it isn't "not listening".
 const handedToChat = (room, speaker) =>
@@ -209,7 +217,12 @@ function interjectionNote(message, room) {
   const paused =
     room.pending?.state === "uncertain" || room.lock?.state === "stale" || (!room.pending && room.opening?.state !== "waiting");
   const reader = labels[message.waitingFor];
-  return `<div class="message-note">${paused || !reader ? "Saved · waits until the conversation continues" : `Saved · ${reader} will read this before replying`}</div>`;
+  if (paused || !reader) return `<div class="message-note">Saved · waits until the conversation continues</div>`;
+  const current = room.pending?.speaker === message.waitingFor;
+  if (current && room.pending.deliveredThrough >= message.seq)
+    return `<div class="message-note">Delivered to ${reader} · reading it at its next step</div>`;
+  if (current && reachesNow(room)) return `<div class="message-note">Sending to ${reader}…</div>`;
+  return `<div class="message-note">Saved · ${reader} will read this before replying</div>`;
 }
 function openingNote(message, room) {
   const opening = room.opening;
@@ -931,7 +944,7 @@ function composerHint(room, mode) {
   if (mode === "interject")
     return room.pending.state === "uncertain"
       ? "Your message is saved until the conversation continues."
-      : `${labels[room.pending.speaker]} will read your message before replying. Approvals for ${labels[room.pending.speaker]} happen in ${hostApp(room.pending.speaker)}.`;
+      : `${reachesNow(room) ? `Your message reaches ${labels[room.pending.speaker]} at its next step, to guide the work in progress.` : `${labels[room.pending.speaker]} will read your message before replying.`} Approvals for ${labels[room.pending.speaker]} happen in ${hostApp(room.pending.speaker)}.`;
   if (mode === "wait")
     return "Your draft is saved here until the stick comes back to you.";
   if (mode === "message" && !room.connections[state.recipient].connected)
@@ -951,9 +964,12 @@ function updateComposer() {
       (mode === "message" && room.connections[state.recipient].connected));
   $("#send").disabled = !canSend;
   $("#message").disabled = mode === "closed";
-  // While the opening waits, its first speaker is fixed, so there is nothing to pick.
-  $("#composer").classList.toggle("fixed-reply", mode === "setup-input");
-  $("#recipient-label").textContent = room?.pending ? "Reply next" : "Reply first";
+  // While the opening waits, or while an AI works, the message goes to that AI: nothing to pick.
+  $("#composer").classList.toggle("fixed-reply", mode === "setup-input" || mode === "interject");
+  $("#recipient-label").textContent =
+    mode === "interject" ? `To ${labels[room.pending.speaker]}`
+      : mode === "setup-input" ? `To ${labels[room.opening.to]}`
+        : room?.pending ? "Reply next" : "Reply first";
   $("#composer-hint").textContent = composerHint(room, mode);
   for (const button of document.querySelectorAll("[data-recipient]")) {
     button.hidden = !members.includes(button.dataset.recipient);
@@ -1555,8 +1571,10 @@ $("#composer").addEventListener("submit", async (event) => {
   if ($("#send").disabled || !room) return;
   const name = room.name;
   const text = $("#message").value;
-  const to = state.recipient;
-  const opening = composerMode(room) === "opening";
+  const mode = composerMode(room);
+  // Input during a turn guides the AI at work, and never picks who speaks after it.
+  const to = mode === "interject" ? room.pending.speaker : mode === "setup-input" ? room.opening.to : state.recipient;
+  const opening = mode === "opening";
   // An unconfirmed identical send keeps its request ID. The core commits it with
   // the message, so an explicit retry cannot duplicate a delivered turn.
   const { clientId } = requestFor(

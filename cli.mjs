@@ -18,7 +18,10 @@ import {
   codexQueueRevision,
   turnGuidance,
   roomCommands,
+  inputNotice,
+  takenNotice,
 } from "./lib/live.mjs";
+import { inputMessages, queuedInputs } from "./lib/inputs.mjs";
 import {
   defaultRoomRoot,
   projectDir,
@@ -30,6 +33,7 @@ import { diagnose } from "./lib/doctor.mjs";
 import { readWakeSettings, wakePaths } from "./lib/wake.mjs";
 import { WakeClient, verifyNativeSeat, sameRuntime } from "./lib/codex-runtime.mjs";
 import { cancelQueuedWake } from "./lib/wake-delivery.mjs";
+import { bindNativeWork } from "./lib/steering.mjs";
 import { RUNTIME, formatRuntime, runtimeIdentity, runtimeChange, sameBuild } from './lib/build-info.mjs';
 import { statusNote } from './lib/status-note.mjs';
 import { artifactViews, artifactView } from './lib/artifacts.mjs';
@@ -453,7 +457,7 @@ function display(
   if (type === "notice") console.log(`\n${text}\n`);
 }
 
-async function refreshWakeSeat(app, speaker) {
+async function refreshWakeSeat(app, speaker, { bindTurn = false } = {}) {
   if (speaker !== "astra" || app.room.participants.astra.transport !== "astra-inbox") return;
   const seat = app.room.participants.astra;
   const paths = wakePaths();
@@ -465,6 +469,11 @@ async function refreshWakeSeat(app, speaker) {
     seat.wakeVerification = await verifyNativeSeat({ client, threadId: seat.id, socket: paths.socket });
     seat.wakeAutomatic = true;
     if (app.room.pending?.receivedAt) await cancelQueuedWake(client, app.room);
+    if (bindTurn) {
+      // Failure to inspect a native turn disables steering, not ordinary wake.
+      try { await bindNativeWork(client, app.room); }
+      catch { delete app.room.pending?.nativeWork; }
+    }
     delete seat.wakeError;
   } catch (error) {
     delete seat.wakeVerification;
@@ -620,7 +629,7 @@ async function reply(app, caller) {
 function handOff(room, caller) {
   if (room.owner === caller) return;
   console.log(
-    `You no longer hold the stick.\n${turnGuidance({ room, speaker: caller, root, afterReply: true, automatic: automaticallyWakes(room.participants[caller]) })}`,
+    `You no longer hold the stick.\n${turnGuidance({ room, speaker: caller, root, afterReply: true, passed: true, automatic: automaticallyWakes(room.participants[caller]) })}`,
   );
 }
 
@@ -639,6 +648,48 @@ function stick(room) {
   process.exitCode = 3;
 }
 
+// While Claude works on a turn it has received, new human input is shown to it at its next step
+// instead of when it tries to reply: the listener finishes, and Claude's app reports that to the
+// working chat. Showing sets the review revision a reply attempt would; only receive marks it read.
+function holding(store, speaker) {
+  try {
+    const current = store.read();
+    return current.owner === speaker && current.pending?.speaker === speaker;
+  } catch {
+    return false;
+  }
+}
+
+function revealNewInput(store, speaker, session) {
+  let current;
+  try {
+    current = store.read();
+  } catch {
+    return null;
+  }
+  const pending = current.pending;
+  if (!pending || pending.speaker !== speaker || current.owner !== speaker ||
+      pending.state !== "awaiting-reply" || !pending.receivedAt ||
+      current.participants[speaker]?.id !== session)
+    return null;
+  const seen = pending.receivedThrough ?? pending.through;
+  const incoming = [...current.messages, ...inputMessages(current, queuedInputs(store.dir))];
+  if (!incoming.some((message) => message.speaker === "human" && message.seq > seen)) return null;
+  try {
+    store.acquire();
+  } catch {
+    return null; // Someone else is saving the room; look again on the next poll.
+  }
+  try {
+    const app = new Semaphore(store, {});
+    if (app.room.participants[speaker]?.id !== session) return null;
+    const result = app.revealInput(pending.id, speaker);
+    return result && { room: app.room, turn: app.room.pending, ...result };
+  } finally {
+    store.release();
+  }
+}
+
 async function listenForTurn(room, store) {
   const caller = callerIn(room);
   const speaker = values.as ?? caller ?? "claude";
@@ -647,7 +698,10 @@ async function listenForTurn(room, store) {
       `Run listen from inside the ${speaker} chat bound to room ${room.name}.`,
     );
   const transport = room.participants[speaker].transport;
-  if (room.owner === speaker && room.pending?.speaker === speaker && room.pending.receivedAt) {
+  // Claude's background listener keeps running through Claude's own turn (see revealNewInput).
+  // Astra's runs in the foreground, so a working Astra gets guidance instead of a wait.
+  if (room.owner === speaker && room.pending?.speaker === speaker && room.pending.receivedAt &&
+      transport !== "claude-inbox") {
     printTurnGuidance(room, speaker);
     return;
   }
@@ -702,11 +756,38 @@ async function listenForTurn(room, store) {
   const baseline = threadId ? codexQueueRevision({ threadId }) : null;
   let nudged = false;
   let disconnected = false;
+  let shown = null;
+  // The turn this chat is working on, if any, so the listener can tell it when the human takes
+  // the stick back. A turn that ends with this chat's own reply ends quietly.
+  let working = room.owner === speaker && room.pending?.speaker === speaker && room.pending.receivedAt
+    ? room.pending.id : null;
+  let taken = null;
+  const endedWithoutReply = (current) => {
+    const pending = current.pending;
+    if (current.owner === speaker && pending?.speaker === speaker &&
+        pending.state === "awaiting-reply" && pending.receivedAt) {
+      working = pending.id;
+      return false;
+    }
+    if (!working) return false;
+    const turn = working;
+    working = null;
+    if (current.messages.some((message) => message.turnId === turn && message.speaker === speaker)) return false;
+    taken = turn;
+    return true;
+  };
   const stopWhen = () => {
+    let current;
     try {
-      disconnected = !stillMine(store.read());
+      current = store.read();
+      disconnected = !stillMine(current);
     } catch {}
     if (disconnected) return true;
+    if (transport === "claude-inbox") {
+      if (current && endedWithoutReply(current)) return true;
+      shown = revealNewInput(store, speaker, session);
+      return !!shown;
+    }
     if (baseline === null) return false;
     const revision = codexQueueRevision({ threadId });
     nudged = revision !== null && revision !== baseline;
@@ -728,6 +809,14 @@ async function listenForTurn(room, store) {
     });
     for (const item of items) console.log(`Listener runtime: ${formatRuntime()}${item.runtime ? '' : '\nThe saved envelope was produced by an unstamped release.'}\n${item.prompt}\n`);
     if (items.length) return;
+    if (shown) {
+      console.log(`Listener runtime: ${formatRuntime()}\n${inputNotice(shown, { root })}`);
+      return;
+    }
+    if (taken) {
+      console.log(`Listener runtime: ${formatRuntime()}\n${takenNotice({ room, turnId: taken, speaker }, { root })}`);
+      return;
+    }
     const again = listenCommand(speaker, room.name);
     if (disconnected) {
       console.log(
@@ -738,7 +827,7 @@ async function listenForTurn(room, store) {
     console.log(
       nudged
         ? `Something new is waiting in your chat, possibly from the human. Stop listening and end your turn so it can reach you, then listen again afterwards: ${again}`
-        : `No new turn in ${seconds} seconds. You are still connected; to keep waiting, run: ${again}`,
+        : `No new ${holding(store, speaker) ? "input for your turn" : "turn"} in ${seconds} seconds. You are still connected; to keep waiting, run: ${again}`,
     );
   } finally {
     process.off("SIGINT", stop);
@@ -916,7 +1005,7 @@ async function main() {
         participant.lastReceivedRuntime = runtimeIdentity();
         semaphore.save();
       }
-      await refreshWakeSeat(semaphore, caller);
+      await refreshWakeSeat(semaphore, caller, { bindTurn: !turn.reviewRequired });
       console.log(
         liveEnvelope(
           {

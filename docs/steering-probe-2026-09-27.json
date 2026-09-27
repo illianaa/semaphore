@@ -1,0 +1,144 @@
+{
+  "version": "codex-cli 0.155.0-alpha.16.4",
+  "transport": "private Unix socket; desktop not attached",
+  "checks": [],
+  "threadId": "01a0e493-a697-7ac1-8dd9-c01be92d42e7",
+  "duringApproval": [
+    {
+      "id": "01a0e493-a780-7143-a4b1-d829d6118208",
+      "status": "inProgress",
+      "items": [
+        {
+          "type": "userMessage",
+          "id": "01a0e493-b148-7630-8111-1fde0c3963b5",
+          "clientId": null,
+          "content": [
+            {
+              "type": "text",
+              "text": "Approval routing test: use the shell tool exactly once to run node -e \"console.log('semaphore-approval-probe')\". If the command is declined, reply exactly: approval-declined. Do not retry, read any files, or use other tools.",
+              "text_elements": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "wrongTurnRejected": "expected active turn id `wrong-turn` but found `01a0e493-a780-7143-a4b1-d829d6118208`",
+  "steered": {
+    "turnId": "01a0e493-a780-7143-a4b1-d829d6118208"
+  },
+  "duplicateSteer": {
+    "turnId": "01a0e493-a780-7143-a4b1-d829d6118208"
+  },
+  "afterSteer": [
+    {
+      "id": "01a0e493-a780-7143-a4b1-d829d6118208",
+      "status": "inProgress",
+      "items": [
+        {
+          "type": "userMessage",
+          "id": "01a0e493-b148-7630-8111-1fde0c3963b5",
+          "clientId": null,
+          "content": [
+            {
+              "type": "text",
+              "text": "Approval routing test: use the shell tool exactly once to run node -e \"console.log('semaphore-approval-probe')\". If the command is declined, reply exactly: approval-declined. Do not retry, read any files, or use other tools.",
+              "text_elements": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "result": {
+    "status": "completed",
+    "text": [
+      "I’ll request the specified shell command once.\n",
+      "semaphore-steered"
+    ],
+    "viewerEvents": [
+      "thread/settings/updated",
+      "thread/status/changed",
+      "turn/started",
+      "mcpServer/startupStatus/updated",
+      "item/started",
+      "item/completed",
+      "item/agentMessage/delta",
+      "serverRequest/resolved",
+      "thread/tokenUsage/updated",
+      "turn/completed"
+    ],
+    "wakeEvents": [
+      "thread/status/changed"
+    ],
+    "viewerRequests": [
+      "item/commandExecution/requestApproval"
+    ],
+    "wakeRequests": []
+  },
+  "finished": [
+    {
+      "id": "01a0e493-a780-7143-a4b1-d829d6118208",
+      "status": "completed",
+      "items": [
+        {
+          "type": "userMessage",
+          "id": "01a0e493-b148-7630-8111-1fde0c3963b5",
+          "clientId": null,
+          "content": [
+            {
+              "type": "text",
+              "text": "Approval routing test: use the shell tool exactly once to run node -e \"console.log('semaphore-approval-probe')\". If the command is declined, reply exactly: approval-declined. Do not retry, read any files, or use other tools.",
+              "text_elements": []
+            }
+          ]
+        },
+        {
+          "type": "agentMessage",
+          "id": "msg_051112bad3119e13016ab97de1109087d1ae09b8e19a79c71f",
+          "text": "I’ll request the specified shell command once.\n",
+          "phase": "commentary",
+          "memoryCitation": null,
+          "delivery": null,
+          "questions": null
+        },
+        {
+          "type": "userMessage",
+          "id": "01a0e493-bdd4-7312-a660-a5de0a3d3566",
+          "clientId": "steer-probe-01a0e493-a697-7ac1-8dd9-c01be92d42e7",
+          "content": [
+            {
+              "type": "text",
+              "text": "New guidance: once the pending tool is declined, reply exactly: semaphore-steered",
+              "text_elements": []
+            }
+          ]
+        },
+        {
+          "type": "userMessage",
+          "id": "01a0e493-bdd6-7bd0-90cf-1f75d582ef82",
+          "clientId": "steer-probe-01a0e493-a697-7ac1-8dd9-c01be92d42e7",
+          "content": [
+            {
+              "type": "text",
+              "text": "New guidance: once the pending tool is declined, reply exactly: semaphore-steered",
+              "text_elements": []
+            }
+          ]
+        },
+        {
+          "type": "agentMessage",
+          "id": "msg_051112bad3119e13016ab97de5e58087d1b9140d846679c157",
+          "text": "semaphore-steered",
+          "phase": "final_answer",
+          "memoryCitation": null,
+          "delivery": null,
+          "questions": null
+        }
+      ]
+    }
+  ],
+  "completedTurnRejected": "no active turn to steer",
+  "protocolPassed": true,
+  "testThreadArchived": true
+}

@@ -3574,3 +3574,11 @@ em,
 .start-caption .limit-switch {
   margin-left: auto;
 }
+/* While the opening waits or an AI works, the composer names who gets the message instead of
+   offering a choice. */
+.composer.fixed-reply .recipient-picker {
+  visibility: visible;
+}
+.composer.fixed-reply .recipient-picker button {
+  display: none;
+}

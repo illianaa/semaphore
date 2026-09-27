@@ -496,6 +496,6 @@ test("invitations explain how each AI waits for turns, and carry the resume chec
     assert.match(invite(speaker), /If your task resumes on its own later, check whose turn it is first: node .*cli\.mjs'? stick room-abc --root '\/tmp\/rooms'/);
   assert.match(invite("astra"), /Whenever you don't hold the stick, wait for your next turn by running this in the foreground: node .*listen room-abc --root '\/tmp\/rooms' --as astra\./);
   assert.ok(invite("astra").includes(ASTRA_WAIT));
-  assert.match(invite("claude"), /start it again before ending each turn/);
-  assert.match(invite("claude"), /Once you pass the stick, end your turn right away \(after restarting the listener\)/);
+  assert.match(invite("claude"), /start it again right after you receive each turn and whenever it finishes\. It wakes you for each new turn, and while you work it brings you my messages/);
+  assert.match(invite("claude"), /Once you pass the stick, end your turn right away; your listener wakes you for the next one\./);
 });

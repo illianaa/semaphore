@@ -25,7 +25,7 @@ test('wake client speaks WebSocket over a private Unix socket and never answers 
   assert.equal((await unexpected)[0],'item/commandExecution/requestApproval');
   await delay(20);
   assert.equal(received.some(message=>message.id===88),false);
-  for(const method of ['thread/resume','thread/start','turn/start','thread/queue/start','config/value/write'])
+  for(const method of ['thread/resume','thread/start','turn/start','turn/interrupt','thread/queue/start','config/value/write'])
     await assert.rejects(client.request(method),/cannot call/);
   assert.ok(received.every(message=>['initialize','initialized','server/diagnostics'].includes(message.method)));
 });

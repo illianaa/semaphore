@@ -10,7 +10,7 @@ import { liveTransport, liveEnvelope, listenerStatus, deliveryProgress, LIVE_TRA
 import { projectDir, defaultRoomRoot } from "./lib/paths.mjs";
 import { buildInvite } from "./lib/invite.mjs";
 import { createLiveRoom, createStartedRoom } from "./lib/rooms.mjs";
-import { queueHumanInput, queuedInputs, inputMessages } from "./lib/inputs.mjs";
+import { queueHumanInput, queuedInputs, inputMessages, replyNextAfter } from "./lib/inputs.mjs";
 import { wakeStatus, enableWake, disableWake, restartChatGPT } from "./lib/wake.mjs";
 import { WakePump } from "./lib/wake-delivery.mjs";
 import { diagnose } from "./lib/doctor.mjs";
@@ -85,7 +85,7 @@ export function createAppServer({
     // room lock. Display it immediately and deduplicate against the main journal.
     const queued = inputMessages(room, queuedInputs(store.dir));
     room = { ...room, messages: [...room.messages, ...queued],
-      ...(queued.length ? { replyNext: { to: queued.at(-1).next, seq: queued.at(-1).seq } } : {}) };
+      ...(queued.length ? { replyNext: replyNextAfter(queued.at(-1)) } : {}) };
     const connections = Object.fromEntries(
       SPEAKERS.map((speaker) => {
         const p = room.participants[speaker];
@@ -96,7 +96,7 @@ export function createAppServer({
             connected: !!(live && p.id),
             manual: p?.transport === "codex-queue",
             transport: p?.transport,
-            ...(speaker === "astra" ? { wake: pump?.mode(p, store.dir, room) } : {}),
+            ...(speaker === "astra" ? { wake: pump?.mode(p, store.dir, room), steering: pump?.canSteer?.(room, store.dir) === true } : {}),
             ...(INBOX_TRANSPORTS.includes(p?.transport) && p.id
               ? { listening: listenerStatus(store.dir, speaker).active }
               : {}),
@@ -129,6 +129,10 @@ export function createAppServer({
             at: room.pending.at,
             wake: room.pending.wake ?? null,
             timing: timingView(room, store.dir),
+            // A prepared GPT revision is not a native delivery receipt.
+            deliveredThrough: room.pending.speaker === 'astra'
+              ? room.pending.steering?.deliveredThrough ?? null
+              : room.pending.reviewThrough ?? null,
             ...(room.pending.state === "awaiting-reply"
               ? {
                   progress: deliveryProgress({

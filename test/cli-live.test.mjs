@@ -543,7 +543,7 @@ test("reply tells a speaker who passed the stick to stop, and stick reports whos
   assert.equal(passed.code, 0, passed.err);
   assert.match(
     passed.out,
-    /You no longer hold the stick\.\nBefore ending your turn, start this as a background task so the next turn wakes you:\nnode .*cli\.mjs'? listen room --root '.*'\nThen, once you have passed the stick, end your turn right away; don't keep working\./,
+    /You no longer hold the stick\.\nYour background listener now waits for your next turn\. If it isn't running \(it finishes each time it tells you something\), start it again as a background task:\nnode .*cli\.mjs'? listen room --root '.*'\nThen end your turn right away; don't keep working\./,
   );
   assert.equal(run(["stick", "room"], CLAUDE).code, 3);
   assert.equal(run(["stick", "room"], ASTRA).code, 0);
@@ -816,12 +816,16 @@ test('join with its own opening gives the turn first; repeat joins and listen gu
   assert.match(duplicate.out,/Read and acknowledge your saved turn first/);
   assert.doesNotMatch(duplicate.out,/ listen /);
   f.run(['receive',room,'--turn',id],CLAUDE);
-  for(const args of [['join',room,'--as','claude'],['stick',room],['listen',room]]){
+  for(const args of [['join',room,'--as','claude'],['stick',room]]){
     const result=f.run(args,CLAUDE);
     assert.equal(result.code,0,result.err);
     assert.match(result.out,/already received turn/);
-    assert.doesNotMatch(result.out,/ listen /);
+    assert.match(result.out,/Keep your listener running as a background task so the human's messages reach you while you work: node .* listen /);
   }
+  // Claude's listener keeps running through its own turn, waiting for the human's messages.
+  const quiet=f.run(['listen',room,'--timeout','1'],CLAUDE);
+  assert.equal(quiet.code,0,quiet.err);
+  assert.match(quiet.out,/No new input for your turn in 1 seconds/);
 });
 
 test('stdin, files and positional replies preserve literal Markdown and trailing newlines', (t) => {
@@ -1071,4 +1075,77 @@ test('CLI listener records observation without receiving and timings retain it a
   report=JSON.parse(f.run(['timings','room']).out);
   assert.equal(report.samples[0].listenerObservedAt,first); assert.ok(report.samples[0].acknowledgedAt);
   assert.ok(report.samples[0].repliedAt); assert.equal(report.groups[0].turns,1);
+});
+
+const settled = (promise, ms) => Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(null), ms))]);
+async function attached(f, speaker = "claude") {
+  const marker = path.join(f.root, "room", "inbox", speaker, "listener.pid");
+  for (let i = 0; i < 100 && !fs.existsSync(marker); i++) await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(fs.existsSync(marker), true, "the listener is attached");
+}
+
+test("Claude's listener brings the human's message to the turn Claude is working on, then waits for its next turn", async (t) => {
+  const f = setup(t);
+  joinBoth(f.run);
+  f.run(["send", "room", "--to", "claude", "--file", f.write("h.txt", "Claude first.")]);
+  const id = f.room("room").pending.id;
+  assert.equal(f.run(["receive", "room", "--turn", id], CLAUDE).code, 0);
+  const listening = f.start(["listen", "room", "--timeout", "20"], CLAUDE);
+  await attached(f);
+  f.run(["send", "room", "--to", "claude", "--file", f.write("more.txt", "Crucial: use the staging database.")]);
+  const heard = await settled(listening, 10_000);
+  assert.ok(heard, "the listener finishes as soon as the human writes");
+  assert.equal(heard.code, 0, heard.out);
+  assert.match(heard.out, /new input for your current turn as Claude/);
+  assert.match(heard.out, /Human → Claude:\nCrucial: use the staging database\./);
+  assert.doesNotMatch(heard.out, /Claude first\./, "only the new input, not the whole turn again");
+  assert.match(heard.out, new RegExp(`receive room --root .* --turn ${id} --revision 2`));
+  assert.match(heard.out, /Then start your listener again as a background task/);
+  assert.equal(f.room("room").pending.reviewThrough, 2);
+  assert.equal(f.room("room").messages[1].readAt, undefined, "shown, not yet read");
+  assert.equal(f.room("room").replyNext, undefined, "guidance for Claude leaves the handoff to Claude");
+  assert.equal(f.run(["receive", "room", "--turn", id, "--revision", "2"], CLAUDE).code, 0);
+  assert.equal(f.room("room").messages[1].readBy, "claude");
+  // Started again, the listener lets Claude's own handoff pass quietly and waits for its next turn.
+  const next = f.start(["listen", "room", "--timeout", "20"], CLAUDE);
+  await attached(f);
+  const passed = f.run(["reply", "room", "--turn", id, "--next", "astra", "--file", f.write("c.txt", "Used staging. Over to Astra.")], CLAUDE);
+  assert.equal(passed.code, 0, passed.err);
+  assert.equal(f.room("room").owner, "astra");
+  assert.equal(await settled(next, 1500), null, "a handoff does not end the listener");
+  const t2 = f.room("room").pending.id;
+  f.run(["receive", "room", "--turn", t2], ASTRA);
+  assert.equal(f.run(["reply", "room", "--turn", t2, "--next", "claude", "--file", f.write("a.txt", "Back to Claude.")], ASTRA).code, 0);
+  const turn = await settled(next, 10_000);
+  assert.ok(turn, "the next turn arrives");
+  assert.match(turn.out, /you hold the talking stick as Claude/);
+  assert.match(turn.out, /Back to Claude\./);
+});
+
+test("Claude's listener tells a working Claude when the human takes the stick back", async (t) => {
+  const f = setup(t);
+  joinBoth(f.run);
+  f.run(["send", "room", "--to", "claude", "--file", f.write("h.txt", "Long task.")]);
+  const id = f.room("room").pending.id;
+  f.run(["receive", "room", "--turn", id], CLAUDE);
+  const listening = f.start(["listen", "room", "--timeout", "20"], CLAUDE);
+  await attached(f);
+  assert.equal(f.run(["take", "room"]).code, 0);
+  const heard = await settled(listening, 10_000);
+  assert.ok(heard, "the listener finishes when the stick is taken");
+  assert.match(heard.out, /the human took the stick back from Claude/);
+  assert.match(heard.out, new RegExp(`during your turn ${id}, so that turn is over: stop working on it and don't reply to it`));
+  assert.match(heard.out, /listen room --root /);
+});
+
+test("Astra's foreground listener still returns guidance at once while Astra works", (t) => {
+  const f = setup(t);
+  joinBoth(f.run);
+  f.run(["send", "room", "--to", "astra", "--file", f.write("h.txt", "Astra first.")]);
+  const id = f.room("room").pending.id;
+  f.run(["receive", "room", "--turn", id], ASTRA);
+  const result = f.run(["listen", "room", "--as", "astra"], ASTRA);
+  assert.equal(result.code, 0, result.err);
+  assert.match(result.out, /already received turn/);
+  assert.doesNotMatch(result.out, /Keep your listener running/);
 });
