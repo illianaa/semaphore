@@ -160,3 +160,15 @@ The reviewed 0.11.0 commits were published with a normal fast-forward `8d739f5..
 
   Every unrelated setting compared equal, the file keeps its 0600 mode, and a backup is in `~/.semaphore/backups/claude-settings-2026-09-28T00-02-54-…json`.
 - **Registration.** Claude's running chat registered itself through a real CwdChanged hook about 48 seconds after the install. The live room then reported Claude as `wake: "automatic"`, and the 0.12.0 envelope for the turn in hand said "no listener is needed". Before handing off, the chat had no background task and no listener for this room.
+- **Production proof, 28 September.** Claude handed turn 111 to Astra at 00:04:17 and ended its native turn with no background task and no listener. Astra received the turn through 0.12.0 and passed it back:
+
+  | UTC | Event |
+  | --- | --- |
+  | 00:04:31.666 | The turn was queued for Claude |
+  | 00:04:32.056 | The app's ClaudeSignalPump wrote Claude's signal (reason `…:turn`) |
+  | 00:04:32.799 | The FileChanged hook claimed the notice under the room lock |
+  | 00:04:32.829 | The hook recorded the observation |
+  | 00:04:37.151 | Claude acknowledged |
+
+  That is 5.5 seconds from queue to acknowledgment. The chat woke with the notice "Semaphore: a saved room message for this chat", which the host labels as a hook error. It still had no child task and no listener after waking. **Listener-free Claude delivery passed in production.**
+- **Publication.** A fast-forward of GitHub main to this record. The old runner checkout stays at `d4d0bde`.
