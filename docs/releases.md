@@ -148,3 +148,15 @@ The reviewed 0.11.0 commits were published with a normal fast-forward `8d739f5..
 - **Apply.** Heads-up in the room and in Claude's chat, then `--apply`; backup `~/.semaphore/backups/cutover-2026-09-27T20-50-59-639Z`. The app went from pid 88137 to 91184, and live `/health` matches the build. The command and both skill links point at 0.11.1. Wake runner 99804, engine 99808 and ChatGPT 8770 are unchanged. 0.11.0 and earlier releases are kept; Claude's listener started under 0.11.0 keeps running.
 - **Transition.** The 0.11.1 command acknowledged turn `28c1936e…` compactly at revision 94 with the runtime notice. The live room shows Claude listening while it works. GPT's wake states are the same as under 0.11.0, with no steering offered while no GPT turn is working.
 - **Publication.** A fast-forward of GitHub main from `087d5be`; the old checkout stays at `d4d0bde`.
+
+## 0.12.0 cutover and Claude hook install, 27–28 September 2026 (Claude)
+
+- **Candidate.** Runtime commit `0f60eed`: Claude chats woken through Claude Code hooks, with no listener. Claude built it, and Astra reviewed and hardened it (durable claims, one outstanding revision, WAL watching, and uninstall revoking registrations). All 214 tests passed. Staged fresh as `~/.semaphore/releases/0.12.0-99a97bdd1dea4d49`, full build `99a97bdd1dea4d491adb2cdd2b4705e01e4c38ef8094002bdd43fb2935a0f12a`.
+- **Before switching.** The candidate on port 4332 with a scratch folder reported 0.12.0 and that build, and served every asset. `hook register` exits 0 quietly on invalid input. Only this room's received Claude turn was pending, and no listener ran for this room. The dry run was clean.
+- **Apply.** Heads-up in the room and in Claude's chat, then `--apply`; backup `~/.semaphore/backups/cutover-2026-09-28T00-02-46-333Z`. The app went from pid 91184 to 49939. The command and both skill links point at 0.12.0. Wake runner 99804, engine 99808 and ChatGPT 8770 are unchanged.
+- **Hooks installed with Illiana's explicit approval** ("yes, INSTALL THE HOOKS!"). `semaphore hooks install` added exactly three entries to `~/.claude/settings.json`, through the stable command:
+  - SessionStart and CwdChanged run `hook register` (timeout 10).
+  - FileChanged runs `hook wake` (`asyncRewake: true`, timeout 10).
+
+  Every unrelated setting compared equal, the file keeps its 0600 mode, and a backup is in `~/.semaphore/backups/claude-settings-2026-09-28T00-02-54-…json`.
+- **Registration.** Claude's running chat registered itself through a real CwdChanged hook about 48 seconds after the install. The live room then reported Claude as `wake: "automatic"`, and the 0.12.0 envelope for the turn in hand said "no listener is needed". Before handing off, the chat had no background task and no listener for this room.
