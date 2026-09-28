@@ -19,6 +19,8 @@ import {
 import { diagnose } from "../lib/doctor.mjs";
 import { createAppServer } from "../server.mjs";
 import { projectDir } from "../lib/paths.mjs";
+import { installClaudeHooks } from "../lib/claude-wake.mjs";
+import { registerSession, isRegistered } from "../lib/claude-registry.mjs";
 
 const CLI = path.join(projectDir, "cli.mjs");
 
@@ -77,7 +79,7 @@ test("a fresh checkout starts its CLI and app without optional wake dependencies
     import { createAppServer } from './server.mjs';
     import { wakeWebSocket } from './lib/codex-runtime.mjs';
     assert.throws(() => wakeWebSocket(), /npm ci --omit=dev/);
-    const app = createAppServer({ root: './data/rooms', wakePump: false });
+    const app = createAppServer({ root: './data/rooms', wakePump: false, claudePump: false });
     const url = await app.listen(0);
     const response = await fetch(url + '/health');
     assert.equal(response.status, 200);
@@ -231,6 +233,21 @@ test("setup refuses to replace a skill it did not install, before changing anyth
     fs.readFileSync(path.join(paths.codexSkill, "SKILL.md"), "utf8"),
     "someone else’s skill",
   );
+});
+
+test("full uninstall removes owned hooks before removing their command and preserves other settings", (t) => {
+  const home = tempHome(t);
+  const paths = installPaths({ home, env: {} });
+  install({ ...offline(home), platform: "linux" });
+  const settingsPath = path.join(home, ".claude", "settings.json");
+  fs.writeFileSync(settingsPath, JSON.stringify({ custom: "keep" }));
+  installClaudeHooks({ settingsPath, command: paths.command, backupDir: path.join(paths.dataHome, "backups"), registryHome: paths.dataHome });
+  const session = "11111111-2222-4333-8444-5555c1a0de00";
+  registerSession({ session_id: session, hook_event_name: "SessionStart" }, { home: paths.dataHome });
+  uninstall({ home, env: {}, platform: "linux", launchctl: false });
+  assert.deepEqual(JSON.parse(fs.readFileSync(settingsPath, "utf8")), { custom: "keep" });
+  assert.equal(fs.existsSync(paths.command), false);
+  assert.equal(isRegistered(session, { home: paths.dataHome }), false);
 });
 
 test("custom data and Codex homes are honoured, and plist values are escaped", (t) => {
@@ -388,6 +405,7 @@ test("the app serves the shared invitations and doctor by default", async (t) =>
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const app = createAppServer({
     root,
+    claudePump: false,
     diagnosticsProvider: async () => ({
       ok: true,
       checks: [{ name: "Stub", ok: true, detail: "fine" }],
@@ -497,5 +515,6 @@ test("invitations explain how each AI waits for turns, and carry the resume chec
   assert.match(invite("astra"), /Whenever you don't hold the stick, wait for your next turn by running this in the foreground: node .*listen room-abc --root '\/tmp\/rooms' --as astra\./);
   assert.ok(invite("astra").includes(ASTRA_WAIT));
   assert.match(invite("claude"), /start it again right after you receive each turn and whenever it finishes\. It wakes you for each new turn, and while you work it brings you my messages/);
-  assert.match(invite("claude"), /Once you pass the stick, end your turn right away; your listener wakes you for the next one\./);
+  assert.match(invite("claude"), /If join says "no listener is needed", Semaphore's Claude Code hooks wake this chat, so skip this step\./);
+  assert.match(invite("claude"), /Once you pass the stick, end your turn right away; Semaphore or your listener wakes you for the next one\./);
 });

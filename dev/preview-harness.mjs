@@ -21,7 +21,7 @@ try {
     speaker: "astra", title: "Shared preview check", ready: true }).artifact;
   store.save(room);
 } finally { store.release(); }
-const app = createAppServer({ root, wakePump: false });
+const app = createAppServer({ root, wakePump: false, claudePump: false });
 const url = await app.listen(0);
 const html = await (await fetch(url)).text();
 const token = html.match(/name="semaphore-token" content="([a-f0-9]+)"/)[1];

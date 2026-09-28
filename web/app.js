@@ -147,7 +147,7 @@ function reachesNow(room) {
   const pending = room?.pending;
   if (!pending || pending.progress !== "received") return false;
   const seat = room.connections[pending.speaker];
-  return (seat?.transport === "claude-inbox" && seat.listening === true) ||
+  return (seat?.transport === "claude-inbox" && (seat.listening === true || seat.wake === "automatic")) ||
     (seat?.transport === "astra-inbox" && seat.steering === true);
 }
 // A listener exits once it hands its chat a turn, and the chat acknowledges when it starts, which
@@ -160,15 +160,18 @@ function justReplied(room, speaker) {
   const last = room.messages.findLast((message) => message.speaker === speaker);
   return !!last && Date.now() - Date.parse(last.at) < LISTEN_AGAIN_MS;
 }
+const claudeWakes = (seat) => seat?.transport === "claude-inbox" && seat.wake === "automatic";
 function memberDetail(room, speaker) {
   const seat = room.connections[speaker];
   if (!seat?.connected) return speaker === "human" ? "" : "not connected";
   if (receivedBy(room, speaker)) return "";
+  if (claudeWakes(seat)) return "wakes automatically";
   return speaker === "astra" ? GPT_WAKE[seat.wake]?.badge ?? "" : "";
 }
 function connectionDescription(room, speaker) {
   const seat = room.connections[speaker];
   if (receivedBy(room, speaker)) return `${labels[speaker]} has received this turn and is working in ${hostApp(speaker)}.`;
+  if (speaker === "claude" && claudeWakes(seat)) return "Semaphore wakes this chat through its Claude Code hook, so no listener is needed. Keep the chat open in the Claude app.";
   if (speaker === "claude") return "Keep this chat open and listening. You can continue speaking to Claude in its app.";
   if (seat.manual) return "Manual delivery: messages wait in GPT’s Codex chat until you press Send there.";
   return GPT_WAKE[seat.wake]?.description ?? "Open GPT’s chat and ask it to listen to this room. Messages wait in its inbox until then.";
@@ -186,6 +189,11 @@ function pendingDetail(pending, room) {
     if (pending.speaker === "astra" && GPT_WAKE[seat?.wake]) return GPT_WAKE[seat.wake].detail;
     if (pending.wake?.status === "blocked") return "saved in GPT’s inbox · open its chat and reconnect";
     if (handedToChat(room, pending.speaker)) return `starting in ${hostApp(pending.speaker)}`;
+    // Registered Claude chats are woken by their hook; a chat that doesn't respond is probably closed.
+    if (claudeWakes(seat))
+      return Date.now() - Date.parse(pending.timing?.queuedAt ?? pending.at) < 60_000
+        ? "waking Claude's chat"
+        : "Claude's chat hasn't woken yet · open it in the Claude app to continue";
     return seat?.listening === false
       ? `waiting in ${who}’s inbox until its chat listens again`
       : `waiting for ${who}’s chat to pick it up`;
@@ -221,6 +229,8 @@ function interjectionNote(message, room) {
   const current = room.pending?.speaker === message.waitingFor;
   if (current && room.pending.deliveredThrough >= message.seq)
     return `<div class="message-note">Delivered to ${reader} · reading it at its next step</div>`;
+  if (current && room.pending.offeredThrough >= message.seq)
+    return `<div class="message-note">Saved · waiting for ${reader} to acknowledge</div>`;
   if (current && reachesNow(room)) return `<div class="message-note">Sending to ${reader}…</div>`;
   return `<div class="message-note">Saved · ${reader} will read this before replying</div>`;
 }
@@ -457,7 +467,9 @@ function startCard(room) {
         invite && /^(codex|claude):\/\//.test(invite.url) ? invite.url : null;
       const app = speaker === "astra" ? "ChatGPT" : "Claude";
       const detail = seat.connected
-        ? seat.listening === false
+        ? claudeWakes(seat)
+          ? "Joined · wakes automatically"
+          : seat.listening === false
           ? "Joined · its chat isn’t listening right now"
           : "Joined and listening"
         : speaker === "claude"
@@ -559,8 +571,9 @@ function renderRoom(room, force = false) {
   if (room.name !== state.selected) return;
   state.room = room;
   settleCommitted(room);
-  // The pause after a reply ends without any change to the room, so it is part of the signature.
-  const signature = JSON.stringify(room) + SEATS.map((speaker) => justReplied(room, speaker)).join();
+  // Reply grace and wake timeout can change without any room mutation.
+  const signature = JSON.stringify(room) + SEATS.map((speaker) => justReplied(room, speaker)).join() +
+    (room.pending ? pendingDetail(room.pending, room) : "");
   if (!force && signature === state.signatures[room.name]) {
     updateComposer();
     return;
@@ -598,6 +611,8 @@ function renderRoom(room, force = false) {
     (speaker) =>
       room.connections[speaker].connected &&
       room.connections[speaker].listening === false &&
+      // A Claude chat Semaphore wakes through its hook needs no listener.
+      !claudeWakes(room.connections[speaker]) &&
       // Known GPT wake states have their own truthful guidance, including Off.
       !(speaker === "astra" && GPT_WAKE[room.connections[speaker].wake]) &&
       !receivedBy(room, speaker) &&

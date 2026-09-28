@@ -54,6 +54,7 @@ const app = createAppServer({
   transports: { astra: fake("astra-inbox"), claude: fake("claude-inbox") },
   wake,
   wakePump: false,
+  claudePump: false,
 });
 const url = (await app.listen(port)).replace(/\/$/, "");
 

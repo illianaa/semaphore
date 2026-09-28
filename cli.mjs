@@ -34,6 +34,9 @@ import { readWakeSettings, wakePaths } from "./lib/wake.mjs";
 import { WakeClient, verifyNativeSeat, sameRuntime } from "./lib/codex-runtime.mjs";
 import { cancelQueuedWake } from "./lib/wake-delivery.mjs";
 import { bindNativeWork } from "./lib/steering.mjs";
+import os from "node:os";
+import { registerSession } from "./lib/claude-registry.mjs";
+import { wakeCheck, claudeHooksStatus, installClaudeHooks, uninstallClaudeHooks } from "./lib/claude-wake.mjs";
 import { RUNTIME, formatRuntime, runtimeIdentity, runtimeChange, sameBuild } from './lib/build-info.mjs';
 import { statusNote } from './lib/status-note.mjs';
 import { artifactViews, artifactView } from './lib/artifacts.mjs';
@@ -95,6 +98,7 @@ Setting up (Claude or Astra runs these for you):
   node cli.mjs version                      Show this process's captured runtime identity
   node cli.mjs install [--yes]              List, then make, the setup changes
   node cli.mjs uninstall [--yes]            Remove Semaphore; conversations are kept
+  node cli.mjs hooks status|install|uninstall   Claude Code hooks that wake joined Claude chats without a listener
   node cli.mjs open                         Open the Semaphore app
 
 Conversations for live desktop chats:
@@ -315,7 +319,7 @@ async function installCommand() {
 function uninstallCommand() {
   if (!values.yes) {
     console.log(
-      `This removes Semaphore's command, its skill for Claude and Astra, the background app and the Semaphore app.\nConversations stay in ${installPaths().rooms}. Run again with --yes to remove.`,
+      `This removes Semaphore's command, its Claude Code hooks, its skill for Claude and Astra, the background app and the Semaphore app.\nConversations stay in ${installPaths().rooms}. Run again with --yes to remove.`,
     );
     return;
   }
@@ -690,6 +694,51 @@ function revealNewInput(store, speaker, session) {
   }
 }
 
+// Run by Claude Code, not by a person (see lib/claude-wake.mjs). It stays fast and quiet: any
+// problem exits 0 so no chat is disturbed; only a saved message for this chat exits 2 to wake it.
+async function hookCommand(verb) {
+  let input = "";
+  try { for await (const chunk of process.stdin) input += chunk; } catch {}
+  let event;
+  try { event = JSON.parse(input); } catch { return; }
+  try {
+    if (verb === "register") {
+      const output = registerSession(event);
+      if (output) process.stdout.write(JSON.stringify(output));
+    } else if (verb === "wake") {
+      const result = wakeCheck(event, { root });
+      if (result.code === 2) {
+        process.stderr.write(`${result.text}\n`);
+        process.exitCode = 2;
+      }
+    }
+  } catch { /* Never disturb a chat over Semaphore's own trouble. */ }
+}
+
+// Three entries in ~/.claude/settings.json. Everything else there is preserved, and a backup is
+// written first. Chats pick them up when they start or are reopened.
+function hooksCommand(verb) {
+  const paths = installPaths();
+  const options = { settingsPath: path.join(os.homedir(), ".claude", "settings.json"), command: paths.command,
+    backupDir: path.join(paths.dataHome, "backups"), registryHome: paths.dataHome };
+  if (verb === "install") {
+    const { changed, backup } = installClaudeHooks(options);
+    console.log(changed
+      ? `Installed Semaphore's Claude Code hooks in ${options.settingsPath}.${backup ? ` Backup: ${backup}` : ""}\nClaude chats pick them up when they start or are reopened; joined chats then need no listener.`
+      : "Semaphore's Claude Code hooks are already installed.");
+    return;
+  }
+  if (verb === "uninstall") {
+    const { changed, backup } = uninstallClaudeHooks(options);
+    console.log(changed
+      ? `Removed Semaphore's Claude Code hooks from ${options.settingsPath}; nothing else changed.${backup ? ` Backup: ${backup}` : ""}`
+      : "Semaphore's Claude Code hooks were not installed.");
+    return;
+  }
+  const status = claudeHooksStatus(options);
+  console.log(JSON.stringify({ settings: options.settingsPath, command: paths.command, ...status }, null, 2));
+}
+
 async function listenForTurn(room, store) {
   const caller = callerIn(room);
   const speaker = values.as ?? caller ?? "claude";
@@ -870,6 +919,8 @@ async function main() {
     "open",
     "wake",
     "version",
+    "hook",
+    "hooks",
   ];
   if (!commands.includes(command)) throw new Error(help);
   if (command === "version") return console.log(JSON.stringify(RUNTIME, null, 2));
@@ -879,6 +930,8 @@ async function main() {
     console.log(JSON.stringify(wakeStatus(), null, 2));
     return;
   }
+  if (command === "hook") return hookCommand(name);
+  if (command === "hooks") return hooksCommand(name);
   if (command === "doctor") return doctor();
   if (command === "install") return installCommand();
   if (command === "uninstall") return uninstallCommand();

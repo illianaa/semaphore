@@ -27,6 +27,7 @@ async function fixture(t, options = {}) {
   const app = createAppServer({
     root,
     wakePump: false,
+    claudePump: false,
     transports: { astra: fake("astra-inbox"), claude: fake("claude-inbox") },
     ...options,
   });
@@ -105,6 +106,23 @@ test("the session reports the running version and invitations preserve a configu
   const invite = await f.request(`/api/rooms/${room.name}/invite/claude`);
   assert.equal(invite.status, 200);
   assert.equal(new URL(invite.body.url).searchParams.get("folder"), workspace);
+});
+
+test("a Claude hook claim stays separate from confirmed delivery and explicit read receipts", async (t) => {
+  const f = await fixture(t);
+  const created = await f.create("Hook status"); f.bind(created.name);
+  const store = new RoomStore(f.root, created.name);
+  store.acquire();
+  try {
+    const room = store.read();
+    room.owner = "claude";
+    room.pending = { id: "turn", speaker: "claude", state: "awaiting-reply", receivedAt: new Date().toISOString(),
+      through: 1, reviewThrough: 2, claudeHook: { session: room.participants.claude.id, inputThrough: 2 } };
+    store.save(room);
+  } finally { store.release(); }
+  const room = (await f.request(`/api/rooms/${created.name}`)).body.room;
+  assert.equal(room.pending.deliveredThrough, null);
+  assert.equal(room.pending.offeredThrough, 2);
 });
 
 test("web shell is available, uses restrictive headers, and never exposes raw room files", async (t) => {

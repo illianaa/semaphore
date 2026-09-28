@@ -1,0 +1,13 @@
+{"at":"2026-09-27T22:37:02.989Z","pid":26248,"session":"target","file":"~/Projects/playground/semaphore-field/semaphore_wake_probe","event":"unlink","signal":""}
+{"at":"2026-09-27T22:39:50.960Z","hook":"FileChanged","pid":27114,"session":"target","file":"~/Projects/playground/semaphore-field/semaphore_wake_probe","event":"change","mine":true,"signal":"mid-work-check-3"}
+{"at":"2026-09-27T22:40:44.135Z","hook":"FileChanged","pid":27343,"session":"target","file":"~/Projects/playground/semaphore-field/semaphore_wake_probe","event":"change","mine":true,"signal":"idle-wake-1 written 22:40:43"}
+{"at":"2026-09-27T22:40:57.446Z","hook":"FileChanged","pid":27441,"session":"target","file":"~/Projects/playground/semaphore-field/semaphore_wake_probe","event":"change","mine":true,"signal":"burst-5"}
+{"at":"2026-09-27T22:41:28.218Z","hook":"FileChanged","pid":27587,"session":"target","file":"~/Projects/playground/semaphore-field/semaphore_wake_probe","event":"unlink","mine":false,"signal":""}
+{"at":"2026-09-27T22:41:43.978Z","hook":"CwdChanged","cwd":"~/Projects/playground","session":"<claude-session>","signal":"<scratch>/probe-signals/<claude-session>"}
+{"at":"2026-09-27T22:41:55.266Z","hook":"CwdChanged","cwd":"~/Projects/playground/semaphore-field","session":"<claude-session>","signal":"<scratch>/probe-signals/<claude-session>"}
+{"at":"2026-09-27T22:42:29.351Z","hook":"CwdChanged","cwd":"~/Projects/playground","session":"<claude-session>","signal":"<scratch>/probe-signals/<claude-session>"}
+{"at":"2026-09-27T22:42:33.146Z","hook":"FileChanged","pid":27940,"session":"<claude-session>","file":"<scratch>/probe-signals/<claude-session>","event":"change","mine":true,"signal":"absolute-path-3"}
+{"at":"2026-09-27T22:46:22.543Z","hook":"CwdChanged","cwd":"~/Projects/playground/semaphore-field","session":"<claude-session>","signal":"<scratch>/probe-signals/<claude-session>"}
+{"at":"2026-09-27T22:46:34.006Z","hook":"CwdChanged","cwd":"~/Projects/playground","session":"<claude-session>","signal":"<scratch>/probe-signals/<claude-session>"}
+{"at":"2026-09-27T22:46:37.899Z","hook":"FileChanged","pid":29296,"session":"<claude-session>","file":"<scratch>/probe-signals/<claude-session>","event":"change","mine":true,"signal":"pre-idle-check"}
+{"at":"2026-09-27T22:47:29.487Z","hook":"FileChanged","pid":29546,"session":"<claude-session>","file":"<scratch>/probe-signals/<claude-session>","event":"change","mine":true,"signal":"clean-idle-wake written 22:47:28"}

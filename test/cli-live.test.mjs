@@ -1149,3 +1149,29 @@ test("Astra's foreground listener still returns guidance at once while Astra wor
   assert.match(result.out, /already received turn/);
   assert.doesNotMatch(result.out, /Keep your listener running/);
 });
+
+test("a chat registered by its Claude Code hook is woken without a listener and told so", (t) => {
+  const f = setup(t);
+  joinBoth(f.run);
+  const home = path.join(path.dirname(f.root), "installation");
+  const signal = path.join(home, "claude", "signals", SESSION);
+  const registered = f.run(["hook", "register"], {}, JSON.stringify({ session_id: SESSION, hook_event_name: "SessionStart", source: "startup" }));
+  assert.equal(registered.code, 0, registered.err);
+  assert.deepEqual(JSON.parse(registered.out), { hookSpecificOutput: { hookEventName: "SessionStart", watchPaths: [signal] } });
+  assert.equal(f.run(["hook", "register"], {}, "not json").code, 0, "a malformed hook input never disturbs the chat");
+  f.run(["send", "room", "--to", "claude", "--file", f.write("h.txt", "Hello Claude")]);
+  const id = f.room("room").pending.id;
+  const event = JSON.stringify({ session_id: SESSION, hook_event_name: "FileChanged", file_path: signal, event: "change" });
+  const woke = f.run(["hook", "wake"], {}, event);
+  assert.equal(woke.code, 2);
+  assert.match(woke.err, new RegExp(`it's your turn as Claude\\. Read and acknowledge it first:\\nnode .* receive room --root .* --turn ${id}`));
+  assert.equal(f.run(["hook", "wake"], {}, event).code, 0, "not repeated");
+  const received = f.run(["receive", "room", "--turn", id], CLAUDE);
+  assert.equal(received.code, 0, received.err);
+  assert.match(received.out, /Semaphore brings you the human's messages while you work and wakes this chat for its next turn, so no listener is needed\./);
+  assert.doesNotMatch(received.out, /start this as a background task/);
+  const passed = f.run(["reply", "room", "--turn", id, "--next", "astra", "--file", f.write("c.txt", "Over to Astra.")], CLAUDE);
+  assert.equal(passed.code, 0, passed.err);
+  assert.match(passed.out, /Semaphore wakes this chat when its next turn is ready; no listener is needed\. End your turn right away/);
+  assert.match(f.run(["stick", "room"], CLAUDE).out, /Semaphore wakes this chat when it has something for you; no listener is needed\. End your turn\./);
+});

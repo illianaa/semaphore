@@ -79,7 +79,7 @@ test('old server and listener keep their build while a new CLI receives the same
   async function startServer(){
     const child=spawn(process.execPath,['--input-type=module','-e',`
       import {createAppServer} from './server.mjs';
-      const app=createAppServer({root:process.env.TEST_ROOM_ROOT,wakePump:false});
+      const app=createAppServer({root:process.env.TEST_ROOM_ROOT,wakePump:false,claudePump:false});
       process.send({url:await app.listen(0)});
       process.on('message',async message=>{if(message==='stop'){await app.close();process.exit(0);}});
     `],{cwd:f.source,env:{...env,TEST_ROOM_ROOT:root},stdio:['ignore','ignore','pipe','ipc']});

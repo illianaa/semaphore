@@ -20,6 +20,8 @@ import { artifactView, artifactViews } from './lib/artifacts.mjs';
 import { createPreviewServer, previewAvailability } from './lib/preview.mjs';
 import { titleText } from './lib/titles.mjs';
 import { timingView, timingReport } from './lib/timing.mjs';
+import { ClaudeSignalPump } from './lib/claude-wake.mjs';
+import { isRegistered } from './lib/claude-registry.mjs';
 
 const SPEAKERS = ["astra", "claude"];
 const MAX_BODY = 80_000;
@@ -33,6 +35,7 @@ export function createAppServer({
   inviteBuilder = buildInvite,
   diagnosticsProvider,
   wakePump,
+  claudePump,
   wake = {
     status: wakeStatus,
     enable: enableWake,
@@ -64,6 +67,8 @@ export function createAppServer({
   diagnosticsProvider ??= () => diagnose({ port, root });
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
   const pump = wakePump === false ? null : wakePump ?? new WakePump({ root });
+  // Wakes registered Claude chats through their Claude Code hook (lib/claude-wake.mjs).
+  const claudeSignals = claudePump === false ? null : claudePump ?? new ClaudeSignalPump({ root });
 
   function readRoom(name) {
     let store;
@@ -97,6 +102,8 @@ export function createAppServer({
             manual: p?.transport === "codex-queue",
             transport: p?.transport,
             ...(speaker === "astra" ? { wake: pump?.mode(p, store.dir, room), steering: pump?.canSteer?.(room, store.dir) === true } : {}),
+            // A Claude chat whose hook registered it is woken by Semaphore; it needs no listener.
+            ...(speaker === "claude" && p?.transport === "claude-inbox" && claudeSignals && isRegistered(p.id) ? { wake: "automatic" } : {}),
             ...(INBOX_TRANSPORTS.includes(p?.transport) && p.id
               ? { listening: listenerStatus(store.dir, speaker).active }
               : {}),
@@ -129,10 +136,12 @@ export function createAppServer({
             at: room.pending.at,
             wake: room.pending.wake ?? null,
             timing: timingView(room, store.dir),
-            // A prepared GPT revision is not a native delivery receipt.
+            // Preparing a revision or claiming a hook is not native delivery confirmation.
             deliveredThrough: room.pending.speaker === 'astra'
               ? room.pending.steering?.deliveredThrough ?? null
-              : room.pending.reviewThrough ?? null,
+              : connections.claude.wake === 'automatic' || room.pending.claudeHook
+                ? null : room.pending.reviewThrough ?? null,
+            offeredThrough: room.pending.claudeHook?.inputThrough ?? null,
             ...(room.pending.state === "awaiting-reply"
               ? {
                   progress: deliveryProgress({
@@ -562,11 +571,13 @@ export function createAppServer({
       });
       port = server.address().port;
       pump?.start();
+      claudeSignals?.start();
       return `http://127.0.0.1:${port}`;
     },
     async close() {
       closing = true;
       pump?.close();
+      claudeSignals?.close();
       await previews.close();
       for (const timer of flushTimers) clearTimeout(timer);
       for (const app of active.values()) if (app.running) app.takeStick();
