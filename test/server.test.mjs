@@ -930,3 +930,25 @@ test("Wake Claude is a Claude-only route that needs Claude to hold a turn", asyn
   assert.equal(off.status, 409, "this app runs without Claude wake-ups");
   assert.equal((await f.request(`/api/rooms/${room.name}/wake/claude`)).status, 405);
 });
+
+test('end and reopen API preserves transcript and blocks messages until review', async t => {
+  const f = await fixture(t);
+  const created = await f.create('End a project'); f.bind(created.name);
+  const base = `/api/rooms/${created.name}`;
+  await f.request(`${base}/messages`, { method: 'POST', body: { text: 'Work', to: 'astra', clientId: 'start-ending-1' } });
+  const ended = await f.request(`${base}/end`, { method: 'POST', body: {} });
+  assert.equal(ended.status, 200);
+  assert.ok(ended.body.room.ended.at);
+  assert.equal(ended.body.room.canInterject, false);
+  assert.equal(ended.body.room.messageCount, 1);
+  assert.equal((await f.request('/api/rooms')).body.rooms[0].ended.at, ended.body.room.ended.at);
+  for (const [route, body] of [['messages', { text: 'Late', to: 'astra', clientId: 'ended-late-1' }], ['pass', { to: 'astra' }], ['recover', { acknowledged: true }]]) {
+    const result = await f.request(`${base}/${route}`, { method: 'POST', body });
+    assert.equal(result.status, 409, JSON.stringify(result.body));
+  }
+  const reopened = await f.request(`${base}/reopen`, { method: 'POST', body: {} });
+  assert.equal(reopened.body.room.ended, null);
+  assert.equal(reopened.body.room.owner, 'human');
+  assert.equal(reopened.body.room.pending.state, 'uncertain');
+  assert.equal(f.calls.length, 1, 'reopening sends nothing');
+});

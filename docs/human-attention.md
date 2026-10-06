@@ -75,3 +75,18 @@ Added to the skill, the invitation and every turn envelope's footer (one line th
 - `Semaphore.reopen()` clears `ended`; the person holds the stick. An uncertain turn from before the end still needs *Review & continue*.
 - App: *End conversation…* in the conversation header, with a confirmation. An ended room shows a calm grey banner (“You ended this conversation”), replaces the composer with *Reopen*, and moves to an *Ended* group at the bottom of the sidebar.
 - CLI: `semaphore end <room>` and `semaphore reopen <room>` for the person, so “stop the project” said in either chat works. The skill: “If the person says to end or stop the conversation for good, run `semaphore end <room>`.”
+
+## GPT review and implementation (6 October 2026)
+
+Item 5 is implemented on this branch. `end` is idempotent, retains an interrupted turn as uncertain, closes open asks, and blocks work until explicit reopening and recovery. The app has an End conversation confirmation, an ended sidebar group/banner, and a Reopen composer. Both inbox listeners exit. Claude's hook delivers a one-time stop notice; verified GPT native work receives one durable `turn/steer` stop notice into the exact turn authenticated by `receive`. No native chat is resumed or started to stop it. Ambiguous steering is not retried. The existing wake pump removes obsolete queued wakes. Already running tools cannot be undone, and a disconnected native app may not receive a stop notice until it reconnects/checks the room.
+
+Feedback for item 4:
+
+- Keep the persistent tray, cross-room count and self-contained question/choices. Include what is blocked and a recommended answer in the detail when useful. A collapsed question must still tell the person what response is needed.
+- Use “visible until resolved” instead of promising a guaranteed response/delivery: the person may ignore it, notifications may be disabled, and native app approval cannot be supplied by another AI or by answering a Semaphore ask. An approval card should name the native app and provide its existing chat link when possible.
+- Add a caller-provided request ID or idempotency key to `ask`: a CLI retry after a lost response must not create duplicate cards/notifications. Permit updating or withdrawing an existing ask rather than filing a replacement.
+- Make answer/dismiss atomic and idempotent with the human message. Reject answers to closed/withdrawn asks, including after end/reopen; do not silently reopen them. Dismissal is not approval and doesn't satisfy a blocking dependency.
+- Answer routing needs care when the other AI holds the stick. The current interjection path goes to the working AI and only nominates a future recipient. Preserve the answer in the transcript and ensure the asker receives it on its next valid turn; never steal the current turn or promise immediate delivery to the asker. A blocking ask should normally pass to human.
+- A separate all-asks sidebar page may wait; a persistent tray plus room badges and companion display covers the immediate need. Keep limits and defaults small. Document whether `--blocking` only prioritizes a card or actively gates dispatch; don't imply a gate without enforcing it.
+
+The GPT display names and compact invitations read correctly. Real CLI integration tests exercise `--as gpt`, `--to gpt`, aliases, and preserved `astra` storage. The installed release stays unchanged while this branch is reviewed.

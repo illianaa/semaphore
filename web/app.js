@@ -432,6 +432,7 @@ function restoreDraft(name, text, rejected, clientId) {
 }
 
 function roomSubtitle(room) {
+  if (room.ended) return "Ended";
   if (room.opening?.state === "waiting") {
     const missing = waitingOn(room);
     return missing.length > 1
@@ -453,13 +454,11 @@ function renderSidebar() {
     room.title.toLocaleLowerCase().includes(search),
   );
   $("#room-count").textContent = state.rooms.length;
+  const item = (room) => `<button class="room-item ${state.selected === room.name ? "selected" : ""}" data-room="${escape(room.name)}" ${state.selected === room.name ? 'aria-current="page"' : ""}><span class="room-copy"><strong>${escape(room.title)}</strong><small>${escape(roomSubtitle(room))}</small></span>${room.ended ? "" : awaitingApproval(room) ? '<span class="room-dot approval" aria-label="Approval needed"></span>' : room.pending ? '<span class="room-dot" aria-label="Reply pending"></span>' : ""}</button>`;
+  const active = rooms.filter(room => !room.ended);
+  const ended = rooms.filter(room => room.ended);
   $("#room-list").innerHTML = rooms.length
-    ? rooms
-        .map(
-          (room) =>
-            `<button class="room-item ${state.selected === room.name ? "selected" : ""}" data-room="${escape(room.name)}" ${state.selected === room.name ? 'aria-current="page"' : ""}><span class="room-copy"><strong>${escape(room.title)}</strong><small>${escape(roomSubtitle(room))}</small></span>${awaitingApproval(room) ? '<span class="room-dot approval" aria-label="Approval needed"></span>' : room.pending ? '<span class="room-dot" aria-label="Reply pending"></span>' : ""}</button>`,
-        )
-        .join("")
+    ? active.map(item).join("") + (ended.length ? '<div class="ended-label">Ended</div>' + ended.map(item).join("") : "")
     : `<p class="no-rooms">${search ? "No matching conversations." : "A good conversation starts with a thought. Make room for yours."}</p>`;
 }
 
@@ -527,12 +526,13 @@ function renderStatus(room, setup) {
   const approval = note?.kind === "approval";
   const recoveryAction = paused ? null : pendingAction(pending, room);
   const chatURL = approval || recoveryAction === "chat" ? room.connections[pending.speaker]?.url : null;
-  const holder = paused ? "paused" : (pending?.speaker ?? "human");
+  const holder = room.ended ? "ended" : paused ? "paused" : (pending?.speaker ?? "human");
   // The stick coming back from an AI plays the arrival once; later redraws stay calm.
   const arrived = holder === "human" && ["astra", "claude"].includes(state.holders[room.name]);
   state.holders[room.name] = holder;
   trackDeliverables(room);
   banner.classList.toggle("paused", paused);
+  banner.classList.toggle("ended", !!room.ended);
   banner.classList.toggle("approval", approval);
   if (arrived) banner.classList.add("arrived");
   else if (holder !== "human" || changedRoom) banner.classList.remove("arrived");
@@ -543,7 +543,9 @@ function renderStatus(room, setup) {
       ? `${signalMark(pending.speaker, approval ? "" : "working")}<span>${approval ? `<strong>${labels[pending.speaker]} is waiting for your approval in ${hostApp(pending.speaker)}</strong>` : `<strong>${labels[pending.speaker]} has the stick</strong><span class="state-detail"> · ${escape(pendingDetail(pending, room))}${Number.isInteger(room.maxTurns) ? ` · reply ${Math.min((room.autoTurns ?? 0) + 1, room.maxTurns)} of ${room.maxTurns}` : ""}</span>`}${note ? `<span class="state-note" title="${escape(note.text)}">“${escape(note.text)}” · ${escape(relativeTime(note.updatedAt))}</span>` : ""}</span>`
       : `${signalMark("human")}<span><strong>Your turn</strong><span class="state-detail"> · reply, or hand the stick to one of them</span></span>`;
   // During the guided start, the start card is the only call to action.
-  const markup = setup
+  const markup = room.ended
+    ? `<span class="state-who"><i class="state-dot"></i><span><strong>You ended this conversation</strong><span class="state-detail"> · the loop is stopped</span></span></span><div class="state-actions">${deliverablesPill(room)}</div>`
+    : setup
     ? ""
     : `<span class="state-who">${who}</span><div class="state-actions">${deliverablesPill(room)}${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${["stuck", "quiet"].includes(claudeWakeOffer(room)) ? `<button class="${claudeWakeOffer(room) === "stuck" ? "primary" : ""}" data-action="wake-claude" title="Signal Claude's chat through its Claude Code hook to ${claudeWakeOffer(room) === "stuck" ? "start this turn" : "check in on this turn"}">Wake Claude</button>` : ""}${chatURL ? `<a class="state-link" href="${escape(chatURL)}">Open chat ↗</a>` : recoveryAction === "setup" ? '<button data-action="setup">Check setup</button>' : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
   if (changedRoom || banner.renderedMarkup !== markup) {
@@ -609,6 +611,7 @@ function renderRoom(room, force = false) {
   $("#conversation").hidden = false;
   $("#top-title").textContent = room.title;
   $("#conversation-title").textContent = room.title;
+  $("#end-conversation").hidden = !!room.ended;
   // A name an AI suggested stays visibly theirs until the person renames it.
   $("#conversation-eyebrow").textContent = ["astra", "claude"].includes(room.titleSource)
     ? `GROUP CONVERSATION · NAMED BY ${labels[room.titleSource].toUpperCase()}`
@@ -623,7 +626,7 @@ function renderRoom(room, force = false) {
   const opening = room.opening;
   // A new conversation stays in the guided start until its opening has gone out.
   const setup =
-    !room.legacy &&
+    !room.legacy && !room.ended &&
     (!room.messages.length ||
       ["waiting", "dispatching"].includes(opening?.state));
   if (setup) loadInvites(room.name);
@@ -647,7 +650,7 @@ function renderRoom(room, force = false) {
   );
   const needsListener = resting.length > 0;
   const guide = $("#connection-guide");
-  guide.hidden = setup || (!missing.length && !needsListener && !room.legacy);
+  guide.hidden = !!room.ended || setup || (!missing.length && !needsListener && !room.legacy);
   if (!guide.hidden)
     guide.innerHTML = `<div><strong>${room.legacy ? "This is an earlier headless conversation" : missing.length ? `Make room for ${missing.map((s) => labels[s]).join(" and ")}` : `${resting.map((s) => labels[s]).join(" and ")} ${resting.length > 1 ? "aren’t" : "isn’t"} listening`}</strong><p>${room.legacy ? "Create a new conversation to connect your live desktop chats." : missing.length ? "Invite each model from its desktop chat. We’ll show you when they join." : `Open ${resting.map((s) => labels[s]).join(" and ")}’s chat and ask it to listen to this room again. Messages wait in its inbox until then.`}</p></div><button data-action="connect">${missing.length ? "Connect apps" : "View connection"} ↗</button>`;
   renderStatus(room, setup);
@@ -940,7 +943,7 @@ function renderDeliverables(room, setup) {
 function renderLimit(room, setup) {
   const limit = room.turnLimit === undefined ? 4 : room.turnLimit;
   const bar = $("#limit-switch");
-  bar.hidden = !!room.legacy;
+  bar.hidden = !!room.legacy || !!room.ended;
   const saving = pendingLimits.has(room.name);
   const value = limitValue(saving ? pendingLimits.get(room.name) : limit);
   bar.dataset.room = room.name;
@@ -966,7 +969,7 @@ function renderStartLimit() {
 }
 // What sending does right now: start the conversation, speak mid-turn, or send normally.
 function composerMode(room) {
-  if (!room || room.legacy) return "closed";
+  if (!room || room.legacy || room.ended) return "closed";
   if (room.pending) return room.canInterject ? "interject" : "wait";
   if (room.opening?.state === "waiting") return "setup-input";
   if (!room.messages.length && waitingOn(room).length) return "opening";
@@ -994,6 +997,9 @@ function composerHint(room, mode) {
 }
 function updateComposer() {
   const room = state.room;
+  $("#composer").hidden = !!room?.ended;
+  $("#ended-composer").hidden = !room?.ended;
+  $("#composer-hint").hidden = !!room?.ended;
   const members = room?.members ?? SEATS;
   if (!members.includes(state.recipient)) state.recipient = members[0];
   const mode = composerMode(room);
@@ -1053,6 +1059,7 @@ function notifyTurns(rooms) {
     const before = state.owners[room.name];
     state.owners[room.name] = room.owner;
     if (
+      room.ended ||
       !before ||
       before === "human" ||
       room.owner !== "human" ||
@@ -1271,6 +1278,7 @@ async function action(kind) {
   if (!state.room) return;
   const name = state.room.name;
   if (kind === "connect") return connections();
+  if (kind === "end" && !await confirmAction({ title: "End this conversation?", text: "Stop the loop and close open requests. Messages and files are kept. Tools already running may finish; you can reopen the conversation later.", action: "End conversation" })) return;
   if (kind === "recover") {
     $("#recover-check").checked = false;
     $("#recover-confirm").disabled = true;
@@ -1317,6 +1325,9 @@ function sendOnEnter(box, form) {
     form.requestSubmit();
   });
 }
+
+$("#end-conversation").addEventListener("click", () => action("end"));
+$("#reopen-conversation").addEventListener("click", () => action("reopen"));
 
 $("#new-room").addEventListener("click", () => showHome());
 $("#limit-switch").addEventListener("change", async (event) => {

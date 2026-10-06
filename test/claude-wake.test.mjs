@@ -352,3 +352,24 @@ test("uninstall preserves mixed hook groups and revokes stale automatic-wake reg
   assert.throws(() => installClaudeHooks(options), /disableAllHooks/);
   assert.deepEqual(JSON.parse(fs.readFileSync(settingsPath, "utf8")), { disableAllHooks: true });
 });
+
+test('ending wakes a working Claude once with a stop notice, including after take-back', async t => {
+  const f = fixture(t);
+  registerSession({ session_id: SESSION, hook_event_name: 'SessionStart' }, { home: f.home });
+  const { app, store, done } = f.room();
+  await app.send('Work on this', 'claude');
+  app.receive(app.room.pending.id, 'claude');
+  app.takeStick(); done();
+  assert.match(f.wake().text, /took the stick back/);
+  store.acquire();
+  new Semaphore(store, {}).end();
+  store.release();
+  const pump = new ClaudeSignalPump({ root: f.root, home: f.home });
+  assert.match(pump.wants(pump.summary('room')).key, /:ended:/);
+  const notice = f.wake();
+  assert.equal(notice.code, 2);
+  assert.match(notice.text, /person ended this conversation/);
+  assert.match(notice.text, /Do not reply, restart a listener/);
+  assert.equal(f.wake().code, 0);
+  assert.equal(pump.wants(pump.summary('room')), null);
+});

@@ -208,6 +208,7 @@
         </section>
         <section id="conversation" class="conversation" hidden>
           <div class="conversation-heading">
+            <button type="button" class="subtle-button" id="end-conversation">End conversation</button>
             <div class="title-block">
               <div class="eyebrow" id="conversation-eyebrow">GROUP CONVERSATION</div>
               <div class="title-row">
@@ -246,6 +247,7 @@
             </nav>
           </div>
           <div class="composer-area">
+            <div id="ended-composer" class="ended-composer" hidden><p>This conversation has ended. Your messages and files are kept.</p><button type="button" class="primary-button" id="reopen-conversation">Reopen conversation</button></div>
             <form id="composer" class="composer">
               <label class="sr-only" for="message"
                 >Message the conversation</label

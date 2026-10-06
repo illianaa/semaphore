@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { RoomStore, Semaphore } from '../lib/core.mjs';
 import { queueHumanInput } from '../lib/inputs.mjs';
-import { bindNativeWork, steerPending } from '../lib/steering.mjs';
+import { bindNativeWork, steerPending, steerEnded } from '../lib/steering.mjs';
 import { WakePump } from '../lib/wake-delivery.mjs';
 
 function fixture(t) {
@@ -30,7 +30,7 @@ function fixture(t) {
       if (method === 'thread/turns/list') return { data: [...(this.activeId ? [{ id: this.activeId, status: 'inProgress',
         items: this.visible ? this.messages : [] }] : []), ...this.turns], nextCursor: null };
       if (method === 'turn/steer') {
-        assert.equal(store.read().pending.steering.batch.status, 'sending', 'intent saved before sending');
+        assert.equal((params.clientUserMessageId.startsWith('semaphore-ended-') ? store.read().pending.endedDelivery : store.read().pending.steering.batch).status, 'sending', 'intent saved before sending');
         if (this.fail === 'before') throw new Error('connection lost');
         if (this.fail === 'ended') { this.activeId = null; throw Object.assign(new Error('no active turn to steer'), { rpc: true }); }
         assert.equal(params.expectedTurnId, this.activeId);
@@ -184,4 +184,27 @@ test('a locked room keeps a recent steering answer but cannot refresh its age', 
   assert.equal(capable(), false, 'the separate room inspection expired');
   f.store.release(); f.native.activeId = 'native-turn';
   await pump.tick(); assert.equal(capable(), true);
+});
+
+test('ending steers a stop once into the exact working GPT turn, never a replacement turn', async t => {
+  const f = fixture(t);
+  new Semaphore(f.store, {}).end();
+  await steerEnded(f.store, f.options);
+  await steerEnded(f.store, f.options);
+  assert.equal(f.count(), 1);
+  assert.equal(f.store.read().pending.endedDelivery.status, 'sent');
+  assert.match(f.native.calls.find(c => c.method === 'turn/steer').params.input[0].text, /person ended this conversation/);
+});
+
+test('ending never steers into a later GPT turn, and an uncertain stop is not retried', async t => {
+  const f = fixture(t);
+  new Semaphore(f.store, {}).end();
+  f.native.activeId = 'another-turn';
+  await steerEnded(f.store, f.options);
+  assert.equal(f.count(), 0);
+  f.native.activeId = 'native-turn'; f.native.fail = 'after';
+  await steerEnded(f.store, f.options);
+  await steerEnded(f.store, f.options);
+  assert.equal(f.count(), 1);
+  assert.equal(f.store.read().pending.endedDelivery.status, 'uncertain');
 });

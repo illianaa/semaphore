@@ -125,7 +125,8 @@ export function createAppServer({
       titleSource: room.titleSource ?? "existing",
       createdAt: room.createdAt,
       owner: room.owner,
-      canInterject: !!room.pending || room.opening?.state === "waiting",
+      ended: room.ended ?? null,
+      canInterject: !room.ended && (!!room.pending || room.opening?.state === "waiting"),
       opening: room.opening ?? null,
       members: room.members ?? SPEAKERS,
       replyNext: room.replyNext ?? null,
@@ -424,7 +425,7 @@ export function createAppServer({
         return json(200, await previews.issue(room.name, artifactView(artifact)));
       }
       const match =
-        /^\/api\/rooms\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(?:\/(messages|opening|take|recover|pass|invite|unlock|limit|title|timings|wake)(?:\/(astra|claude))?)?$/.exec(
+        /^\/api\/rooms\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(?:\/(messages|opening|take|end|reopen|recover|pass|invite|unlock|limit|title|timings|wake)(?:\/(astra|claude))?)?$/.exec(
           url.pathname,
         );
       if (!match) throw error(404, "Not found.");
@@ -446,7 +447,7 @@ export function createAppServer({
       }
       if (
         req.method !== "POST" ||
-        !["messages", "opening", "take", "recover", "pass", "unlock", "limit", "title", "wake"].includes(action)
+        !["messages", "opening", "take", "end", "reopen", "recover", "pass", "unlock", "limit", "title", "wake"].includes(action)
       )
         throw error(405, "Method not allowed.");
       const input = await body(req);
@@ -510,9 +511,9 @@ export function createAppServer({
       }
       // Abort an in-flight delivery in this server immediately, while its process
       // still owns the lock. The existing handler persists the uncertain outcome.
-      if (action === "take" && active.get(name)?.running) {
+      if (["take", "end"].includes(action) && active.get(name)?.running) {
         const app = active.get(name);
-        app.takeStick();
+        action === "end" ? app.end() : app.takeStick();
         return json(200, { room: view(app.room, app.store) });
       }
       const change = async (app) => {
@@ -527,6 +528,8 @@ export function createAppServer({
           await app.pass(input.to);
         }
         if (action === "take") app.takeStick();
+        if (action === "end") app.end();
+        if (action === "reopen") app.reopen();
         if (action === "limit") app.setTurnLimit(input.maxTurns);
         if (action === "title") app.setTitle(input.title);
         if (action === "wake") {
@@ -546,7 +549,7 @@ export function createAppServer({
       try {
         room = await mutate(name, change, { waitMs: action === "messages" ? 0 : 5000 });
         // Signal at once rather than on the pump's next tick.
-        if (action === "wake") try { claudeSignals.tick(); } catch {}
+        if (["wake", "end"].includes(action)) try { claudeSignals?.tick(); } catch {}
       } catch (err) {
         if (action !== "messages" || err.code !== "ROOM_LOCKED") throw err;
         const { room: saved, store } = readRoom(name);

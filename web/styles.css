@@ -3582,3 +3582,12 @@ em,
 .composer.fixed-reply .recipient-picker button {
   display: none;
 }
+
+/* Ended conversations remain readable and can be explicitly reopened. */
+#end-conversation { order: 2; margin-left: auto; align-self: flex-start; }
+.room-alerts .state-banner.ended { background: var(--surface); color: var(--muted); }
+.ended-label { padding: 20px 14px 7px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.ended-composer { padding: 18px; text-align: center; }
+.ended-composer p { margin: 0 0 12px; color: var(--muted); }
+
+.ended-composer .primary-button { width: auto; margin: 0 auto; padding: 10px 18px; }

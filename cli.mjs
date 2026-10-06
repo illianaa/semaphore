@@ -20,6 +20,7 @@ import {
   roomCommands,
   inputNotice,
   takenNotice,
+  endedNotice,
 } from "./lib/live.mjs";
 import { inputMessages, queuedInputs } from "./lib/inputs.mjs";
 import {
@@ -119,6 +120,8 @@ Conversations for live desktop chats:
   node cli.mjs native <room>                Show native conversation links
   node cli.mjs inspect <room>               Read GPT's saved native history
   node cli.mjs take <room>                  Take the stick; a pending native reply is rejected
+  node cli.mjs end <room>                   End the loop until the person reopens it
+  node cli.mjs reopen <room>                Reopen without starting work
   node cli.mjs recover <room>               Acknowledge an uncertain delivery
   node cli.mjs unlock <room>                Remove a lock only if its process died
 
@@ -642,6 +645,7 @@ function handOff(room, caller) {
 
 // Lets a chat whose task resumed on its own check whose turn it is before doing anything.
 function stick(room) {
+  if (room.ended) { console.log(endedNotice(room)); process.exitCode = 3; return; }
   const caller = callerIn(room);
   const mine = caller
     ? room.owner === caller
@@ -743,6 +747,7 @@ function hooksCommand(verb) {
 }
 
 async function listenForTurn(room, store) {
+  if (room.ended) { console.log(endedNotice(room)); return; }
   const caller = callerIn(room);
   const speaker = values.as ?? caller ?? "claude";
   if (caller !== speaker)
@@ -793,6 +798,7 @@ async function listenForTurn(room, store) {
       return null;
     }
     if (!stillMine(current) || item.session !== session) return null;
+    if (current.ended) return false;
     const pending = current.pending;
     return (
       !!pending &&
@@ -808,6 +814,7 @@ async function listenForTurn(room, store) {
   const baseline = threadId ? codexQueueRevision({ threadId }) : null;
   let nudged = false;
   let disconnected = false;
+  let ended = null;
   let shown = null;
   // The turn this chat is working on, if any, so the listener can tell it when the human takes
   // the stick back. A turn that ends with this chat's own reply ends quietly.
@@ -833,8 +840,9 @@ async function listenForTurn(room, store) {
     try {
       current = store.read();
       disconnected = !stillMine(current);
+      ended = current.ended ? current : null;
     } catch {}
-    if (disconnected) return true;
+    if (ended || disconnected) return true;
     if (transport === "claude-inbox") {
       if (current && endedWithoutReply(current)) return true;
       shown = revealNewInput(store, speaker, session);
@@ -861,6 +869,7 @@ async function listenForTurn(room, store) {
     });
     for (const item of items) console.log(`Listener runtime: ${formatRuntime()}${item.runtime ? '' : '\nThe saved envelope was produced by an unstamped release.'}\n${item.prompt}\n`);
     if (items.length) return;
+    if (ended) { console.log(endedNotice(ended)); return; }
     if (shown) {
       console.log(`Listener runtime: ${formatRuntime()}\n${inputNotice(shown, { root })}`);
       return;
@@ -903,6 +912,8 @@ async function main() {
     "unlock",
     "pass",
     "take",
+    "end",
+    "reopen",
     "join",
     "reply",
     "listen",
@@ -1029,7 +1040,14 @@ async function main() {
         ownTurn: command === "reply" ? values.turn : undefined,
       }),
     );
+    if (command === "end" || command === "reopen") {
+      if (nativeChat() && !caller) throw new Error("Run this from a bound chat or the Semaphore app.");
+      semaphore[command]();
+      console.log(command === "end" ? endedNotice(semaphore.room) : "Conversation reopened. You hold the stick; no work has restarted.");
+      return;
+    }
     if (command === "join") {
+      semaphore.checkActive();
       await join(semaphore);
       // A new binding can complete setup. Refresh the adapters from that binding.
       semaphore.adapters = transportsFor(semaphore.room, callerIn(semaphore.room));

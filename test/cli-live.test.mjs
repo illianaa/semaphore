@@ -1187,3 +1187,30 @@ test("a chat registered by its Claude Code hook is woken without a listener and 
   assert.match(passed.out, /Semaphore wakes this chat when its next turn is ready; no listener is needed\. End your turn right away/);
   assert.match(f.run(["stick", "room"], CLAUDE).out, /Semaphore wakes this chat when it has something for you; no listener is needed\. End your turn\./);
 });
+
+test("end releases GPT and Claude listeners, rejects late replies and needs explicit reopen", { timeout: 15000 }, async t => {
+  const f = setup(t);
+  assert.equal(f.run(['join', 'room', '--as', 'gpt'], ASTRA).code, 0);
+  assert.equal(f.run(['join', 'room', '--as', 'claude'], CLAUDE).code, 0);
+  const sent = f.run(['send', 'room', '--to', 'gpt', 'Please work'], ASTRA);
+  const turn = turnIn(sent.out);
+  assert.equal(f.run(['receive', 'room', '--as', 'gpt', '--turn', turn], ASTRA).code, 0);
+  assert.equal(f.run(['reply', 'room', '--turn', turn, '--next', 'human', 'Waiting'], ASTRA).code, 0);
+  const gpt = f.start(['listen', 'room', '--as', 'gpt', '--timeout', '6'], ASTRA);
+  const claude = f.start(['listen', 'room', '--timeout', '6'], CLAUDE);
+  for (let i = 0; i < 100; i++) {
+    if (['astra', 'claude'].every(s => fs.existsSync(path.join(f.root, 'room', 'inbox', s, 'listener.pid')))) break;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  assert.equal(f.run(['end', 'room']).code, 0);
+  for (const result of await Promise.all([gpt, claude])) {
+    assert.equal(result.code, 0, result.out);
+    assert.match(result.out, /person ended this conversation/);
+    assert.doesNotMatch(result.out, /to keep waiting, run/);
+  }
+  assert.equal(f.run(['stick', 'room'], ASTRA).code, 3);
+  assert.match(f.run(['listen', 'room', '--as', 'gpt'], ASTRA).out, /person ended/);
+  assert.equal(f.run(['send', 'room', '--to', 'gpt', 'More'], ASTRA).code, 1);
+  assert.equal(f.run(['reopen', 'room']).code, 0);
+  assert.equal(f.room('room').owner, 'human');
+});
