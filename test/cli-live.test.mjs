@@ -117,14 +117,14 @@ function joinBoth(run, { manual = false } = {}) {
   assert.equal(run(["join", "room", "--as", "claude"], CLAUDE).code, 0);
 }
 
-test("acceptance flow: human via Astra, Astra → Claude → Astra → human, all in the live chats", (t) => {
+test("acceptance flow: human via GPT, GPT → Claude → GPT → human, all in the live chats", (t) => {
   const { run, write, room, queued, claudeCalled } = setup(t);
   assert.equal(run(["join", "room", "--as", "astra"], ASTRA).code, 0);
   const joined = run(["join", "room", "--as", "claude"], CLAUDE);
   assert.equal(joined.code, 0, joined.err);
   assert.match(joined.out, /listen room --root '/);
 
-  // The human spoke in Astra's chat; Astra relays it and gets its own turn handed back directly.
+  // The human spoke in GPT's chat; GPT relays it and gets its own turn handed back directly.
   const sent = run(
     [
       "send",
@@ -132,12 +132,12 @@ test("acceptance flow: human via Astra, Astra → Claude → Astra → human, al
       "--to",
       "astra",
       "--file",
-      write("human.txt", "Hello both. Astra first, then Claude."),
+      write("human.txt", "Hello both. GPT first, then Claude."),
     ],
     ASTRA,
   );
   assert.equal(sent.code, 0, sent.err);
-  assert.match(sent.out, /Human \(relayed by Astra\) → Astra:\nHello both/);
+  assert.match(sent.out, /Human \(relayed by GPT\) → GPT:\nHello both/);
   const t1 = turnIn(sent.out);
   assert.equal(queued().length, 0, "never queued back into the calling chat");
 
@@ -150,7 +150,7 @@ test("acceptance flow: human via Astra, Astra → Claude → Astra → human, al
       "--next",
       "claude",
       "--file",
-      write("a1.txt", "Astra here. Over to Claude."),
+      write("a1.txt", "GPT here. Over to Claude."),
     ],
     ASTRA,
   );
@@ -158,7 +158,7 @@ test("acceptance flow: human via Astra, Astra → Claude → Astra → human, al
   assert.match(r1.out, /Accepted as message 2\. Stick: claude/);
   assert.doesNotMatch(
     r1.out,
-    /Astra here/,
+    /GPT here/,
     "the caller is not shown its own reply again",
   );
 
@@ -166,7 +166,7 @@ test("acceptance flow: human via Astra, Astra → Claude → Astra → human, al
   assert.equal(heard.code, 0, heard.err);
   assert.match(
     heard.out,
-    /Human \(relayed by Astra\) → Astra:\nHello both[\s\S]*Astra → Claude:\nAstra here/,
+    /Human \(relayed by GPT\) → GPT:\nHello both[\s\S]*GPT → Claude:\nGPT here/,
   );
   const t2 = turnIn(heard.out);
 
@@ -179,7 +179,7 @@ test("acceptance flow: human via Astra, Astra → Claude → Astra → human, al
       "--next",
       "astra",
       "--file",
-      write("c1.txt", "Claude here. Back to Astra."),
+      write("c1.txt", "Claude here. Back to GPT."),
     ],
     CLAUDE,
   );
@@ -187,11 +187,11 @@ test("acceptance flow: human via Astra, Astra → Claude → Astra → human, al
   const waiting = run(["listen", "room", "--as", "astra", "--timeout", "5"], ASTRA);
   assert.equal(waiting.code, 0, waiting.err);
   const envelope = waiting.out;
-  assert.match(envelope, /Claude → Astra:\nClaude here/);
+  assert.match(envelope, /Claude → GPT:\nClaude here/);
   assert.doesNotMatch(
     envelope,
-    /Astra here/,
-    "Astra already has its own reply",
+    /GPT here/,
+    "GPT already has its own reply",
   );
   const t3 = turnIn(envelope);
   assert.equal(run(["receive", "room", "--turn", t3], ASTRA).code, 0);
@@ -317,12 +317,24 @@ test("a bound chat relays the human with provenance; --via cannot be claimed fro
     run(["send", "room", "--via", "astra", "--file", message]).err,
     /--via astra works only/,
   );
-  // From anywhere else the human speaks directly, and Astra's turn waits in its inbox.
+  // From anywhere else the human speaks directly, and GPT's turn waits in its inbox.
   const direct = run(["send", "room", "--to", "astra", "--file", message]);
   assert.equal(direct.code, 0, direct.err);
   assert.equal(room("room").messages[0].via, undefined);
   assert.equal(inbox("room", "astra").length, 1);
   assert.equal(queued().length, 0);
+});
+
+test("gpt names GPT's seat wherever a speaker is named; the stored seat stays astra", (t) => {
+  const { run, write, room, inbox } = setup(t);
+  const joined = run(["join", "room", "--as", "gpt"], ASTRA);
+  assert.equal(joined.code, 0, joined.err);
+  assert.equal(room("room").participants.astra.id, THREAD);
+  assert.equal(run(["join", "room", "--as", "GPT"], ASTRA).code, 0);
+  const sent = run(["send", "room", "--to", "gpt", "--file", write("h.txt", "Hello.")]);
+  assert.equal(sent.code, 0, sent.err);
+  assert.equal(room("room").messages[0].next, "astra");
+  assert.equal(inbox("room", "astra").length, 1);
 });
 
 test("join binds only from inside the chat, is idempotent, and needs --rebind with no pending turn to replace one", (t) => {
@@ -333,7 +345,7 @@ test("join binds only from inside the chat, is idempotent, and needs --rebind wi
   );
   assert.match(
     run(["join", "room", "--as", "human"], ASTRA).err,
-    /--as astra or --as claude/,
+    /--as gpt or --as claude/,
   );
   assert.equal(run(["join", "room", "--as", "claude"], CLAUDE).code, 0);
   assert.match(
@@ -407,7 +419,7 @@ test("a reply that commits but cannot reach the next chat says so, and repeating
     "--next",
     "astra",
     "--file",
-    write("c.txt", "Astra, over to you."),
+    write("c.txt", "GPT, over to you."),
   ];
   const failed = run(reply, { ...CLAUDE, FAKE_CODEX_FAIL: "1" });
   assert.equal(failed.code, 2);
@@ -468,12 +480,12 @@ test("new starts a live conversation whose empty seats each chat can join; rooms
   const invite = run(["invite", name, "--to", "astra"]);
   assert.match(
     invite.out,
-    /^Start a new Astra chat: codex:\/\/threads\/new\?prompt=/,
+    /^Start a new GPT chat: codex:\/\/threads\/new\?prompt=/,
   );
   assert.match(
     invite.out,
     new RegExp(
-      `Or paste this into an existing Astra chat:\\n\\n(?:Join my Semaphore group chat “Release workshop” as Astra|Use the Semaphore skill to connect this chat as Astra)`,
+      `Or paste this into an existing GPT chat:\\n\\n(?:Join my Semaphore group chat “Release workshop” as GPT|Use the Semaphore skill to connect this chat as GPT)`,
     ),
   );
   assert.match(run(["new"]).err, /title of 1–100 characters/);
@@ -536,7 +548,7 @@ test("reply tells a speaker who passed the stick to stop, and stick reports whos
       "--next",
       "astra",
       "--file",
-      write("c.txt", "Over to Astra."),
+      write("c.txt", "Over to GPT."),
     ],
     CLAUDE,
   );
@@ -554,16 +566,16 @@ test("reply tells a speaker who passed the stick to stop, and stick reports whos
   );
 });
 
-test("an Astra turn waits in its inbox across listener gaps and timeouts; it is never lost or delivered twice", (t) => {
+test("a GPT turn waits in its inbox across listener gaps and timeouts; it is never lost or delivered twice", (t) => {
   const { run, write, inbox, queued } = setup(t);
   joinBoth(run);
-  run(["send", "room", "--to", "claude", "--file", write("h.txt", "Claude, then Astra.")]);
+  run(["send", "room", "--to", "claude", "--file", write("h.txt", "Claude, then GPT.")]);
   const t1 = turnIn(run(["listen", "room"], CLAUDE).out);
   assert.equal(run(["receive", "room", "--turn", t1], CLAUDE).code, 0);
-  // Astra is not listening when Claude hands off: the turn waits durably.
-  const passed = run(["reply", "room", "--turn", t1, "--next", "astra", "--file", write("c.txt", "Over to Astra.")], CLAUDE);
+  // GPT is not listening when Claude hands off: the turn waits durably.
+  const passed = run(["reply", "room", "--turn", t1, "--next", "astra", "--file", write("c.txt", "Over to GPT.")], CLAUDE);
   assert.equal(passed.code, 0, passed.err);
-  assert.match(passed.out, /Queued for Astra \(astra-inbox; not listening yet/);
+  assert.match(passed.out, /Queued for GPT \(astra-inbox; not listening yet/);
   assert.equal(inbox("room", "astra").length, 1);
   const first = run(["listen", "room", "--as", "astra", "--timeout", "2"], ASTRA);
   const t2 = turnIn(first.out);
@@ -579,10 +591,10 @@ test("an Astra turn waits in its inbox across listener gaps and timeouts; it is 
   assert.equal(queued().length, 0);
 });
 
-test("a cancelled Astra turn is dropped from its inbox instead of being delivered later", (t) => {
+test("a cancelled GPT turn is dropped from its inbox instead of being delivered later", (t) => {
   const { run, write, inbox } = setup(t);
   joinBoth(run);
-  assert.equal(run(["send", "room", "--to", "astra", "--file", write("h.txt", "Astra, please.")]).code, 0);
+  assert.equal(run(["send", "room", "--to", "astra", "--file", write("h.txt", "GPT, please.")]).code, 0);
   assert.equal(inbox("room", "astra").length, 1);
   assert.equal(run(["take", "room"]).code, 0);
   assert.match(run(["listen", "room", "--as", "astra", "--timeout", "1"], ASTRA).out, /No new turn in 1 seconds/);
@@ -604,7 +616,7 @@ test("the same chat can switch its idle seat between the manual ChatGPT queue an
   assert.match(run(["join", "room", "--as", "claude", "--manual"], CLAUDE).err, /claude cannot use the codex-queue transport/);
 });
 
-test("a listening Astra steps aside when something new lands in its own ChatGPT chat", async (t) => {
+test("a listening GPT steps aside when something new lands in its own ChatGPT chat", async (t) => {
   const sqlite = process.getBuiltinModule?.("node:sqlite");
   if (!sqlite) return t.skip("node:sqlite is unavailable");
   const { run, start, root } = setup(t);
@@ -624,13 +636,13 @@ test("a listening Astra steps aside when something new lands in its own ChatGPT 
   assert.ok(Date.now() - began < 10_000, "it returns promptly, not at the timeout");
 });
 
-test("stick tells a resumed Astra to keep waiting in the foreground, and Claude to keep its background listener", (t) => {
+test("stick tells a resumed GPT to keep waiting in the foreground, and Claude to keep its background listener", (t) => {
   const { run, write } = setup(t);
   joinBoth(run);
   assert.equal(run(["send", "room", "--to", "claude", "--file", write("h.txt", "Claude first.")]).code, 0);
   const astra = run(["stick", "room"], ASTRA);
   assert.equal(astra.code, 3);
-  assert.match(astra.out, /Stay connected: wait for your turn by running this in the foreground: node .*listen room --root .* --as astra/);
+  assert.match(astra.out, /Stay connected: wait for your turn by running this in the foreground: node .*listen room --root .* --as gpt/);
   assert.doesNotMatch(astra.out, /end your turn/i);
   assert.equal(run(["send", "room", "--to", "astra", "--file", write("x.txt", "x")]).code, 0, "human input saves while Claude holds the stick");
   assert.equal(run(["stick", "room"], CLAUDE).code, 0, "sending does not take Claude's stick");
@@ -643,13 +655,13 @@ test("an old listener whose seat moves to another chat stops without taking that
   await new Promise((resolve) => setTimeout(resolve, 1200));
   const other = { CODEX_THREAD_ID: OTHER };
   assert.equal(run(["join", "room", "--as", "astra", "--rebind"], other).code, 0);
-  assert.equal(run(["send", "room", "--to", "astra", "--file", write("h.txt", "For the new Astra chat.")]).code, 0);
+  assert.equal(run(["send", "room", "--to", "astra", "--file", write("h.txt", "For the new GPT chat.")]).code, 0);
   const { code, out } = await old;
   assert.equal(code, 0, out);
   assert.match(out, /This chat is no longer astra in room: its seat now belongs to another chat or delivery route\. Stopped listening without taking any messages\./);
-  assert.doesNotMatch(out, /For the new Astra chat/);
+  assert.doesNotMatch(out, /For the new GPT chat/);
   assert.equal(inbox("room", "astra").length, 1, "the replacement chat's turn is still waiting");
-  assert.match(run(["listen", "room", "--as", "astra", "--timeout", "2"], other).out, /For the new Astra chat/);
+  assert.match(run(["listen", "room", "--as", "astra", "--timeout", "2"], other).out, /For the new GPT chat/);
 });
 
 test("CLI rejects a stale answer until the new human input is explicitly received", (t) => {
@@ -744,7 +756,7 @@ test("loop-in refuses missing native identity before creating a room", (t) => {
 
 test("loop-in from Claude defaults to a catch-up turn in the initiating native chat", (t) => {
   const f = setup(t);
-  const file = f.write("opening.md", "Bring Astra into this discussion");
+  const file = f.write("opening.md", "Bring GPT into this discussion");
   const started = f.run(["loop-in", "--as", "claude", "--to", "astra", "--file", file, "--request-id", "claude-native-start"], CLAUDE);
   assert.equal(started.code, 0, started.err);
   const name = started.out.match(/in (room-[a-f0-9]+)\./)[1];
@@ -759,7 +771,7 @@ test("loop-in from Claude defaults to a catch-up turn in the initiating native c
   assert.equal(f.claudeCalled(), false);
 });
 
-test("Astra's default listener has no timer and stays quiet until a real turn arrives", async (t) => {
+test("GPT's default listener has no timer and stays quiet until a real turn arrives", async (t) => {
   const f = setup(t); joinBoth(f.run);
   // Advance the child clock by ten minutes each read. A former 300-second
   // default would exit immediately; an event-only wait must remain attached.
@@ -946,7 +958,7 @@ test('notes require the bound, acknowledged turn and never deliver a reply', (t)
   assert.equal(working.text, 'Comparing three options');
   assert.equal(working.kind, 'working');
   assert.equal(Date.parse(working.expiresAt) - Date.parse(working.updatedAt), WORKING_NOTE_TTL);
-  assert.match(f.run(['status', 'room']).out, /Astra is working[\s\S]*Comparing three options/);
+  assert.match(f.run(['status', 'room']).out, /GPT is working[\s\S]*Comparing three options/);
 
   assert.equal(note(['--approval', 'Approve the native file operation']).code, 0);
   assert.equal(f.room('room').statusNote.expiresAt, null);
@@ -1109,7 +1121,7 @@ test("Claude's listener brings the human's message to the turn Claude is working
   // Started again, the listener lets Claude's own handoff pass quietly and waits for its next turn.
   const next = f.start(["listen", "room", "--timeout", "20"], CLAUDE);
   await attached(f);
-  const passed = f.run(["reply", "room", "--turn", id, "--next", "astra", "--file", f.write("c.txt", "Used staging. Over to Astra.")], CLAUDE);
+  const passed = f.run(["reply", "room", "--turn", id, "--next", "astra", "--file", f.write("c.txt", "Used staging. Over to GPT.")], CLAUDE);
   assert.equal(passed.code, 0, passed.err);
   assert.equal(f.room("room").owner, "astra");
   assert.equal(await settled(next, 1500), null, "a handoff does not end the listener");
@@ -1138,10 +1150,10 @@ test("Claude's listener tells a working Claude when the human takes the stick ba
   assert.match(heard.out, /listen room --root /);
 });
 
-test("Astra's foreground listener still returns guidance at once while Astra works", (t) => {
+test("GPT's foreground listener still returns guidance at once while GPT works", (t) => {
   const f = setup(t);
   joinBoth(f.run);
-  f.run(["send", "room", "--to", "astra", "--file", f.write("h.txt", "Astra first.")]);
+  f.run(["send", "room", "--to", "astra", "--file", f.write("h.txt", "GPT first.")]);
   const id = f.room("room").pending.id;
   f.run(["receive", "room", "--turn", id], ASTRA);
   const result = f.run(["listen", "room", "--as", "astra"], ASTRA);
@@ -1170,7 +1182,7 @@ test("a chat registered by its Claude Code hook is woken without a listener and 
   assert.equal(received.code, 0, received.err);
   assert.match(received.out, /Semaphore brings you the human's messages while you work and wakes this chat for its next turn, so no listener is needed\./);
   assert.doesNotMatch(received.out, /start this as a background task/);
-  const passed = f.run(["reply", "room", "--turn", id, "--next", "astra", "--file", f.write("c.txt", "Over to Astra.")], CLAUDE);
+  const passed = f.run(["reply", "room", "--turn", id, "--next", "astra", "--file", f.write("c.txt", "Over to GPT.")], CLAUDE);
   assert.equal(passed.code, 0, passed.err);
   assert.match(passed.out, /Semaphore wakes this chat when its next turn is ready; no listener is needed\. End your turn right away/);
   assert.match(f.run(["stick", "room"], CLAUDE).out, /Semaphore wakes this chat when it has something for you; no listener is needed\. End your turn\./);

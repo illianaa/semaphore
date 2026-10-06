@@ -139,7 +139,7 @@ test("queued turns survive reopening; acceptance carries unseen context and the 
   await third.accept({
     turnId: third.room.pending.id,
     speaker: "claude",
-    message: "Astra, I agree.",
+    message: "GPT, I agree.",
     next: "astra",
   });
   assert.equal(third.room.owner, "human");
@@ -158,7 +158,7 @@ test("queued turns survive reopening; acceptance carries unseen context and the 
     "an explicit human pass starts a fresh exchange",
   );
   assert.equal(third.room.maxTurns, 1);
-  assert.match(calls[2].prompt, /Astra, I agree/);
+  assert.match(calls[2].prompt, /GPT, I agree/);
   assert.doesNotMatch(calls[2].prompt, /Start our discussion/);
 });
 
@@ -485,7 +485,7 @@ test("interjections cannot reset the cap, unpause a room, or override a request 
   assert.equal(calls.length, 1);
   await app.pass("claude");
   const nextId = app.room.pending.id;
-  await app.send("Astra next", "astra");
+  await app.send("GPT next", "astra");
   const question = { turnId: nextId, speaker: "claude", message: "Which project?", next: "human" };
   app.receive(nextId, "claude", (await app.accept(question)).revision);
   await app.accept(question);
@@ -583,7 +583,7 @@ test("a direct human send drains older queued input before choosing the next spe
   queueHumanInput(f.store, { text: "Earlier queued thought", to: "claude", clientId: "ordering-early-123" });
   await app.send("Later direct thought", "astra", { clientId: "ordering-later-123" });
   assert.deepEqual(app.room.messages.map((m) => m.text), ["Start", "Earlier queued thought", "Later direct thought"]);
-  // The later input is guidance for Astra, which is working, so it clears the earlier routing.
+  // The later input is guidance for GPT, which is working, so it clears the earlier routing.
   assert.equal(app.room.replyNext, undefined);
   assert.equal(app.room.owner, "astra");
 });
@@ -645,7 +645,7 @@ test("input for the AI at work guides its turn; only naming the other AI moves t
   await app.send("Use the new colours", "claude", { clientId: "guidance-input-1" });
   assert.equal(app.room.replyNext, undefined, "guidance for Claude leaves the handoff to Claude");
   assert.equal(app.room.messages.at(-1).waitingFor, "claude");
-  await app.send("Then ask Astra to check", "astra", { clientId: "routing-input-1" });
+  await app.send("Then ask GPT to check", "astra", { clientId: "routing-input-1" });
   assert.deepEqual(app.room.replyNext, { to: "astra", seq: 3 });
   // Queued input (saved while another process held the room) follows the same rule, in order.
   queueHumanInput(f.store, { text: "Actually, Claude decides", to: "claude", clientId: "guidance-input-2" });

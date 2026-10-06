@@ -18,7 +18,8 @@ function limitOptions() {
 function limitHelp(limit) {
   return limit === null ? "No automatic reply limit. An AI can still hand you the stick when it needs you. You can speak or take it anytime." : `They stop after ${limit} AI ${limit === 1 ? "reply" : "replies"} in a row and hand the stick back to you.`;
 }
-// A new conversation starts with 4 unless this draft picked another limit.
+// A new conversation starts with the limit the person chose last time. The app's saved
+// preference is shared by every window; this copy covers the first paint.
 function savedStartLimit() {
   const saved = storageGet("semaphore:start-limit");
   return saved && LIMITS.map(limitValue).includes(saved) ? limitFromValue(saved) : 4;
@@ -1082,6 +1083,7 @@ async function refresh() {
     ]);
     $("#offline").hidden = true;
     state.rooms = list.rooms;
+    adoptStartLimit(list.preferences?.startLimit);
     notifyTurns(list.rooms);
     notifyApprovals(list.rooms);
     renderSidebar();
@@ -1500,10 +1502,24 @@ for (const button of document.querySelectorAll("[data-start-recipient]"))
     updateStart();
     $("#start-message").focus();
   });
+// Another window, or a conversation started from a chat, may have changed the saved choice.
+let startLimitSaving = 0;
+function adoptStartLimit(limit) {
+  if (limit === undefined || startLimitSaving || startBusy || limit === state.startLimit) return;
+  if (!LIMITS.includes(limit)) return;
+  state.startLimit = limit;
+  storageSet("semaphore:start-limit", limitValue(limit));
+  if ($("#start-limit-select")) renderStartLimit();
+}
 $("#start-limit").addEventListener("change", (event) => {
   if (event.target.id !== "start-limit-select") return;
   state.startLimit = limitFromValue(event.target.value);
   storageSet("semaphore:start-limit", event.target.value);
+  // Remembered for every later new conversation, not just this draft.
+  startLimitSaving++;
+  api("/preferences", { method: "POST", body: { startLimit: state.startLimit } })
+    .catch(() => {})
+    .finally(() => startLimitSaving--);
   updateStart();
 });
 $("#start-message").addEventListener("input", () => {
@@ -1532,8 +1548,7 @@ $("#start-form").addEventListener("submit", async (event) => {
     });
     storageSet(`semaphore:recipient:${room.name}`, to);
     storageSet("semaphore:start-request", "");
-    storageSet("semaphore:start-limit", "");
-    state.startLimit = 4;
+    // Keep the limit: the next new conversation starts with the same choice.
     box.value = "";
     storageSet("semaphore:start-draft", "");
     await selectRoom(room.name);

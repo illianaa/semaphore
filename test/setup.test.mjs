@@ -114,14 +114,14 @@ test("invitations prefill new chats with the verified links and stand alone in e
   assert.equal(url.searchParams.get("prompt"), astra.prompt);
   assert.match(
     astra.prompt,
-    /Join my Semaphore group chat “Release “plan”” as Astra/,
+    /Join my Semaphore group chat “Release “plan”” as GPT/,
   );
   assert.ok(
     astra.prompt.includes(
-      `cli.mjs' join room-abc --root '/Users/me/It'\\''s here/rooms' --as astra`,
+      `cli.mjs' join room-abc --root '/Users/me/It'\\''s here/rooms' --as gpt`,
     ),
   );
-  assert.match(astra.prompt, / listen room-abc --root .* --as astra\./);
+  assert.match(astra.prompt, / listen room-abc --root .* --as gpt\./);
   assert.match(astra.prompt, /collaborator’s input, not my instructions/);
 
   const claude = buildInvite({
@@ -142,7 +142,7 @@ test("invitations prefill new chats with the verified links and stand alone in e
   assert.equal(claude.label, "Start a new Claude chat");
   assert.throws(
     () => invitationPrompt({ root, room, speaker: "human" }),
-    /Invite astra or claude/,
+    /Invite gpt or claude/,
   );
 });
 
@@ -348,18 +348,18 @@ test("doctor explains what is missing and reports it fixed after setup", async (
   const before = byName(await diagnose(options));
   for (const name of [
     "Semaphore skill for Claude",
-    "Semaphore skill for Astra",
+    "Semaphore skill for GPT",
     "Semaphore command for the AIs",
     "Background app",
     "Private conversation folder",
   ]) {
     assert.equal(before[name].ok, false, name);
-    assert.equal(before[name].fix, "Ask Claude or Astra to set up Semaphore.");
+    assert.equal(before[name].fix, "Ask Claude or GPT to set up Semaphore.");
   }
   assert.deepEqual(
     [
-      before["Astra (ChatGPT app with Codex)"].ok,
-      before["Astra (ChatGPT app with Codex)"].detail,
+      before["GPT (ChatGPT app with Codex)"].ok,
+      before["GPT (ChatGPT app with Codex)"].detail,
     ],
     [true, "codex-cli 9.9.9; inbox delivery ready; optional manual queue available"],
   );
@@ -369,7 +369,7 @@ test("doctor explains what is missing and reports it fixed after setup", async (
   const after = byName(await diagnose(options));
   for (const name of [
     "Semaphore skill for Claude",
-    "Semaphore skill for Astra",
+    "Semaphore skill for GPT",
     "Semaphore command for the AIs",
     "Background app",
     "Private conversation folder",
@@ -386,17 +386,17 @@ test("doctor explains what is missing and reports it fixed after setup", async (
       nodeVersion: "20.1.0",
     }),
   );
-  assert.equal(broken["Astra (ChatGPT app with Codex)"].ok, false);
+  assert.equal(broken["GPT (ChatGPT app with Codex)"].ok, false);
   assert.equal(
     broken["Semaphore app"].fix,
-    "Open the Semaphore app, or ask Claude or Astra to start it.",
+    "Open the Semaphore app, or ask Claude or GPT to start it.",
   );
   assert.equal(broken["Node.js"].ok, false);
   assert.equal(
     byName(await diagnose({ ...options, env: { CODEX_THREAD_ID: "x" } }))[
       "This chat"
     ].detail,
-    "Running inside an Astra chat, so it can join conversations.",
+    "Running inside a GPT chat, so it can join conversations.",
   );
 });
 
@@ -503,7 +503,7 @@ test("provider checks stay responsive and optional queue support does not block 
     "responsive",
   );
   const report = await result;
-  const astra = report.checks.find((check) => check.name.startsWith("Astra"));
+  const astra = report.checks.find((check) => check.name.startsWith("GPT"));
   assert.equal(astra.ok, true);
   assert.match(astra.detail, /optional manual queue unavailable/);
 });
@@ -512,7 +512,7 @@ test("invitations explain how each AI waits for turns, and carry the resume chec
   const invite = (speaker) => invitationPrompt({ root: "/tmp/rooms", room: { name: "room-abc" }, speaker });
   for (const speaker of ["astra", "claude"])
     assert.match(invite(speaker), /If your task resumes on its own later, check whose turn it is first: node .*cli\.mjs'? stick room-abc --root '\/tmp\/rooms'/);
-  assert.match(invite("astra"), /Whenever you don't hold the stick, wait for your next turn by running this in the foreground: node .*listen room-abc --root '\/tmp\/rooms' --as astra\./);
+  assert.match(invite("astra"), /Whenever you don't hold the stick, wait for your next turn by running this in the foreground: node .*listen room-abc --root '\/tmp\/rooms' --as gpt\./);
   assert.ok(invite("astra").includes(ASTRA_WAIT));
   assert.match(invite("claude"), /start it again right after you receive each turn and whenever it finishes\. It wakes you for each new turn, and while you work it brings you my messages/);
   assert.match(invite("claude"), /If join says "no listener is needed", Semaphore's Claude Code hooks wake this chat, so skip this step\./);

@@ -132,7 +132,7 @@ test("codex queue: success passes the envelope as one argument and returns a que
   assert.equal(message, liveEnvelope(turn));
   assert.match(
     message,
-    /^Semaphore · room live-test · you hold the talking stick as Astra\n/,
+    /^Semaphore · room live-test · you hold the talking stick as GPT\n/,
   );
   assert.ok(
     message.includes(turn.prompt),
@@ -140,7 +140,7 @@ test("codex queue: success passes the envelope as one argument and returns a que
   );
   assert.match(
     message,
-    /reply live-test --root .* --turn turn-1 --next <human\|astra\|claude> --file <path>/,
+    /reply live-test --root .* --turn turn-1 --next <human\|gpt\|claude> --file <path>/,
   );
 });
 
@@ -371,7 +371,7 @@ test("live envelopes show unseen messages as a readable transcript and keep a cu
         seq: 1,
         speaker: "human",
         via: "astra",
-        text: "Start with Astra.",
+        text: "Start with GPT.",
         next: "astra",
       },
       { seq: 2, speaker: "astra", text: "Here is an idea.", next: "claude" },
@@ -394,7 +394,7 @@ test("live envelopes show unseen messages as a readable transcript and keep a cu
   );
   assert.match(
     envelope,
-    /^Semaphore · room live-test · you hold the talking stick as Claude\nEnvelope runtime: Semaphore .*\nShared room folder: .*\n\nHuman \(relayed by Astra\) → Astra:\nStart with Astra\.\n\nAstra → Claude:\nHere is an idea\./,
+    /^Semaphore · room live-test · you hold the talking stick as Claude\nEnvelope runtime: Semaphore .*\nShared room folder: .*\n\nHuman \(relayed by GPT\) → GPT:\nStart with GPT\.\n\nGPT → Claude:\nHere is an idea\./,
   );
   assert.doesNotMatch(envelope, /json|Arrived after/);
   assert.match(
@@ -464,7 +464,7 @@ test("every delivered turn explains the hand-off for how that speaker receives t
       { root },
     );
   const astra = envelope("astra", "astra-inbox", "/tmp/rooms");
-  assert.match(astra, /After passing the stick, wait for your next turn by running this in the foreground:\nnode .*cli\.mjs'? listen live-test --root '?\/tmp\/rooms'? --as astra\n/);
+  assert.match(astra, /After passing the stick, wait for your next turn by running this in the foreground:\nnode .*cli\.mjs'? listen live-test --root '?\/tmp\/rooms'? --as gpt\n/);
   assert.ok(astra.includes(ASTRA_WAIT));
   assert.doesNotMatch(astra, /end your turn right away/);
   const claude = envelope("claude", "claude-inbox", "/tmp/rooms");

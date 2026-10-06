@@ -5,11 +5,11 @@ description: Connect native Codex and Claude desktop chats in an ongoing group c
 
 # Semaphore
 
-Semaphore lets the user talk with Claude and Astra together. Each AI stays in its own desktop chat with its own tools, and a talking stick decides who speaks next. The user can follow the whole conversation in the Semaphore app (http://127.0.0.1:4317) as well as in both chats.
+Semaphore lets the user talk with Claude and GPT together. Each AI stays in its own desktop chat with its own tools, and a talking stick decides who speaks next. The user can follow the whole conversation in the Semaphore app (http://127.0.0.1:4317) as well as in both chats.
 
 **The user does not use a terminal.** Run the plumbing yourself and explain results in plain language. Use `~/.semaphore/bin/semaphore`, or `$SEMAPHORE_HOME/bin/semaphore` when configured. Below, `semaphore` means that absolute executable, not necessarily a command on PATH. If missing, the repository's `cli.mjs` can be run with Node; resolve this skill's symlink to find the repository. Do not substitute a stateless or headless consultation for the connected desktop participant.
 
-You are `claude` if you are Claude, and `astra` if you are Astra (GPT in the ChatGPT app).
+You are `claude` if you are Claude, and `gpt` if you are GPT (the model in the ChatGPT app). GPT's seat is stored as `astra`; the CLI accepts `gpt` and `astra` as the same seat. Call it GPT when you write to the person, whatever model it is.
 
 ## Loop in the other AI, or start a group chat
 
@@ -39,14 +39,14 @@ Run the turn's receive command before working. It checks ownership and records t
 
 ### Work, then reply
 
-- Do the work the turn calls for with your normal tools, then run the reply command the turn gave you. Choose who speaks next with `--next human|astra|claude`. Choose `human` when you need the user, or when the group is done.
+- Do the work the turn calls for with your normal tools, then run the reply command the turn gave you. Choose who speaks next with `--next human|gpt|claude`. Choose `human` when you need the user, or when the group is done.
 - Give the reply in one of three ways: `--file <path>`; `--file -` to read stdin, preferably from a quoted heredoc (`<<'EOF'`) so `$`, backticks and apostrophes stay literal; or short text in quotes in place of `--file`. Semaphore keeps replies exactly as written.
 - Keep messages readable. They appear in both apps and in the Semaphore app.
 - **Naming a new conversation.** If you are the first AI in a conversation named from the person's opening line, your turn offers `semaphore title <room> --turn <id> "<concise name>"`. Use it at most once, early, for a short descriptive name of up to 100 characters. It never sends a message or delays the conversation. A name the person chose is never replaced, and they can rename it anytime.
 - **Share files through the room's folder.** Each room has a shared folder on this computer, `<root>/<room>/workspace`, named in each turn. Both chats can reach it; it is not synced anywhere else. Put files meant for the group there, keep scratch work apart from finished work, and name each file you created or changed in your reply. When the work belongs in an existing repository, work there and follow its instructions instead. A room's stick does not lock other rooms, so use separate worktrees or coordinate. If your host can't reach the folder, say so in your reply rather than working around it.
 - **Pass, then wait.** Once your reply passes the stick, stop working on the task: no more edits, reviews or side messages. Semaphore delivers the next turn as described under waiting below.
 - **Hold the stick briefly.** Do a focused piece of work, then reply. For longer work, report progress and pass the stick (often to the human) instead of working silently for a long time.
-- **Check before resuming.** If your task resumes on its own (for example a standing goal or a scheduled run), run `semaphore stick <room> [--root <path>]` first. If it says someone else holds the stick (exit code 3), follow its waiting command: Astra uses the foreground listener; Claude ends its turn, first starting its background listener unless Semaphore's hooks wake the chat. Don't resume task work without the stick.
+- **Check before resuming.** If your task resumes on its own (for example a standing goal or a scheduled run), run `semaphore stick <room> [--root <path>]` first. If it says someone else holds the stick (exit code 3), follow its waiting command: GPT uses the foreground listener; Claude ends its turn, first starting its background listener unless Semaphore's hooks wake the chat. Don't resume task work without the stick.
 
 ### Status notes
 
@@ -77,12 +77,12 @@ The human may send while you hold the stick, usually with information that shoul
 
 ## Waiting for your turn
 
-- **Automatic Astra wake:** when `join`, `receive`, `reply` or `stick` confirms that automatic wake is verified, end the native turn after passing the stick. Do not run a listener. Semaphore saves the room notice in the native shared runtime's queue; the app starts the next turn and owns all permission prompts. Never use `thread/resume` from another runtime. If automatic wake needs reconnecting after an engine restart, run `join <room> --as astra` inside the existing native chat to verify its engine again. If the command does not confirm automatic wake, use the listener behavior below.
+- **Automatic GPT wake:** when `join`, `receive`, `reply` or `stick` confirms that automatic wake is verified, end the native turn after passing the stick. Do not run a listener. Semaphore saves the room notice in the native shared runtime's queue; the app starts the next turn and owns all permission prompts. Never use `thread/resume` from another runtime. If automatic wake needs reconnecting after an engine restart, run `join <room> --as gpt` inside the existing native chat to verify its engine again. If the command does not confirm automatic wake, use the listener behavior below.
 
 - **Claude**, when `join`, `receive` or `reply` says "no listener is needed": Semaphore's Claude Code hooks wake this chat for each turn, so after passing the stick just end your turn and don't run a listener. Otherwise run `semaphore listen <room> [--root <path>]` as a background task: after joining, right after receiving each turn, and again whenever it finishes. While you work, it brings the human's messages; once you pass the stick, it waits and wakes you when the next turn arrives. Keep one running; after passing the stick, end your turn.
-- **Astra** runs `semaphore listen <room> --as astra [--root <path>]` in the foreground whenever it doesn't hold the stick, including while the human holds it. The listener has no timer by default: keep the same foreground command attached, and do no other work while waiting. An explicit `--timeout <seconds>` is optional; restart if such a timed wait ends without a turn. The native task still stays active. Host tool polling can require model steps, so removing the timer is not a promise of zero model usage. If `listen` says something new is waiting in the chat, end the turn so that message can reach you, then listen again afterwards.
+- **GPT** runs `semaphore listen <room> --as gpt [--root <path>]` in the foreground whenever it doesn't hold the stick, including while the human holds it. The listener has no timer by default: keep the same foreground command attached, and do no other work while waiting. An explicit `--timeout <seconds>` is optional; restart if such a timed wait ends without a turn. The native task still stays active. Host tool polling can require model steps, so removing the timer is not a promise of zero model usage. If `listen` says something new is waiting in the chat, end the turn so that message can reach you, then listen again afterwards.
 - A turn stays in your inbox until you run its receive command, so a listener that restarts or times out can't lose it.
-- **Manual route.** `join --as astra --manual` makes Astra receive turns through the ChatGPT queue instead. Queued messages wait in the chat until someone presses Send, so use it only when the user asks for it. On that route, end your turn right after passing the stick.
+- **Manual route.** `join --as gpt --manual` makes GPT receive turns through the ChatGPT queue instead. Queued messages wait in the chat until someone presses Send, so use it only when the user asks for it. On that route, end your turn right after passing the stick.
 
 ## Rules
 
@@ -100,7 +100,7 @@ The human may send while you hold the stick, usually with information that shoul
 - Setup adds:
   - a private folder for conversations;
   - the `semaphore` command;
-  - this skill, for both Claude and Astra;
+  - this skill, for both Claude and GPT;
   - on macOS, a background app plus a Semaphore app in ~/Applications.
 - To show the app, use the host's browser tool with the URL reported by setup (default `http://127.0.0.1:4317`). The CLI also provides `open` for environments where that is an appropriate UI mechanism.
 - Requested removal uses `semaphore uninstall --yes`. Conversations are kept.

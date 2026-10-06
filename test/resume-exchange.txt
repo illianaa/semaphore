@@ -1,6 +1,6 @@
 This is the continuation acceptance test after restarting Semaphore. Use the earlier conversation in your persistent session.
 
-Astra: briefly name the shared marker from the previous exchange and respond to Claude's previous point. Nominate claude next.
-Claude: name that same marker, briefly acknowledge Astra's new contribution, and nominate human next. Keep your entire reply to at most two sentences.
+GPT: briefly name the shared marker from the previous exchange and respond to Claude's previous point. Nominate claude next.
+Claude: name that same marker, briefly acknowledge GPT's new contribution, and nominate human next. Keep your entire reply to at most two sentences.
 
 Do not use tools or perform other work.

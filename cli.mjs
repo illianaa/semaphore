@@ -88,12 +88,15 @@ const { values, positionals } = parseArgs({
     help: { type: "boolean" },
   },
 });
+// GPT's seat keeps its stored id "astra"; "gpt" is accepted wherever a speaker is named.
+for (const key of ["as", "to", "next", "first", "via"]) if (values[key]?.toLowerCase() === "gpt") values[key] = "astra";
 const [command = "help", name = "hello", ...words] = positionals;
 const root = path.resolve(values.root);
 const rootFlag = ` --root ${quote(root)}`;
-const help = `Semaphore — you, Astra, and Claude, one speaker at a time.
+const help = `Semaphore — you, GPT, and Claude, one speaker at a time.
+GPT's seat id is "astra"; "gpt" is accepted anywhere a speaker is named.
 
-Setting up (Claude or Astra runs these for you):
+Setting up (Claude or GPT runs these for you):
   node cli.mjs doctor                       Check this computer's setup
   node cli.mjs version                      Show this process's captured runtime identity
   node cli.mjs install [--yes]              List, then make, the setup changes
@@ -106,29 +109,29 @@ Conversations for live desktop chats:
   node cli.mjs title <room> "<title>" --turn <id>  First AI's one-time name; human renames need no --turn
   node cli.mjs timings <room>              Delivery stages, distributions and failure counts (JSON)
   node cli.mjs rooms                        List conversations
-  node cli.mjs invite <room> --to astra|claude [--folder <path>]   Link and text that bring an AI in
+  node cli.mjs invite <room> --to gpt|claude [--folder <path>]   Link and text that bring an AI in
 
   npm start                               Start the local web app
   node cli.mjs chat <room>                  Legacy headless conversation
-  node cli.mjs send <room> --to astra --file message.txt
+  node cli.mjs send <room> --to gpt --file message.txt
   node cli.mjs show <room>                  Read the shared transcript
   node cli.mjs status <room>                Stick, pending turn, and chat bindings
   node cli.mjs native <room>                Show native conversation links
-  node cli.mjs inspect <room>               Read Astra's saved native history
+  node cli.mjs inspect <room>               Read GPT's saved native history
   node cli.mjs take <room>                  Take the stick; a pending native reply is rejected
   node cli.mjs recover <room>               Acknowledge an uncertain delivery
   node cli.mjs unlock <room>                Remove a lock only if its process died
 
-Live chats (run from inside the Astra or Claude desktop chat):
-  node cli.mjs loop-in --as astra --to claude --file request.md --request-id <id>
+Live chats (run from inside the GPT or Claude desktop chat):
+  node cli.mjs loop-in --as gpt --to claude --file request.md --request-id <id>
     Create a group from this chat, save the opening, and prepare the other invitation.
-  node cli.mjs join <room> --as astra|claude [--rebind]   Bind this chat to the room
+  node cli.mjs join <room> --as gpt|claude [--rebind]   Bind this chat to the room
   node cli.mjs listen <room>                Wait for a turn without a timer; --timeout <seconds> opts in
   node cli.mjs stick <room>                 Whose turn is it? Exits 3 if it isn't this chat's
   node cli.mjs receive <room> --turn <id>    Acknowledge and read this chat's current turn
     --compact --seen-through <revision>    Only after reading that exact delivery; newer input is shown in full
     --show                                Read the full turn again
-  node cli.mjs reply <room> --turn <id> --next human|astra|claude --file reply.md
+  node cli.mjs reply <room> --turn <id> --next human|gpt|claude --file reply.md
     --file - reads stdin; omit --file for short quoted text. Use files or quoted heredocs for long Markdown.
     Replies preserve whitespace. A reply needing review keeps a draft and prints its retry command.
   node cli.mjs note <room> --turn <id> [--approval] "<text>"
@@ -152,8 +155,8 @@ In a conversation:
   the conversation's reply limit, set in the app (four unless changed).
   Use --max-turns 1–20 to override it for one run.
 `;
-const names = { human: "You", astra: "Astra", claude: "Claude" };
-const recipients = { human: "you", astra: "Astra", claude: "Claude" };
+const names = { human: "You", astra: "GPT", claude: "Claude" };
+const recipients = { human: "you", astra: "GPT", claude: "Claude" };
 
 function readMessage() {
   return values.file
@@ -215,10 +218,10 @@ function newRoom() {
   const { room } = createLiveRoom(root, positionals.slice(1).join(" "));
   console.log(`Started “${room.title}” as room ${room.name}.`);
   console.log(
-    `Each chat joins with: join ${room.name}${rootFlag} --as astra|claude`,
+    `Each chat joins with: join ${room.name}${rootFlag} --as gpt|claude`,
   );
   console.log(
-    `To bring an AI in: invite ${room.name}${rootFlag} --to astra|claude`,
+    `To bring an AI in: invite ${room.name}${rootFlag} --to gpt|claude`,
   );
 }
 
@@ -319,7 +322,7 @@ async function installCommand() {
 function uninstallCommand() {
   if (!values.yes) {
     console.log(
-      `This removes Semaphore's command, its Claude Code hooks, its skill for Claude and Astra, the background app and the Semaphore app.\nConversations stay in ${installPaths().rooms}. Run again with --yes to remove.`,
+      `This removes Semaphore's command, its Claude Code hooks, its skill for Claude and GPT, the background app and the Semaphore app.\nConversations stay in ${installPaths().rooms}. Run again with --yes to remove.`,
     );
     return;
   }
@@ -386,7 +389,7 @@ function transportsFor(room, caller) {
 function native(room, store) {
   const { astra, claude } = room.participants;
   console.log(
-    `\nCodex: ${astra.id ? `codex://threads/${astra.id}` : "starts on Astra’s first turn"}${["astra-inbox", "codex-queue"].includes(astra.transport) ? " (live chat)" : ""}`,
+    `\nCodex: ${astra.id ? `codex://threads/${astra.id}` : "starts on GPT’s first turn"}${["astra-inbox", "codex-queue"].includes(astra.transport) ? " (live chat)" : ""}`,
   );
   if (claude.transport === "claude-inbox") {
     console.log(
@@ -494,7 +497,7 @@ function automaticallyWakes(participant) {
 async function join(app) {
   const speaker = values.as;
   if (!["astra", "claude"].includes(speaker))
-    throw new Error("Use join <room> --as astra or --as claude.");
+    throw new Error("Use join <room> --as gpt or --as claude.");
   const binding = bindFromEnv(
     speaker,
     process.env,
@@ -579,14 +582,14 @@ function printTurnGuidance(room, speaker) {
 async function reply(app, caller) {
   if (!caller)
     throw new Error(
-      `This chat is not bound to room ${app.room.name}. Run join from inside the Astra or Claude chat first.`,
+      `This chat is not bound to room ${app.room.name}. Run join from inside the GPT or Claude chat first.`,
     );
   if (!values.turn)
     throw new Error(
-      "Use reply <room> --turn <id> --next human|astra|claude --file reply.md.",
+      "Use reply <room> --turn <id> --next human|gpt|claude --file reply.md.",
     );
   if (!SPEAKERS.includes(values.next))
-    throw new Error("--next must be human, astra, or claude.");
+    throw new Error("--next must be human, gpt, or claude.");
   await refreshWakeSeat(app, caller);
   const message = readMessage();
   try {
@@ -975,7 +978,7 @@ async function main() {
       return;
     }
     if (!room.participants.astra.id)
-      throw new Error("Astra has not spoken yet.");
+      throw new Error("GPT has not spoken yet.");
     const client = new CodexClient({ cwd: store.workspace });
     try {
       await client.initialize();

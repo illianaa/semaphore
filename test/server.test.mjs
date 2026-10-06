@@ -540,7 +540,9 @@ test("a conversation starts with the reply limit chosen on the start screen", as
   assert.equal(never.body.room.turnLimit, null);
   const ten = await start("start-limit-ten", { maxTurns: 10 });
   assert.equal(ten.body.room.turnLimit, 10);
-  assert.equal((await start("start-limit-default")).body.room.turnLimit, 4);
+  // Omitted (for example from a chat's loop-in), it uses the limit chosen for the last new conversation.
+  assert.equal((await start("start-limit-default")).body.room.turnLimit, 10);
+  assert.deepEqual((await f.request("/api/rooms")).body.preferences, { startLimit: 10 });
   // A retry must repeat the same choice; a different one is a different request.
   assert.equal((await start("start-limit-ten", { maxTurns: 20 })).status, 409);
   assert.equal((await start("start-limit-ten", { maxTurns: 10 })).status, 200);
@@ -557,6 +559,24 @@ test("a conversation starts with the reply limit chosen on the start screen", as
     assert.equal(app.room.opening.state, "started");
     assert.equal(app.room.maxTurns, 10);
   } finally { store.release(); }
+});
+
+test("the start screen's reply limit is remembered app-wide until the person changes it", async (t) => {
+  const f = await fixture(t);
+  assert.deepEqual((await f.request("/api/preferences")).body.preferences, { startLimit: 4 });
+  const saved = await f.request("/api/preferences", { method: "POST", body: { startLimit: null } });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(saved.body.preferences, { startLimit: null });
+  for (const startLimit of [0, 21, 2.5, "4"])
+    assert.equal((await f.request("/api/preferences", { method: "POST", body: { startLimit } })).status, 400);
+  assert.deepEqual((await f.request("/api/rooms")).body.preferences, { startLimit: null });
+  // A conversation created without a limit, such as `new` or a loop-in, starts with it.
+  const room = await f.request("/api/rooms", { method: "POST", body: { title: "Planning" } });
+  assert.equal(room.body.room.turnLimit, null);
+  // Changing one conversation's limit leaves the new-conversation choice alone.
+  await f.request(`/api/rooms/${room.body.room.name}/limit`, { method: "POST", body: { maxTurns: 20 } });
+  assert.equal((await f.request(`/api/rooms/${room.body.room.name}`)).body.room.turnLimit, 20);
+  assert.deepEqual((await f.request("/api/preferences")).body.preferences, { startLimit: null });
 });
 
 test("human context is saved during setup and travels in the first delivery", async (t) => {
@@ -654,7 +674,7 @@ test("the app sets a conversation's reply limit, including no limit", async (t) 
   assert.equal(read.body.room.turnLimit, null);
 });
 
-test("instant wake is read and changed only through its routes, and a restart waits for Astra", async (t) => {
+test("instant wake is read and changed only through its routes, and a restart waits for GPT", async (t) => {
   const calls = [];
   const state = { enabled: false };
   const status = () => ({
@@ -693,7 +713,7 @@ test("instant wake is read and changed only through its routes, and a restart wa
     400,
     "the restart needs an explicit confirmation",
   );
-  const room = await f.create("Astra is busy");
+  const room = await f.create("GPT is busy");
   f.bind(room.name);
   await f.request(`/api/rooms/${room.name}/messages`, {
     method: "POST",
@@ -713,7 +733,7 @@ test("instant wake is read and changed only through its routes, and a restart wa
     body: { confirm: true },
   });
   assert.equal(blocked.status, 409);
-  assert.match(blocked.body.error, /Astra is working/);
+  assert.match(blocked.body.error, /GPT is working/);
   await f.request(`/api/rooms/${room.name}/take`, { method: "POST", body: {} });
   const restarted = await f.request("/api/wake/restart", {
     method: "POST",

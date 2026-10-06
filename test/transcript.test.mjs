@@ -26,7 +26,7 @@ const room = {
     {
       seq: 2,
       speaker: "astra",
-      text: "Astra replies.",
+      text: "GPT replies.",
       next: "claude",
       at: "2026-09-22T17:01:00Z",
     },
@@ -47,9 +47,9 @@ test("shared view preserves ordered speakers, routing, and literal message text"
   });
   assert.ok(html.indexOf('id="message-1"') < html.indexOf('id="message-2"'));
   assert.ok(html.indexOf('id="message-2"') < html.indexOf('id="message-3"'));
-  for (const name of ["You", "Astra", "Claude"])
+  for (const name of ["You", "GPT", "Claude"])
     assert.ok(html.includes(`<strong>${name}</strong>`));
-  assert.match(html, /Shared from Astra’s chat/);
+  assert.match(html, /Shared from GPT’s chat/);
   assert.match(
     html,
     /&lt;script&gt;alert\(&quot;no&quot;\)&lt;\/script&gt; &amp; welcome/,
@@ -104,5 +104,5 @@ test("every committed save updates the view; a failed view leaves the journal co
   fs.rmdirSync(view);
   store.save(saved);
   assert.equal(store.transcriptError, null);
-  assert.match(fs.readFileSync(view, "utf8"), /Talking stick: Astra/);
+  assert.match(fs.readFileSync(view, "utf8"), /Talking stick: GPT/);
 });

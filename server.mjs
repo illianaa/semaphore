@@ -10,6 +10,7 @@ import { liveTransport, liveEnvelope, listenerStatus, deliveryProgress, LIVE_TRA
 import { projectDir, defaultRoomRoot } from "./lib/paths.mjs";
 import { buildInvite } from "./lib/invite.mjs";
 import { createLiveRoom, createStartedRoom } from "./lib/rooms.mjs";
+import { readPreferences, writePreferences, validLimit } from "./lib/preferences.mjs";
 import { queueHumanInput, queuedInputs, inputMessages, replyNextAfter } from "./lib/inputs.mjs";
 import { wakeStatus, enableWake, disableWake, restartChatGPT } from "./lib/wake.mjs";
 import { WakePump } from "./lib/wake-delivery.mjs";
@@ -278,14 +279,14 @@ export function createAppServer({
 
   function assertSpeaker(speaker) {
     if (!SPEAKERS.includes(speaker))
-      throw error(400, "Choose Astra or Claude.");
+      throw error(400, "Choose GPT or Claude.");
   }
   function assertLive(app, speaker) {
     const p = app.room.participants[speaker];
     if (!LIVE_TRANSPORTS.includes(p?.transport) || !p.id)
       throw error(
         409,
-        `Connect ${speaker === "astra" ? "Astra" : "Claude"} before sending a message.`,
+        `Connect ${speaker === "astra" ? "GPT" : "Claude"} before sending a message.`,
       );
   }
 
@@ -368,7 +369,7 @@ export function createAppServer({
           if (busy)
             throw error(
               409,
-              `Astra is working in “${busy.title}”. Restart ChatGPT once Astra has passed the stick.`,
+              `GPT is working in “${busy.title}”. Restart ChatGPT once GPT has passed the stick.`,
             );
         }
         try {
@@ -387,7 +388,16 @@ export function createAppServer({
         }
       }
       if (req.method === "GET" && url.pathname === "/api/rooms")
-        return json(200, { rooms: listRooms() });
+        return json(200, { rooms: listRooms(), preferences: readPreferences(root) });
+      // App-wide choices, such as the reply limit a new conversation starts with.
+      if (url.pathname === "/api/preferences") {
+        if (req.method === "GET") return json(200, { preferences: readPreferences(root) });
+        if (req.method !== "POST") throw error(405, "Method not allowed.");
+        const input = await body(req);
+        if ("startLimit" in input && !validLimit(input.startLimit))
+          throw error(400, "Choose a limit of 1 to 20 replies, or no limit.");
+        return json(200, { preferences: writePreferences(root, input) });
+      }
       if (req.method === "POST" && url.pathname === "/api/rooms") {
         const input = await body(req);
         try { titleText(input.title); } catch (err) { throw error(400, err.message); }

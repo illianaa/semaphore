@@ -38,8 +38,8 @@ test('both invitation forms carry the recorded opening, participants and relay p
   for (const speaker of ['astra', 'claude']) for (const skillAvailable of [false, true]) {
     const invite = buildInvite({ root: '/tmp/rooms', room, speaker, skillAvailable });
     assert.ok(invite.prompt.includes(text.split('\n').map(line=>`> ${line}`).join('\n')));
-    assert.match(invite.prompt, /Participants: Human, Astra, Claude/);
-    assert.match(invite.prompt, /Recorded human opening \(relayed by Astra\)/);
+    assert.match(invite.prompt, /Participants: Human, GPT, Claude/);
+    assert.match(invite.prompt, /Recorded human opening \(relayed by GPT\)/);
     assert.doesNotMatch(invite.prompt, /approved spending money/);
     assert.match(invite.prompt, /does not replace your native app's authorization or approval checks/);
     assert.equal(new URL(invite.url).searchParams.get(speaker === 'astra' ? 'prompt' : 'q'), invite.prompt);
@@ -53,5 +53,5 @@ test('long invitation context is explicitly an excerpt and directs a full receiv
   assert.match(invite.prompt,/opening is longer than this excerpt/);
   assert.match(invite.prompt,/Receive the full saved turn before working/);
   assert.ok(invite.prompt.length<3000);
-  assert.match(invite.prompt,/Participants: Human, Astra\./);
+  assert.match(invite.prompt,/Participants: Human, GPT\./);
 });

@@ -47,8 +47,8 @@ test("bare and angle links exclude prose punctuation but preserve balanced paren
 });
 
 test("code stays literal across fences and spans, including Markdown and URLs", () => {
-  const html = formatMessage('`**bold** [x](https://example.com) @Astra`\n\n``use `ticks` and https://example.com``\n\n~~~~html\n<script>x</script>\n```\n[x](https://example.com)\n~~~~\n\n```\nAn unclosed fence\nhttps://example.com');
-  assert.match(html, /<code>\*\*bold\*\* \[x\]\(https:\/\/example.com\) @Astra<\/code>/);
+  const html = formatMessage('`**bold** [x](https://example.com) @GPT`\n\n``use `ticks` and https://example.com``\n\n~~~~html\n<script>x</script>\n```\n[x](https://example.com)\n~~~~\n\n```\nAn unclosed fence\nhttps://example.com');
+  assert.match(html, /<code>\*\*bold\*\* \[x\]\(https:\/\/example.com\) @GPT<\/code>/);
   assert.match(html, /<code>use `ticks` and https:\/\/example.com<\/code>/);
   assert.match(html, /<pre><code>&lt;script&gt;x&lt;\/script&gt;\n```/);
   assert.match(html, /<pre><code>An unclosed fence\nhttps:\/\/example.com<\/code><\/pre>$/);
@@ -57,12 +57,12 @@ test("code stays literal across fences and spans, including Markdown and URLs", 
 });
 
 test("inline emphasis, strike, escaped syntax and mentions do not alter identifiers", () => {
-  const html = formatMessage('*em* and _em_ and **bold with _em_** and ~~old~~; snake_case and some_long_name. \\*literal\\* @Astra');
+  const html = formatMessage('*em* and _em_ and **bold with _em_** and ~~old~~; snake_case and some_long_name. \\*literal\\* @GPT');
   assert.match(html, /<em>em<\/em> and <em>em<\/em>/);
   assert.match(html, /<strong>bold with <em>em<\/em><\/strong>/);
   assert.match(html, /<del>old<\/del>/);
   assert.match(html, /snake_case and some_long_name/);
-  assert.match(html, /\*literal\* <span class="mention">@Astra<\/span>/);
+  assert.match(html, /\*literal\* <span class="mention">@GPT<\/span>/);
   assert.equal(formatMessage('***both***'), '<p><strong><em>both</em></strong></p>');
 });
 
