@@ -172,3 +172,15 @@ The reviewed 0.11.0 commits were published with a normal fast-forward `8d739f5..
 
   That is 5.5 seconds from queue to acknowledgment. The chat woke with the notice "Semaphore: a saved room message for this chat", which the host labels as a hook error. It still had no child task and no listener after waking. **Listener-free Claude delivery passed in production.**
 - **Publication.** A fast-forward of GitHub main to this record. The old runner checkout stays at `d4d0bde`.
+
+## 0.13.0 cutover, 6 October 2026 (GPT)
+
+Runtime commit `035cb2a` contains Wake Claude, GPT naming, remembered reply limits, the Needs you request tray and End/Reopen, including companion controls. Review fixes cover answer routing, stale request choices, retry payloads, dismissal receipts, text submission and the companion notice layout. All 240 tests passed; the release/cutover checks passed separately (8 tests). Disposable browser checks covered the companion at 420×760, including a registered-Claude fixture and text-only request answers.
+
+The frozen release is `~/.semaphore/releases/0.13.0-81c696f5a477fdcc`, full build `81c696f5a477fdccdef67bc38dbb59843f4b63b31742d7b318d935c0075071d4`. Its source matches the runtime commit. The isolated smoke server and installation dry run passed. This record is written after staging and belongs in a separate documentation commit; the frozen release is unchanged.
+
+The person approved installation in room message 7 and subsequently handed the task to GPT. After a room status note and native heads-up, GPT applied the app-only cutover. Backup: `~/.semaphore/backups/cutover-2026-10-06T21-21-38-527Z`. App PID changed from 49939 to 97109. Live health reports the exact full build above, and eight served assets match the frozen release byte for byte, including both fonts. The command and both skill links target 0.13.0. Wake runner 99804, shared engine 99808 and ChatGPT 1885 stayed running; previous releases remain available.
+
+Before the switch, three saved turns were pending and no deliveries were in flight. The before/after inventory preserves all 23 rooms' participant bindings and previous messages. The three pending turns remain available. Current turn `0ac2ea57-25fe-45de-8618-c34f0236c8f3` was received on 0.12.0 and acknowledged through the installed 0.13.0 command at revision 11 after rejoining the same native chat. Both seats report automatic wake, and GPT reports live steering. No listener or second native runtime was used.
+
+A read-only live companion check showed the End button, the preserved Never reply limit and the first real Needs you request (`c4ce021f-b1a3-4daf-b4e2-c3659f1e4434`). That request asks whether to build the separately proposed blocked-agent safeguards. Those safeguards are not part of 0.13.0. No remote publication was performed.
