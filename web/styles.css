@@ -3638,9 +3638,6 @@ em,
   display: grid;
   gap: 8px;
   padding: 0 8px 8px;
-  max-height: min(520px, calc(var(--message-area-height, 100vh) - 150px));
-  overflow: auto;
-  overscroll-behavior: contain;
 }
 .ask {
   padding: 12px 14px;
@@ -3803,4 +3800,14 @@ em,
     flex-basis: 100%;
   }
 
+}
+
+/* Bound all stacked notices together: connection warnings and the banner vary in height.
+   A single scroller keeps every request reachable without covering the companion composer. */
+.room-alerts:has(.asks-tray:not([hidden])) {
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: start;
+  pointer-events: auto;
 }

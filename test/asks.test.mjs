@@ -89,11 +89,11 @@ test('the person answers while holding the stick: one quoted message goes to the
   const { ask } = app.fileAsk({ turnId, speaker: 'claude', title: 'Launch on Tuesday or Thursday?', options: ['Tuesday', 'Thursday'], blocking: true });
   await reply(app, turnId, 'claude');
   assert.equal(app.room.owner, 'human');
-  await assert.rejects(app.answerAsk(ask.id, { clientId: 'answer-0001' }), /Choose an option or write an answer/);
-  await assert.rejects(app.answerAsk(ask.id, { option: 2, clientId: 'answer-0001' }), /one of the offered options/);
-  await assert.rejects(app.answerAsk(ask.id, { option: 1 }), /answer request ID is required/);
+  await assert.rejects(app.answerAsk(ask.id, { revision: 1, clientId: 'answer-0001' }), /Choose an option or write an answer/);
+  await assert.rejects(app.answerAsk(ask.id, { revision: 1, option: 2, clientId: 'answer-0001' }), /one of the offered options/);
+  await assert.rejects(app.answerAsk(ask.id, { revision: 1, option: 1 }), /answer request ID is required/);
   assert.equal(store.read().asks[0].status, 'open', 'a refused answer changes nothing');
-  await app.answerAsk(ask.id, { option: 1, text: 'QA needs the extra day.', clientId: 'answer-0001' });
+  await app.answerAsk(ask.id, { revision: 1, option: 1, text: 'QA needs the extra day.', clientId: 'answer-0001' });
   const saved = store.read();
   const message = saved.messages.at(-1);
   assert.equal(message.speaker, 'human');
@@ -104,10 +104,10 @@ test('the person answers while holding the stick: one quoted message goes to the
   assert.deepEqual(saved.asks[0].answer, { option: 1, text: 'QA needs the extra day.', clientId: 'answer-0001' });
   assert.equal(saved.pending.speaker, 'claude', 'the answer starts the asker\'s turn');
   const turns = delivered.length;
-  await app.answerAsk(ask.id, { option: 1, text: 'QA needs the extra day.', clientId: 'answer-0001' });
+  await app.answerAsk(ask.id, { revision: 1, option: 1, text: 'QA needs the extra day.', clientId: 'answer-0001' });
   assert.equal(store.read().messages.length, saved.messages.length, 'a retried answer is not repeated');
   assert.equal(delivered.length, turns, 'or delivered again');
-  await assert.rejects(app.answerAsk(ask.id, { option: 0, clientId: 'answer-0002' }), /already answered/);
+  await assert.rejects(app.answerAsk(ask.id, { revision: 1, option: 0, clientId: 'answer-0002' }), /already answered/);
 });
 
 test('an answer while the other AI works is read by it now and never changes who speaks next', async t => {
@@ -117,7 +117,7 @@ test('an answer while the other AI works is read by it now and never changes who
   await reply(app, claudeTurn, 'claude', 'astra');
   const gptTurn = app.room.pending.id;
   app.receive(gptTurn, 'astra');
-  await app.answerAsk(ask.id, { option: 0, clientId: 'answer-1001' });
+  await app.answerAsk(ask.id, { revision: 1, option: 0, clientId: 'answer-1001' });
   const saved = store.read();
   const message = saved.messages.at(-1);
   assert.equal(message.interjection, true);
@@ -136,11 +136,11 @@ test('dismissing is not answering: no message, the asker is told, and ended room
   const second = app.fileAsk({ turnId, speaker: 'claude', title: 'Approve the $40 domain purchase?', kind: 'approval' }).ask;
   await reply(app, turnId, 'claude');
   const before = store.read().messages.length;
-  app.dismissAsk(first.id);
-  app.dismissAsk(first.id);
+  app.dismissAsk(first.id, { revision: 1 });
+  app.dismissAsk(first.id, { revision: 1 });
   assert.equal(store.read().messages.length, before);
   assert.equal(store.read().asks[0].status, 'dismissed');
-  await assert.rejects(app.answerAsk(first.id, { text: 'Actually yes', clientId: 'answer-2001' }), /already dismissed/);
+  await assert.rejects(app.answerAsk(first.id, { revision: 1, text: 'Actually yes', clientId: 'answer-2001' }), /already dismissed/);
   // The asker's next turn reminds it of what is open and what was closed unanswered.
   const summary = askSummary(store.read(), 'claude', app.room.participants.claude.seen);
   assert.match(summary, new RegExp(`Your open requests to the person .*\\n- ${second.id} · approval · “Approve the \\$40 domain purchase\\?”`));
@@ -150,8 +150,8 @@ test('dismissing is not answering: no message, the asker is told, and ended room
   assert.equal(store.read().asks[1].status, 'closed');
   const reopened = new Semaphore(store, adapters);
   reopened.reopen();
-  await assert.rejects(reopened.answerAsk(second.id, { text: 'Yes', clientId: 'answer-2002' }), /already closed/);
-  assert.throws(() => reopened.dismissAsk(second.id), /already closed/);
+  await assert.rejects(reopened.answerAsk(second.id, { revision: 1, text: 'Yes', clientId: 'answer-2002' }), /already closed/);
+  assert.throws(() => reopened.dismissAsk(second.id, { revision: 1 }), /already closed/);
   assert.equal(askViews(reopened.room).length, 0, 'reopening never reopens requests');
   assert.ok(root);
 });
@@ -164,4 +164,56 @@ test('every turn tells the AI the person may not read it and how to file a reque
   assert.match(envelope, /The person may not read this conversation; when busy they don't skim it at all\. If you need anything from them/);
   assert.match(envelope, new RegExp(`node .*cli\\.mjs'? ask room --root .* --turn ${turnId} \\[--kind decision\\|approval\\|info\\|review\\] \\[--option "<choice>"\\]… \\[--blocking\\] \\[--file <detail\\.md>\\] "<self-contained question>"`));
   assert.match(envelope, /Your open requests to the person \(they stay in the app's Needs you tray until resolved\):\n- .* · info · blocking · “Which region should the bucket use\?”/);
+});
+
+test('answering preserves a handoff the person already requested during this turn', async t => {
+  const { app, working } = fixture(t);
+  const c = await working();
+  const { ask } = app.fileAsk({ turnId: c, speaker: 'claude', title: 'Pick a day', options: ['Tue', 'Thu'] });
+  await reply(app, c, 'claude', 'astra');
+  const g = app.room.pending.id; app.receive(g, 'astra');
+  await app.send('Give Claude the next turn', 'claude', { clientId: 'route-human-1' });
+  const route = structuredClone(app.room.replyNext);
+  await app.answerAsk(ask.id, { revision: 1, option: 1, clientId: 'answer-route-1' });
+  assert.deepEqual(app.room.replyNext, route);
+  assert.equal(app.room.owner, 'astra');
+});
+
+test('an outdated request cannot reinterpret an option or dismiss the new question', async t => {
+  const { app, working, store } = fixture(t);
+  const turnId = await working();
+  const { ask } = app.fileAsk({ turnId, speaker: 'claude', title: 'Which environment?', options: ['Staging', 'Production'] });
+  app.fileAsk({ turnId, speaker: 'claude', id: ask.id, title: 'Which environment?', options: ['Production', 'Staging'] });
+  await assert.rejects(app.answerAsk(ask.id, { revision: 1, option: 0, clientId: 'answer-stale-1' }), /request changed/);
+  assert.throws(() => app.dismissAsk(ask.id, { revision: 1 }), /request changed/);
+  assert.equal(store.read().asks[0].status, 'open');
+  assert.equal(store.read().messages.length, 1);
+  assert.equal(askViews(app.room)[0].revision, 2);
+  await app.answerAsk(ask.id, { revision: 2, option: 1, clientId: 'answer-fresh-1' });
+  assert.match(store.read().messages.at(-1).text, /Staging/);
+});
+
+test('reusing an answer ID with different content is rejected, not reported as saved', async t => {
+  const { app, working, store } = fixture(t);
+  const turnId = await working();
+  const { ask } = app.fileAsk({ turnId, speaker: 'claude', title: 'Ready?', options: ['No', 'Yes'] });
+  await app.answerAsk(ask.id, { revision: 1, option: 0, clientId: 'answer-conflict-1' });
+  await assert.rejects(app.answerAsk(ask.id, { revision: 1, option: 1, clientId: 'answer-conflict-1' }), /Conflicting duplicate/);
+  assert.equal(store.read().asks[0].answer.option, 0);
+});
+
+test('a mid-turn dismissal stays visible until the asker receives it, regardless of later messages', async t => {
+  const { app, working, root } = fixture(t);
+  const c = await working();
+  const { ask } = app.fileAsk({ turnId: c, speaker: 'claude', title: 'Also publish?', kind: 'approval' });
+  app.dismissAsk(ask.id, { revision: 1 });
+  await reply(app, c, 'claude', 'astra');
+  app.receive(app.room.pending.id, 'astra');
+  await reply(app, app.room.pending.id, 'astra', 'claude');
+  assert.match(askSummary(app.room, 'claude'), /Also publish/);
+  const next = app.receive(app.room.pending.id, 'claude');
+  const envelope = liveEnvelope({ room: app.room, participant: app.room.participants.claude, turn: next, prompt: '' }, { root });
+  assert.match(envelope, /Closed without an answer \(not an approval\)/);
+  await reply(app, next.id, 'claude');
+  assert.equal(askSummary(app.room, 'claude'), '', 'acknowledged closure is not repeated forever');
 });

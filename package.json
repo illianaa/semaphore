@@ -1,6 +1,6 @@
 {
   "name": "semaphore-conversation",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "private": true,
   "license": "MIT",
   "repository": {
@@ -19,7 +19,7 @@
     "LICENSE"
   ],
   "type": "module",
-  "description": "A group chat for you, Claude and Astra, where each AI stays in its own desktop app and a talking stick decides who speaks.",
+  "description": "A group chat for you, Claude and GPT, where each AI stays in its own desktop app and a talking stick decides who speaks.",
   "engines": {
     "node": ">=22"
   },

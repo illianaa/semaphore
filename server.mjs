@@ -423,8 +423,8 @@ export function createAppServer({
         const [, name, id, verb] = askMatch;
         const input = await body(req);
         const answer = (app) => verb === "answer"
-          ? app.answerAsk(id, { option: input.option, text: input.text, clientId: input.clientId })
-          : app.dismissAsk(id);
+          ? app.answerAsk(id, { option: input.option, text: input.text, clientId: input.clientId, revision: input.revision })
+          : app.dismissAsk(id, { revision: input.revision });
         // A delivery running in this server holds the room; answer through it, like a message.
         const running = active.get(name);
         if (running) {

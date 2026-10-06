@@ -705,8 +705,6 @@ function sizeMessageRail() {
   const area = $("#message-area");
   const alertsHeight = $("#room-alerts").offsetHeight;
   area.style.setProperty("--alerts-height", `${alertsHeight}px`);
-  // The Needs you tray scrolls within the conversation's height instead of covering the composer.
-  area.style.setProperty("--message-area-height", `${area.clientHeight}px`);
   const height = Math.max(0, area.clientHeight - messageInset());
   area.style.setProperty("--deliverables-height", `${Math.max(80, height - 8)}px`);
   // Companion is a deliberately compact desktop window. Ordinary phone/touch layouts
@@ -1156,7 +1154,7 @@ function askCard(ask) {
 <h3 class="ask-title">${escape(ask.title)}</h3>
 ${ask.detail ? `<details class="ask-detail"><summary>Details</summary><div class="message-text">${formatMessage(ask.detail)}</div></details>` : ""}
 ${ask.kind === "approval" ? `<p class="ask-where">Your answer is a reply in this conversation. Any permission prompt still appears in ${escape(hostApp(ask.from))}.</p>` : ""}
-<form class="ask-answer" data-ask-form="${escape(ask.id)}">
+<form class="ask-answer" data-ask-form="${escape(ask.id)}" data-ask-revision="${Number(ask.revision ?? 1)}">
 ${ask.options.length ? `<div class="ask-options" role="group" aria-label="Choices">${ask.options.map((option, index) => `<button type="submit" class="ask-option" name="option" value="${index}"${busy ? " disabled" : ""}>${escape(option)}</button>`).join("")}</div>` : ""}
 <div class="ask-reply"><label class="sr-only" for="ask-text-${escape(ask.id)}">Answer ${who}</label><input id="ask-text-${escape(ask.id)}" data-ask-text="${escape(ask.id)}" maxlength="4000" autocomplete="off" placeholder="${ask.options.length ? "Add a note to your choice, or answer in your own words" : `Answer ${who}`}"${busy ? " disabled" : ""}><button type="submit" class="ask-send" name="option" value=""${busy ? " disabled" : ""}>Send</button><button type="button" class="ask-dismiss" data-ask-dismiss="${escape(ask.id)}"${busy ? " disabled" : ""}>Dismiss</button></div>
 </form>
@@ -1192,11 +1190,19 @@ $("#asks").addEventListener("input", (event) => {
   const id = event.target.dataset?.askText;
   if (id) storageSet(`semaphore:ask-draft:${id}`, event.target.value);
 });
+// Enter in the free-text box sends that text, never implicitly choosing the first option.
+$("#asks").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.isComposing || !event.target.matches("[data-ask-text]")) return;
+  event.preventDefault();
+  const form = event.target.closest("[data-ask-form]");
+  form.requestSubmit(form.querySelector(".ask-send"));
+});
 $("#asks").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.target.closest("[data-ask-form]");
   if (!form || !state.room || askBusy) return;
   const id = form.dataset.askForm;
+  const revision = Number(form.dataset.askRevision);
   const room = state.room;
   const ask = room.asks?.find((item) => item.id === id);
   if (!ask) return;
@@ -1207,17 +1213,19 @@ $("#asks").addEventListener("submit", async (event) => {
     return toast(ask.options.length ? "Choose an option, or write an answer." : "Write an answer first.");
   }
   // The same request ID makes a retried answer idempotent.
-  const key = `${id}:${option ?? ""}:${text}`;
+  const key = JSON.stringify([id, revision, option ?? null, text]);
   const clientId = askRequests.get(key) ?? crypto.randomUUID();
   askRequests.set(key, clientId);
   askBusy = id;
   renderAsks(room, false);
   try {
-    const result = await api(`/rooms/${room.name}/asks/${id}/answer`, { method: "POST", body: { option, text, clientId } });
+    const result = await api(`/rooms/${room.name}/asks/${id}/answer`, { method: "POST", body: { option, text, clientId, revision } });
     storageSet(`semaphore:ask-draft:${id}`, "");
     askRequests.delete(key);
     const worker = result.room.pending?.speaker;
-    toast(worker && worker !== ask.from
+    toast(result.room.pending?.state === "uncertain"
+      ? "Answer saved. It will be read when the conversation continues."
+      : worker && worker !== ask.from
       ? `Answer saved. ${labels[worker]} reads it now; ${labels[ask.from]} sees it on its next turn.`
       : `Answer sent to ${labels[ask.from]}.`);
     askBusy = null;
@@ -1248,7 +1256,7 @@ $("#asks").addEventListener("click", async (event) => {
   askBusy = id;
   renderAsks(room, false);
   try {
-    const result = await api(`/rooms/${room.name}/asks/${id}/dismiss`, { method: "POST", body: {} });
+    const result = await api(`/rooms/${room.name}/asks/${id}/dismiss`, { method: "POST", body: { revision: ask.revision ?? 1 } });
     storageSet(`semaphore:ask-draft:${id}`, "");
     askBusy = null;
     renderRoom(result.room, true);
