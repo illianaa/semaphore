@@ -1214,3 +1214,33 @@ test("end releases GPT and Claude listeners, rejects late replies and needs expl
   assert.equal(f.run(['reopen', 'room']).code, 0);
   assert.equal(f.room('room').owner, 'human');
 });
+
+test("requests are filed, listed, retried and withdrawn from the bound chat during its received turn", (t) => {
+  const f = setup(t); joinBoth(f.run);
+  assert.equal(f.run(["send", "room", "--to", "claude", "Plan the launch"]).code, 0);
+  const id = f.room("room").pending.id;
+  const ask = (args, env = CLAUDE) => f.run(["ask", "room", "--turn", id, ...args], env);
+  assert.match(ask(["Which day?"]).err, /Receive this turn/);
+  assert.equal(f.run(["receive", "room", "--turn", id], CLAUDE).code, 0);
+  assert.match(ask(["Which day?"], ASTRA).err, /Stale requests|must be filed from the chat bound/);
+  assert.equal(ask(["Which day?"], {}).code, 1, "only the bound chat can file");
+  const detail = f.write("detail.md", "QA needs a day.\n\n**Recommendation:** Thursday.");
+  const filed = ask(["--option", "Tuesday", "--option", "Thursday", "--blocking", "--file", detail, "Launch", "on", "Tuesday", "or", "Thursday?"]);
+  assert.equal(filed.code, 0, filed.err);
+  assert.match(filed.out, /^Request filed: [a-f0-9-]{36} · decision · blocking\n“Launch on Tuesday or Thursday\?”\nOptions: Tuesday \| Thursday/);
+  assert.match(filed.out, /You still hold the stick\. No reply was sent\./);
+  const saved = f.room("room").asks[0];
+  assert.equal(saved.detail, "QA needs a day.\n\n**Recommendation:** Thursday.");
+  assert.match(ask(["--option", "Tuesday", "--option", "Thursday", "--blocking", "--file", detail, "Launch on Tuesday or Thursday?"]).out, /^Already filed: /);
+  assert.equal(f.room("room").asks.length, 1);
+  const listed = JSON.parse(f.run(["ask", "room", "list"]).out);
+  assert.deepEqual(listed.asks.map((item) => item.id), [saved.id]);
+  assert.equal(ask(["--kind", "urgent", "Bad kind"]).code, 1);
+  assert.match(f.run(["ask", "room", "withdraw", "--turn", id], CLAUDE).err, /--id <ask>/);
+  const withdrawn = f.run(["ask", "room", "withdraw", "--turn", id, "--id", saved.id, "Decided", "it", "myself"], CLAUDE);
+  assert.equal(withdrawn.code, 0, withdrawn.err);
+  assert.equal(f.room("room").asks[0].status, "withdrawn");
+  assert.equal(f.room("room").asks[0].reason, "Decided it myself");
+  assert.equal(f.room("room").messages.length, 1, "requests never add messages");
+  assert.equal(f.room("room").owner, "claude");
+});

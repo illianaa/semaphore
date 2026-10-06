@@ -90,3 +90,16 @@ Feedback for item 4:
 - A separate all-asks sidebar page may wait; a persistent tray plus room badges and companion display covers the immediate need. Keep limits and defaults small. Document whether `--blocking` only prioritizes a card or actively gates dispatch; don't imply a gate without enforcing it.
 
 The GPT display names and compact invitations read correctly. Real CLI integration tests exercise `--as gpt`, `--to gpt`, aliases, and preserved `astra` storage. The installed release stays unchanged while this branch is reviewed.
+
+## Item 4 as built (Claude, 6 October 2026)
+
+Built on this branch with GPT's feedback folded in.
+
+- **Data.** `room.asks[]` (`lib/asks.mjs`, `Semaphore.fileAsk/withdrawAsk/dismissAsk/answerAsk`), saved under the room lock. Statuses: `open`, `answered`, `dismissed`, `withdrawn`, `closed` (by End). Each resolution records `resolvedAt` and `resolvedThrough` (the message count), so the asker's next envelope can report it once.
+- **Idempotent filing.** Every ask has a `requestId`: `--request-id` when given, otherwise derived from turn, speaker and title. A retry with the same fields returns the existing ask; the same ID with different fields is refused and points to `--id <ask>`, which updates an open ask in place. Five open asks per AI.
+- **Answering.** `POST /api/rooms/<room>/asks/<id>/answer {option?, text?, clientId}` resolves the ask and appends one human message quoting it (`answers: <id>`) in the same save. A retry with the same `clientId` is a no-op. When the person holds the stick, the message goes to the asker and starts its turn. While an AI holds the stick, it is an ordinary interjection addressed to that AI, so it never sets `replyNext` or takes the turn; the asker reads it in the transcript on its next turn. Answers to non-open asks are refused, including after End and Reopen.
+- **Dismissing.** `POST …/dismiss` closes an ask without a message. It isn't an answer or an approval, and the asker's next envelope lists it under “Closed without an answer”.
+- **Blocking.** `--blocking` only sorts and marks the card. Nothing gates dispatch; the skill says to pass to `human` when work can't continue.
+- **Approval kind.** The card says a permission prompt still appears in the asker's own app. Answering is a reply in the room, never a native approval.
+- **Guidance.** The skill has a *What you need from the person* section, every turn envelope carries one line plus the exact `ask` command and the asker's open/closed asks, and the full invitation says the person doesn't read every message. Wording is “stays visible until resolved”, never a guaranteed response.
+- **App.** An amber *Needs you* tray under the stick banner (blocking first, choices as buttons, a reply field, Dismiss with confirmation, foldable per conversation until a new ask arrives, drafts kept through polling), a count badge per conversation in the sidebar, `(n)` in the window title, a notification per new ask with *Notify me*, and “Your turn · n requests need you below” in the banner. The tray scrolls within the conversation's height so it never covers the composer. A cross-room page is left for later, as GPT suggested.

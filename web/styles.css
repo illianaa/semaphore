@@ -3591,3 +3591,216 @@ em,
 .ended-composer p { margin: 0 0 12px; color: var(--muted); }
 
 .ended-composer .primary-button { width: auto; margin: 0 auto; padding: 10px 18px; }
+
+/* Needs you: what the AIs need from the person, kept apart from the conversation and in view
+   until answered, dismissed or withdrawn. Amber, like an approval, because it waits on them. */
+.room-alerts .asks-tray {
+  margin: 0;
+  border: 1px solid var(--approval-line);
+  border-radius: var(--radius);
+  background: var(--approval-bg);
+  color: var(--text);
+  box-shadow: var(--shadow-float);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
+  overflow: hidden;
+}
+.asks-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 10px 14px 8px;
+  font-size: 13px;
+  color: var(--approval-ink);
+}
+.asks-head strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--approval-strong);
+}
+.asks-fold {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--approval-ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.asks-fold:hover {
+  color: var(--approval-strong);
+  text-decoration: underline;
+}
+.asks-list {
+  display: grid;
+  gap: 8px;
+  padding: 0 8px 8px;
+  max-height: min(520px, calc(var(--message-area-height, 100vh) - 150px));
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.ask {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.ask.blocking {
+  border-color: var(--approval-line);
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+.ask-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.ask-meta strong {
+  color: var(--text-2);
+  font-weight: 600;
+}
+.ask-meta .avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+.ask-meta time {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.ask-blocking {
+  color: var(--amber);
+  font-weight: 600;
+}
+.ask-title {
+  margin: 8px 0 0;
+  font-size: 17px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.ask-detail {
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.ask-detail summary {
+  width: fit-content;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.ask-detail .message-text {
+  margin-top: 6px;
+}
+.ask-where {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--approval-ink);
+}
+.ask-answer {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.ask-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ask-option {
+  padding: 6px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.ask-option:hover:not(:disabled),
+.ask-option:focus-visible {
+  border-color: var(--green);
+  color: var(--green-text);
+}
+.ask-reply {
+  display: flex;
+  gap: 6px;
+}
+.ask-reply input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+.ask-reply input:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--focus-glow);
+}
+.ask-send {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--green);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ask-dismiss {
+  padding: 7px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.ask-dismiss:hover:not(:disabled) {
+  color: var(--text);
+}
+.ask button:disabled,
+.ask input:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+.room-item .ask-count {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  min-width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--amber);
+  color: var(--paper);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 760px) {
+  .asks-head > span {
+    order: 3;
+    flex-basis: 100%;
+  }
+  .ask-reply {
+    flex-wrap: wrap;
+  }
+  .ask-reply input {
+    flex-basis: 100%;
+  }
+
+}

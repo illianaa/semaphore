@@ -74,6 +74,8 @@
             <strong id="top-title">New conversation</strong>
           </div>
           <div class="topbar-actions">
+            <!-- The companion hides the conversation heading, so it ends a conversation from here. -->
+            <button type="button" class="subtle-button" id="end-conversation-top" title="End this conversation" hidden>End</button>
             <button type="button" class="subtle-button" id="notify" hidden>
               Notify me
             </button>
@@ -237,6 +239,7 @@
                 <div id="state-banner" class="state-banner" role="status"></div>
                 <section id="deliverables" class="deliverables" aria-label="Deliverables" hidden></section>
               </div>
+              <section id="asks" class="asks-tray" aria-label="Needs you" hidden></section>
             </div>
             <div class="message-scroll" id="message-scroll">
               <div id="messages" class="messages"></div>

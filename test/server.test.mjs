@@ -952,3 +952,41 @@ test('end and reopen API preserves transcript and blocks messages until review',
   assert.equal(reopened.body.room.pending.state, 'uncertain');
   assert.equal(f.calls.length, 1, 'reopening sends nothing');
 });
+
+test("the app shows open requests and answers or dismisses them through their own routes", async (t) => {
+  const f = await fixture(t);
+  const room = (await f.request("/api/rooms", { method: "POST", body: { title: "Requests" } })).body.room;
+  f.bind(room.name);
+  const { Semaphore } = await import("../lib/core.mjs");
+  const store = new RoomStore(f.root, room.name);
+  store.acquire();
+  let first, second;
+  try {
+    const app = new Semaphore(store, { claude: { kind: "claude-inbox", async deliver({ turn }) { return { status: "queued", transport: "claude-inbox", turnId: turn.id }; } } });
+    await app.send("Plan it", "claude");
+    const turnId = app.room.pending.id;
+    app.receive(turnId, "claude");
+    first = app.fileAsk({ turnId, speaker: "claude", title: "Which day?", options: ["Tue", "Thu"] }).ask;
+    second = app.fileAsk({ turnId, speaker: "claude", title: "Ship without the beta flag?", kind: "approval", blocking: true }).ask;
+    await app.accept({ turnId, speaker: "claude", message: "Two questions filed.", next: "human" });
+  } finally { store.release(); }
+  const list = (await f.request("/api/rooms")).body.rooms.find((item) => item.name === room.name);
+  assert.deepEqual(list.asks.map((ask) => ask.title), ["Ship without the beta flag?", "Which day?"], "blocking first");
+  assert.equal(list.asks[0].requestId, undefined, "internal keys stay out of the view");
+  const route = (id, verb) => `/api/rooms/${room.name}/asks/${id}/${verb}`;
+  assert.equal((await f.request(route(first.id, "answer"))).status, 405);
+  assert.equal((await f.request(route("00000000-0000-4000-8000-000000000000", "dismiss"), { method: "POST", body: {} })).status, 404);
+  const bad = await f.request(route(first.id, "answer"), { method: "POST", body: { option: 5, clientId: "answer-3001" } });
+  assert.equal(bad.status, 400);
+  const dismissed = await f.request(route(second.id, "dismiss"), { method: "POST", body: {} });
+  assert.equal(dismissed.status, 200);
+  assert.deepEqual(dismissed.body.room.asks.map((ask) => ask.id), [first.id]);
+  const answered = await f.request(route(first.id, "answer"), { method: "POST", body: { option: 1, text: "Thursday works.", clientId: "answer-3002" } });
+  assert.equal(answered.status, 200, answered.body.error);
+  assert.deepEqual(answered.body.room.asks, []);
+  assert.equal(answered.body.room.messages.at(-1).answers, first.id);
+  assert.equal(answered.body.room.pending.speaker, "claude");
+  const again = await f.request(route(first.id, "answer"), { method: "POST", body: { option: 1, text: "Thursday works.", clientId: "answer-3002" } });
+  assert.equal(again.status, 200);
+  assert.equal(again.body.room.messages.length, answered.body.room.messages.length);
+});

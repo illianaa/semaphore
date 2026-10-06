@@ -39,7 +39,7 @@ Run the turn's receive command before working. It checks ownership and records t
 
 ### Work, then reply
 
-- Do the work the turn calls for with your normal tools, then run the reply command the turn gave you. Choose who speaks next with `--next human|gpt|claude`. Choose `human` when you need the user, or when the group is done.
+- Do the work the turn calls for with your normal tools, then run the reply command the turn gave you. Choose who speaks next with `--next human|gpt|claude`. Choose `human` when you need the user, or when the group is done. When you need something from them, file a request too (see below): the reply alone may go unread.
 - Give the reply in one of three ways: `--file <path>`; `--file -` to read stdin, preferably from a quoted heredoc (`<<'EOF'`) so `$`, backticks and apostrophes stay literal; or short text in quotes in place of `--file`. Semaphore keeps replies exactly as written.
 - Keep messages readable. They appear in both apps and in the Semaphore app.
 - **Naming a new conversation.** If you are the first AI in a conversation named from the person's opening line, your turn offers `semaphore title <room> --turn <id> "<concise name>"`. Use it at most once, early, for a short descriptive name of up to 100 characters. It never sends a message or delays the conversation. A name the person chose is never replaced, and they can rename it anytime.
@@ -47,6 +47,17 @@ Run the turn's receive command before working. It checks ownership and records t
 - **Pass, then wait.** Once your reply passes the stick, stop working on the task: no more edits, reviews or side messages. Semaphore delivers the next turn as described under waiting below.
 - **Hold the stick briefly.** Do a focused piece of work, then reply. For longer work, report progress and pass the stick (often to the human) instead of working silently for a long time.
 - **Check before resuming.** If your task resumes on its own (for example a standing goal or a scheduled run), run `semaphore stick <room> [--root <path>]` first. If it says someone else holds the stick (exit code 3), follow its waiting command: GPT uses the foreground listener; Claude ends its turn, first starting its background listener unless Semaphore's hooks wake the chat. Don't resume task work without the stick.
+
+### What you need from the person: requests
+
+**Don't assume the person reads the conversation.** They skim it at best, and while they're busy with other work they don't look at it at all. A question in your reply, even one addressed to them, may never be seen. Anything you need from them goes in a **request**: it stays in the Semaphore app's *Needs you* tray, with a sidebar badge and a notification, until they answer or dismiss it or you withdraw it. Visible until resolved is not a promise that they will answer.
+
+- File one during your received turn: `semaphore ask <room> --turn <id> [--kind decision|approval|info|review] [--option "<choice>"]… [--blocking] [--file detail.md] "<title>"`. Filing never sends a message or passes the stick.
+- Write the title so it makes sense with no context, as if it were the only thing they read today: "Ship the redesign with the old pricing table, or wait a day for the new one?", not "Thoughts on the above?". Offer options when the answer is a choice, and put what's blocked, the trade-offs and your recommendation in `--file` (Markdown, 2,000 characters at most).
+- `--blocking` only puts the card first; nothing waits on it automatically. If you can't continue without the answer, file the request and pass the stick to `human`. If you can, keep working and let it wait.
+- Their answer arrives as their message in the room, quoting your request. A dismissal is not an answer or an approval. Each turn lists your open requests and any closed without an answer.
+- Update a request with `--id <ask>` instead of filing a second one, and withdraw one that no longer applies: `semaphore ask <room> withdraw --turn <id> --id <ask>`. A retry of the same `ask` returns the request it already filed. At most five open requests per AI.
+- Don't file what the other AI can answer, and don't use a request for an approval prompt your app shows. Those still happen in your app; use an `--approval` status note for them.
 
 ### Status notes
 

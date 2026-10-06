@@ -454,7 +454,7 @@ function renderSidebar() {
     room.title.toLocaleLowerCase().includes(search),
   );
   $("#room-count").textContent = state.rooms.length;
-  const item = (room) => `<button class="room-item ${state.selected === room.name ? "selected" : ""}" data-room="${escape(room.name)}" ${state.selected === room.name ? 'aria-current="page"' : ""}><span class="room-copy"><strong>${escape(room.title)}</strong><small>${escape(roomSubtitle(room))}</small></span>${room.ended ? "" : awaitingApproval(room) ? '<span class="room-dot approval" aria-label="Approval needed"></span>' : room.pending ? '<span class="room-dot" aria-label="Reply pending"></span>' : ""}</button>`;
+  const item = (room) => `<button class="room-item ${state.selected === room.name ? "selected" : ""}" data-room="${escape(room.name)}" ${state.selected === room.name ? 'aria-current="page"' : ""}><span class="room-copy"><strong>${escape(room.title)}</strong><small>${escape(roomSubtitle(room))}</small></span>${room.ended ? "" : room.asks?.length ? `<span class="ask-count" title="${room.asks.length === 1 ? "A request needs you" : `${room.asks.length} requests need you`}" aria-label="${room.asks.length === 1 ? "A request needs you" : `${room.asks.length} requests need you`}">${room.asks.length}</span>` : awaitingApproval(room) ? '<span class="room-dot approval" aria-label="Approval needed"></span>' : room.pending ? '<span class="room-dot" aria-label="Reply pending"></span>' : ""}</button>`;
   const active = rooms.filter(room => !room.ended);
   const ended = rooms.filter(room => room.ended);
   $("#room-list").innerHTML = rooms.length
@@ -541,7 +541,7 @@ function renderStatus(room, setup) {
     ? `<i class="state-dot"></i><span>${stale ? "A previous app process stopped. Your conversation is saved." : "Paused · a previous delivery needs your review"}</span>`
     : pending
       ? `${signalMark(pending.speaker, approval ? "" : "working")}<span>${approval ? `<strong>${labels[pending.speaker]} is waiting for your approval in ${hostApp(pending.speaker)}</strong>` : `<strong>${labels[pending.speaker]} has the stick</strong><span class="state-detail"> · ${escape(pendingDetail(pending, room))}${Number.isInteger(room.maxTurns) ? ` · reply ${Math.min((room.autoTurns ?? 0) + 1, room.maxTurns)} of ${room.maxTurns}` : ""}</span>`}${note ? `<span class="state-note" title="${escape(note.text)}">“${escape(note.text)}” · ${escape(relativeTime(note.updatedAt))}</span>` : ""}</span>`
-      : `${signalMark("human")}<span><strong>Your turn</strong><span class="state-detail"> · reply, or hand the stick to one of them</span></span>`;
+      : `${signalMark("human")}<span><strong>Your turn</strong><span class="state-detail"> · ${room.asks?.length ? `${room.asks.length === 1 ? "a request needs" : `${room.asks.length} requests need`} you below` : "reply, or hand the stick to one of them"}</span></span>`;
   // During the guided start, the start card is the only call to action.
   const markup = room.ended
     ? `<span class="state-who"><i class="state-dot"></i><span><strong>You ended this conversation</strong><span class="state-detail"> · the loop is stopped</span></span></span><div class="state-actions">${deliverablesPill(room)}</div>`
@@ -612,11 +612,13 @@ function renderRoom(room, force = false) {
   $("#top-title").textContent = room.title;
   $("#conversation-title").textContent = room.title;
   $("#end-conversation").hidden = !!room.ended;
+  $("#end-conversation-top").hidden = !companion || !!room.ended;
   // A name an AI suggested stays visibly theirs until the person renames it.
   $("#conversation-eyebrow").textContent = ["astra", "claude"].includes(room.titleSource)
     ? `GROUP CONVERSATION · NAMED BY ${labels[room.titleSource].toUpperCase()}`
     : "GROUP CONVERSATION";
   document.title = `${room.title} · Semaphore`;
+  countAsksInTitle();
   $("#members").innerHTML = ["human", ...(room.members ?? SEATS)]
     .map(
       (speaker) =>
@@ -654,6 +656,7 @@ function renderRoom(room, force = false) {
   if (!guide.hidden)
     guide.innerHTML = `<div><strong>${room.legacy ? "This is an earlier headless conversation" : missing.length ? `Make room for ${missing.map((s) => labels[s]).join(" and ")}` : `${resting.map((s) => labels[s]).join(" and ")} ${resting.length > 1 ? "aren’t" : "isn’t"} listening`}</strong><p>${room.legacy ? "Create a new conversation to connect your live desktop chats." : missing.length ? "Invite each model from its desktop chat. We’ll show you when they join." : `Open ${resting.map((s) => labels[s]).join(" and ")}’s chat and ask it to listen to this room again. Messages wait in its inbox until then.`}</p></div><button data-action="connect">${missing.length ? "Connect apps" : "View connection"} ↗</button>`;
   renderStatus(room, setup);
+  renderAsks(room, setup);
   const messages = setup ? room.messages.filter((message) => !message.opening) : room.messages;
   const markup = (setup ? startCard(room) : "") + messages
         .map(
@@ -684,7 +687,9 @@ function renderRoom(room, force = false) {
 
 // Alerts float over the conversation. The messages start below them, and the rail centres
 // in the space that remains.
-new ResizeObserver(sizeMessageRail).observe($("#room-alerts"));
+const alertsObserver = new ResizeObserver(sizeMessageRail);
+alertsObserver.observe($("#room-alerts"));
+alertsObserver.observe($("#message-area"));
 // One quiet dash per message. The rail is outside the scroller, so it stays in place.
 let railEntries = [];
 let railObserver;
@@ -700,6 +705,8 @@ function sizeMessageRail() {
   const area = $("#message-area");
   const alertsHeight = $("#room-alerts").offsetHeight;
   area.style.setProperty("--alerts-height", `${alertsHeight}px`);
+  // The Needs you tray scrolls within the conversation's height instead of covering the composer.
+  area.style.setProperty("--message-area-height", `${area.clientHeight}px`);
   const height = Math.max(0, area.clientHeight - messageInset());
   area.style.setProperty("--deliverables-height", `${Math.max(80, height - 8)}px`);
   // Companion is a deliberately compact desktop window. Ordinary phone/touch layouts
@@ -1106,6 +1113,154 @@ function notifyApprovals(rooms) {
     };
   }
 }
+// A new request from an AI is the one thing worth interrupting the person for.
+function notifyAsks(rooms) {
+  const first = state.askIds === undefined;
+  const known = state.askIds ?? new Set();
+  state.askIds = new Set(rooms.flatMap((room) => (room.asks ?? []).map((ask) => ask.id)));
+  if (first || !canNotify() || (!document.hidden && document.hasFocus())) return;
+  for (const room of rooms)
+    for (const ask of room.asks ?? []) {
+      if (known.has(ask.id)) continue;
+      let alert;
+      try {
+        alert = new Notification(`${labels[ask.from]} needs you · ${room.title}`, {
+          body: `${ask.blocking ? "Blocking · " : ""}${ask.title}`,
+          tag: `${room.name}:ask:${ask.id}`,
+        });
+      } catch { continue; }
+      alert.onclick = () => {
+        window.focus();
+        selectRoom(room.name);
+        alert.close();
+      };
+    }
+}
+// The tab and window title carry the number of open requests across every conversation.
+function countAsksInTitle() {
+  const open = state.rooms.reduce((sum, room) => sum + (room.ended ? 0 : room.asks?.length ?? 0), 0);
+  const base = document.title.replace(/^\(\d+\) /, "");
+  document.title = open ? `(${open}) ${base}` : base;
+}
+
+// What the AIs need from the person, kept apart from the conversation so it's seen without
+// reading it. Each card stays until answered, dismissed or withdrawn. Drafts survive polling.
+const ASK_KINDS = { decision: "Decision", approval: "Sign-off", info: "Information", review: "Review" };
+const askRequests = new Map();
+let askBusy = null;
+function askCard(ask) {
+  const who = labels[ask.from];
+  const busy = askBusy === ask.id;
+  return `<article class="ask${ask.blocking ? " blocking" : ""}" data-ask="${escape(ask.id)}" data-from="${escape(ask.from)}">
+<div class="ask-meta">${avatar(ask.from)}<span><strong>${who}</strong> · ${ASK_KINDS[ask.kind] ?? "Request"}${ask.blocking ? ' · <b class="ask-blocking">Blocking</b>' : ""}</span><time datetime="${escape(ask.updatedAt ?? ask.createdAt)}">${escape(formatTime(ask.updatedAt ?? ask.createdAt))}</time></div>
+<h3 class="ask-title">${escape(ask.title)}</h3>
+${ask.detail ? `<details class="ask-detail"><summary>Details</summary><div class="message-text">${formatMessage(ask.detail)}</div></details>` : ""}
+${ask.kind === "approval" ? `<p class="ask-where">Your answer is a reply in this conversation. Any permission prompt still appears in ${escape(hostApp(ask.from))}.</p>` : ""}
+<form class="ask-answer" data-ask-form="${escape(ask.id)}">
+${ask.options.length ? `<div class="ask-options" role="group" aria-label="Choices">${ask.options.map((option, index) => `<button type="submit" class="ask-option" name="option" value="${index}"${busy ? " disabled" : ""}>${escape(option)}</button>`).join("")}</div>` : ""}
+<div class="ask-reply"><label class="sr-only" for="ask-text-${escape(ask.id)}">Answer ${who}</label><input id="ask-text-${escape(ask.id)}" data-ask-text="${escape(ask.id)}" maxlength="4000" autocomplete="off" placeholder="${ask.options.length ? "Add a note to your choice, or answer in your own words" : `Answer ${who}`}"${busy ? " disabled" : ""}><button type="submit" class="ask-send" name="option" value=""${busy ? " disabled" : ""}>Send</button><button type="button" class="ask-dismiss" data-ask-dismiss="${escape(ask.id)}"${busy ? " disabled" : ""}>Dismiss</button></div>
+</form>
+</article>`;
+}
+function renderAsks(room, setup) {
+  const tray = $("#asks");
+  const asks = room.ended || setup ? [] : room.asks ?? [];
+  // The tray can be folded to its header, per conversation, until a new request arrives.
+  const ids = asks.map((ask) => ask.id).join();
+  const folded = storageGet(`semaphore:asks-folded:${room.name}`) === ids && !!ids;
+  const markup = asks.length
+    ? `<header class="asks-head"><strong>Needs you</strong><span>${asks.length === 1 ? "1 request" : `${asks.length} requests`} · stays here until you answer or dismiss it</span><button type="button" class="asks-fold" data-asks-fold aria-expanded="${!folded}">${folded ? "Show" : "Hide"}</button></header>${folded ? "" : `<div class="asks-list">${asks.map(askCard).join("")}</div>`}`
+    : "";
+  tray.hidden = !asks.length;
+  if (tray.dataset.room === room.name && tray.renderedMarkup === markup) return;
+  const sameRoom = tray.dataset.room === room.name;
+  const drafts = new Map(sameRoom ? [...tray.querySelectorAll("[data-ask-text]")].map((input) => [input.dataset.askText, input.value]) : []);
+  const open = new Set(sameRoom ? [...tray.querySelectorAll(".ask-detail[open]")].map((detail) => detail.closest("[data-ask]").dataset.ask) : []);
+  const active = sameRoom && tray.contains(document.activeElement) ? document.activeElement : null;
+  const focusKey = active && (active.dataset.askText ? `[data-ask-text="${CSS.escape(active.dataset.askText)}"]` : null);
+  const scroll = tray.querySelector(".asks-list")?.scrollTop ?? 0;
+  tray.innerHTML = markup;
+  tray.renderedMarkup = markup;
+  tray.dataset.room = room.name;
+  for (const input of tray.querySelectorAll("[data-ask-text]"))
+    input.value = drafts.get(input.dataset.askText) ?? storageGet(`semaphore:ask-draft:${input.dataset.askText}`) ?? "";
+  for (const id of open) tray.querySelector(`[data-ask="${CSS.escape(id)}"] .ask-detail`)?.setAttribute("open", "");
+  if (tray.querySelector(".asks-list")) tray.querySelector(".asks-list").scrollTop = scroll;
+  if (focusKey) tray.querySelector(focusKey)?.focus({ preventScroll: true });
+}
+$("#asks").addEventListener("input", (event) => {
+  const id = event.target.dataset?.askText;
+  if (id) storageSet(`semaphore:ask-draft:${id}`, event.target.value);
+});
+$("#asks").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target.closest("[data-ask-form]");
+  if (!form || !state.room || askBusy) return;
+  const id = form.dataset.askForm;
+  const room = state.room;
+  const ask = room.asks?.find((item) => item.id === id);
+  if (!ask) return;
+  const option = event.submitter?.value ? Number(event.submitter.value) : undefined;
+  const text = form.querySelector("[data-ask-text]").value.trim();
+  if (option === undefined && !text) {
+    form.querySelector("[data-ask-text]").focus();
+    return toast(ask.options.length ? "Choose an option, or write an answer." : "Write an answer first.");
+  }
+  // The same request ID makes a retried answer idempotent.
+  const key = `${id}:${option ?? ""}:${text}`;
+  const clientId = askRequests.get(key) ?? crypto.randomUUID();
+  askRequests.set(key, clientId);
+  askBusy = id;
+  renderAsks(room, false);
+  try {
+    const result = await api(`/rooms/${room.name}/asks/${id}/answer`, { method: "POST", body: { option, text, clientId } });
+    storageSet(`semaphore:ask-draft:${id}`, "");
+    askRequests.delete(key);
+    const worker = result.room.pending?.speaker;
+    toast(worker && worker !== ask.from
+      ? `Answer saved. ${labels[worker]} reads it now; ${labels[ask.from]} sees it on its next turn.`
+      : `Answer sent to ${labels[ask.from]}.`);
+    askBusy = null;
+    renderRoom(result.room, true);
+    await refresh();
+  } catch (err) {
+    askBusy = null;
+    if (err.room) renderRoom(err.room, true);
+    else renderAsks(room, false);
+    toast(err.message);
+  }
+});
+$("#asks").addEventListener("click", async (event) => {
+  if (event.target.closest("[data-asks-fold]") && state.room) {
+    const ids = (state.room.asks ?? []).map((ask) => ask.id).join();
+    const key = `semaphore:asks-folded:${state.room.name}`;
+    storageSet(key, storageGet(key) === ids ? "" : ids);
+    renderAsks(state.room, false);
+    $("#asks [data-asks-fold]")?.focus({ preventScroll: true });
+    return;
+  }
+  const button = event.target.closest("[data-ask-dismiss]");
+  if (!button || !state.room || askBusy) return;
+  const id = button.dataset.askDismiss;
+  const room = state.room;
+  const ask = room.asks?.find((item) => item.id === id);
+  if (!ask || !await confirmAction({ title: "Dismiss this request?", text: `${labels[ask.from]} is told you closed it without answering. That isn't an approval.`, action: "Dismiss" })) return;
+  askBusy = id;
+  renderAsks(room, false);
+  try {
+    const result = await api(`/rooms/${room.name}/asks/${id}/dismiss`, { method: "POST", body: {} });
+    storageSet(`semaphore:ask-draft:${id}`, "");
+    askBusy = null;
+    renderRoom(result.room, true);
+    await refresh();
+  } catch (err) {
+    askBusy = null;
+    if (err.room) renderRoom(err.room, true);
+    else renderAsks(room, false);
+    toast(err.message);
+  }
+});
+
 async function refresh() {
   const selected = state.selected;
   try {
@@ -1118,8 +1273,10 @@ async function refresh() {
     adoptStartLimit(list.preferences?.startLimit);
     notifyTurns(list.rooms);
     notifyApprovals(list.rooms);
+    notifyAsks(list.rooms);
     renderSidebar();
     if (detail && selected === state.selected) renderRoom(detail.room);
+    countAsksInTitle();
   } catch (err) {
     $("#offline").hidden = false;
     $("#offline").textContent =
@@ -1219,6 +1376,8 @@ function showHome(prefill, { route = "push" } = {}) {
   $("#conversation").hidden = true;
   $("#top-title").textContent = "New conversation";
   document.title = "Semaphore";
+  countAsksInTitle();
+  $("#end-conversation-top").hidden = true;
   closeSidebarDrawer();
   renderSidebar();
   const box = $("#start-message");
@@ -1327,6 +1486,7 @@ function sendOnEnter(box, form) {
 }
 
 $("#end-conversation").addEventListener("click", () => action("end"));
+$("#end-conversation-top").addEventListener("click", () => action("end"));
 $("#reopen-conversation").addEventListener("click", () => action("reopen"));
 
 $("#new-room").addEventListener("click", () => showHome());
@@ -1553,13 +1713,28 @@ $("#start-limit").addEventListener("change", (event) => {
   if (event.target.id !== "start-limit-select") return;
   state.startLimit = limitFromValue(event.target.value);
   storageSet("semaphore:start-limit", event.target.value);
-  // Remembered for every later new conversation, not just this draft.
-  startLimitSaving++;
-  api("/preferences", { method: "POST", body: { startLimit: state.startLimit } })
-    .catch(() => {})
-    .finally(() => startLimitSaving--);
+  saveStartLimit(state.startLimit);
   updateStart();
 });
+// Remembered for every later new conversation, not just this draft. Saves run one at a time and
+// only the latest choice is sent, so quick changes can't land out of order. Polling won't adopt
+// the server's value until they finish; a failure says so, and the next poll shows what's saved.
+let startLimitQueue = Promise.resolve();
+let startLimitWanted;
+function saveStartLimit(limit) {
+  startLimitWanted = limit;
+  startLimitSaving++;
+  startLimitQueue = startLimitQueue
+    .then(async () => {
+      if (startLimitWanted !== limit) return;
+      try {
+        await api("/preferences", { method: "POST", body: { startLimit: limit } });
+      } catch (err) {
+        toast(`“Stop after” wasn’t saved for new conversations. ${err.message}`);
+      }
+    })
+    .finally(() => startLimitSaving--);
+}
 $("#start-message").addEventListener("input", () => {
   storageSet("semaphore:start-draft", $("#start-message").value);
   fitBox($("#start-message"));

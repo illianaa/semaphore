@@ -161,6 +161,18 @@ say(pricing, [
   ],
 ]);
 
+// Two requests waiting on the person in the Needs you tray, one of them blocking.
+edit(pricing, (room) => {
+  room.asks = [
+    { id: "00000000-0000-4000-8000-0000000000a1", requestId: "harness-ask-1", from: "astra", turnId: "harness", kind: "decision",
+      title: "Should the Starter plan include three rooms instead of one?",
+      detail: "Rooms are cheap on disk, and one room makes Starter hard to try with a real project.\n\n**Recommendation:** three rooms. The pricing table copy depends on this.",
+      options: ["One room", "Three rooms"], blocking: true, status: "open", createdAt: ago(19) },
+    { id: "00000000-0000-4000-8000-0000000000a2", requestId: "harness-ask-2", from: "claude", turnId: "harness", kind: "review",
+      title: "Review the layout draft before I build the comparison table?", options: [], blocking: false, status: "open", createdAt: ago(23) },
+  ];
+});
+
 await send(received, "One more thing: keep the fix small enough to review today.", "claude");
 
 const launch = createLiveRoom(root, "Launch checklist").room.name;

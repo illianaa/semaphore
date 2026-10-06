@@ -76,6 +76,8 @@ const { values, positionals } = parseArgs({
     access: { type: "string" },
     sha256: { type: "string" },
     kind: { type: "string" },
+    option: { type: "string", multiple: true },
+    blocking: { type: "boolean" },
     "request-id": { type: "string" },
     first: { type: "string" },
     next: { type: "string" },
@@ -140,6 +142,14 @@ Live chats (run from inside the GPT or Claude desktop chat):
   node cli.mjs note <room> --turn <id> [--approval] "<text>"
     After receive, share a working note (30 minutes) or an approval wait (until cleared).
     Notes use one line, at most 280 characters. Use --clear without text to remove one.
+  node cli.mjs ask <room> --turn <id> [--kind decision|approval|info|review] [--option "<choice>"]… [--blocking] [--file detail.md] "<title>"
+    File a request for the person. It stays in the app's Needs you tray until they answer or dismiss it,
+    or you withdraw it. The person may not read the conversation, so anything you need from them goes here.
+    The title must make sense with no context (≤ 160 characters). --file adds Markdown detail (≤ 2,000).
+    A retry returns the same request; --request-id <id> names it explicitly. --id <ask> updates an open one.
+    Filing never sends a message or passes the stick; --blocking only puts it first. Max 5 open per AI.
+  node cli.mjs ask <room> withdraw --turn <id> --id <ask> ["<reason>"]
+  node cli.mjs ask <room> list              Every request in the room (JSON), open first
   node cli.mjs artifact <room> list         Selected deliverables and exact registered versions (JSON)
   node cli.mjs artifact <room> add --turn <id> --file <path> [--title "<title>"] [--ready]
     --id <artifact> updates one (omit --file to keep its path); --asset <relative-file> selects an adjacent asset (repeatable).
@@ -920,6 +930,7 @@ async function main() {
     "stick",
     "receive",
     "note",
+    "ask",
     "artifact",
     "title",
     "timings",
@@ -955,6 +966,11 @@ async function main() {
   if (command === "loop-in") return loopIn();
   const store = new RoomStore(root, name);
   if (command === "timings") return console.log(JSON.stringify(timingReport(store.read(), store.dir), null, 2));
+  if (command === "ask" && words[0] === "list") {
+    const asks = store.read().asks ?? [];
+    console.log(JSON.stringify({ asks: [...asks.filter((ask) => ask.status === "open"), ...asks.filter((ask) => ask.status !== "open")] }, null, 2));
+    return;
+  }
   if (command === "artifact" && words[0] === "list") {
     console.log(JSON.stringify({ artifacts: artifactViews(store.read()) }, null, 2));
     return;
@@ -1114,6 +1130,22 @@ async function main() {
         revision: Number(values.revision), sha256: values.sha256, kind: values.kind, via: values.via });
       else throw new Error("Use artifact <room> list, add or review.");
       console.log(JSON.stringify({ ...result, artifact: artifactView(result.artifact) }, null, 2));
+      return;
+    }
+    if (command === "ask") {
+      if (!caller || (values.as && values.as !== caller))
+        throw new Error("Requests must be filed from the chat bound to this room as its speaker.");
+      if (words[0] === "withdraw") {
+        if (!values.id) throw new Error("Use ask <room> withdraw --turn <id> --id <ask>.");
+        const ask = semaphore.withdrawAsk({ turnId: values.turn, speaker: caller, id: values.id, reason: words.slice(1).join(" ") });
+        console.log(`Request ${ask.id} withdrawn. It has left the person's Needs you tray.\nYou still hold the stick. No reply was sent.`);
+        return;
+      }
+      const { ask, changed } = semaphore.fileAsk({ turnId: values.turn, speaker: caller, id: values.id,
+        requestId: values["request-id"], title: words.join(" "), kind: values.kind, options: values.option,
+        blocking: values.blocking === true, detail: values.file ? fs.readFileSync(values.file === "-" ? 0 : path.resolve(values.file), "utf8") : undefined });
+      console.log(`${values.id ? (changed ? "Request updated" : "Request unchanged") : changed ? "Request filed" : "Already filed"}: ${ask.id} · ${ask.kind}${ask.blocking ? " · blocking" : ""}\n“${ask.title}”${ask.options.length ? `\nOptions: ${ask.options.join(" | ")}` : ""}`);
+      console.log("It stays in the person's Needs you tray until they answer or dismiss it, or you withdraw it. Their answer arrives as a message in the room. A request is not a native app approval.\nYou still hold the stick. No reply was sent. If you can't continue without an answer, pass the stick to human.");
       return;
     }
     if (command === "note") {

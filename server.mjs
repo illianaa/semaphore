@@ -11,6 +11,7 @@ import { projectDir, defaultRoomRoot } from "./lib/paths.mjs";
 import { buildInvite } from "./lib/invite.mjs";
 import { createLiveRoom, createStartedRoom } from "./lib/rooms.mjs";
 import { readPreferences, writePreferences, validLimit } from "./lib/preferences.mjs";
+import { askViews } from "./lib/asks.mjs";
 import { queueHumanInput, queuedInputs, inputMessages, replyNextAfter } from "./lib/inputs.mjs";
 import { wakeStatus, enableWake, disableWake, restartChatGPT } from "./lib/wake.mjs";
 import { WakePump } from "./lib/wake-delivery.mjs";
@@ -157,6 +158,8 @@ export function createAppServer({
           }
         : null,
       statusNote: statusNote(room),
+      // What the AIs need from the person, open until answered, dismissed or withdrawn.
+      asks: askViews(room),
       deliverables: { total: room.artifacts?.length ?? 0, ready: artifacts.filter(item => item.ready).length },
       connections,
       lock: store.lockStatus(),
@@ -412,6 +415,23 @@ export function createAppServer({
           const { room, store, duplicate } = await createStartedRoom(root, input);
           return json(duplicate ? 200 : 201, { room: view(room, store), duplicate });
         } catch (err) { err.status ??= err.code === "ROOM_LOCKED" ? 423 : 409; throw err; }
+      }
+      // The person answers or dismisses an AI's request from the Needs you tray.
+      const askMatch = /^\/api\/rooms\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})\/asks\/([a-f0-9-]{36})\/(answer|dismiss)$/.exec(url.pathname);
+      if (askMatch) {
+        if (req.method !== "POST") throw error(405, "Method not allowed.");
+        const [, name, id, verb] = askMatch;
+        const input = await body(req);
+        const answer = (app) => verb === "answer"
+          ? app.answerAsk(id, { option: input.option, text: input.text, clientId: input.clientId })
+          : app.dismissAsk(id);
+        // A delivery running in this server holds the room; answer through it, like a message.
+        const running = active.get(name);
+        if (running) {
+          try { await answer(running); } catch (err) { err.room = view(running.room, running.store); throw err; }
+          return json(200, { room: view(running.room, running.store) });
+        }
+        return json(200, { room: await mutate(name, answer) });
       }
       const previewMatch = /^\/api\/rooms\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})\/artifacts\/([a-f0-9-]{36})\/preview$/.exec(url.pathname);
       if (previewMatch) {
