@@ -162,6 +162,23 @@ function justReplied(room, speaker) {
   return !!last && Date.now() - Date.parse(last.at) < LISTEN_AGAIN_MS;
 }
 const claudeWakes = (seat) => seat?.transport === "claude-inbox" && seat.wake === "automatic";
+// A hooked Claude chat can be woken from the banner, like reopening GPT's chat from its link:
+// once its turn hasn't started for a minute, or once it has gone quiet for a while mid-turn.
+const CLAUDE_STUCK_MS = 60_000;
+const CLAUDE_QUIET_MS = 5 * 60_000;
+const time = (at) => (at ? Date.parse(at) || 0 : 0);
+function claudeWakeOffer(room) {
+  const pending = room.pending;
+  if (pending?.speaker !== "claude" || pending.state !== "awaiting-reply" || !claudeWakes(room.connections.claude)) return null;
+  const requested = time(pending.wakeRequestedAt);
+  if (Date.now() - requested < CLAUDE_STUCK_MS) return "waking";
+  if (pending.progress === "received") {
+    const since = Math.max(time(pending.timing?.acknowledgedAt) || time(pending.at), time(currentNote(room)?.updatedAt), requested);
+    return Date.now() - since > CLAUDE_QUIET_MS ? "quiet" : null;
+  }
+  const since = Math.max(time(pending.timing?.queuedAt) || time(pending.at), requested);
+  return Date.now() - since > CLAUDE_STUCK_MS ? "stuck" : null;
+}
 function memberDetail(room, speaker) {
   const seat = room.connections[speaker];
   if (!seat?.connected) return speaker === "human" ? "" : "not connected";
@@ -181,7 +198,12 @@ function connectionDescription(room, speaker) {
 function pendingDetail(pending, room) {
   const who = labels[pending.speaker];
   if (pending.state === "delivering") return "sending";
-  if (pending.progress === "received") return `working in ${hostApp(pending.speaker)}`;
+  if (pending.progress === "received") {
+    const offer = claudeWakeOffer(room);
+    if (offer === "waking") return "asked Claude's chat to check in";
+    if (offer === "quiet") return "no word from Claude for a while · Wake Claude asks it to check in";
+    return `working in ${hostApp(pending.speaker)}`;
+  }
   if (pending.wake?.status === "uncertain") return "wake status uncertain · check GPT’s chat";
   if (pending.wake?.status === "needs-send") return "wake queued in GPT’s chat · press Send there";
   const seat = room.connections[pending.speaker];
@@ -189,12 +211,15 @@ function pendingDetail(pending, room) {
     if (seat?.manual) return `queued in ${who}’s Codex chat · press Send there`;
     if (pending.speaker === "astra" && GPT_WAKE[seat?.wake]) return GPT_WAKE[seat.wake].detail;
     if (pending.wake?.status === "blocked") return "saved in GPT’s inbox · open its chat and reconnect";
+    // Registered Claude chats are woken by their hook. One that was signaled but never started its
+    // turn stays stuck until the person wakes it again or opens it in the Claude app.
+    if (claudeWakes(seat)) {
+      const offer = claudeWakeOffer(room);
+      if (offer === "waking") return "waking Claude's chat again";
+      if (offer === "stuck") return "Claude's chat hasn't started this turn · press Wake Claude, or open it in the Claude app";
+      return handedToChat(room, pending.speaker) ? `starting in ${hostApp(pending.speaker)}` : "waking Claude's chat";
+    }
     if (handedToChat(room, pending.speaker)) return `starting in ${hostApp(pending.speaker)}`;
-    // Registered Claude chats are woken by their hook; a chat that doesn't respond is probably closed.
-    if (claudeWakes(seat))
-      return Date.now() - Date.parse(pending.timing?.queuedAt ?? pending.at) < 60_000
-        ? "waking Claude's chat"
-        : "Claude's chat hasn't woken yet · open it in the Claude app to continue";
     return seat?.listening === false
       ? `waiting in ${who}’s inbox until its chat listens again`
       : `waiting for ${who}’s chat to pick it up`;
@@ -520,7 +545,7 @@ function renderStatus(room, setup) {
   // During the guided start, the start card is the only call to action.
   const markup = setup
     ? ""
-    : `<span class="state-who">${who}</span><div class="state-actions">${deliverablesPill(room)}${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${chatURL ? `<a class="state-link" href="${escape(chatURL)}">Open chat ↗</a>` : recoveryAction === "setup" ? '<button data-action="setup">Check setup</button>' : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
+    : `<span class="state-who">${who}</span><div class="state-actions">${deliverablesPill(room)}${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${["stuck", "quiet"].includes(claudeWakeOffer(room)) ? `<button class="${claudeWakeOffer(room) === "stuck" ? "primary" : ""}" data-action="wake-claude" title="Signal Claude's chat through its Claude Code hook to ${claudeWakeOffer(room) === "stuck" ? "start this turn" : "check in on this turn"}">Wake Claude</button>` : ""}${chatURL ? `<a class="state-link" href="${escape(chatURL)}">Open chat ↗</a>` : recoveryAction === "setup" ? '<button data-action="setup">Check setup</button>' : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
   if (changedRoom || banner.renderedMarkup !== markup) {
     const signal = changedRoom ? null : banner.querySelector(".signal");
     const focused = !changedRoom && banner.contains(document.activeElement) ? document.activeElement : null;
@@ -1253,7 +1278,7 @@ async function action(kind) {
     return;
   }
   try {
-    const route = kind.startsWith("pass-") ? "pass" : kind;
+    const route = kind.startsWith("pass-") ? "pass" : kind === "wake-claude" ? "wake/claude" : kind;
     const input =
       route === "pass"
         ? { to: kind.slice(5) }
@@ -1270,6 +1295,8 @@ async function action(kind) {
       toast(
         "You have the stick. Check the desktop chat before clearing the pending turn.",
       );
+    if (kind === "wake-claude")
+      toast("Waking Claude's chat. If it doesn't respond within a minute, open the chat in the Claude app and send any message.");
   } catch (err) {
     if (err.room) renderRoom(err.room);
     toast(err.message);

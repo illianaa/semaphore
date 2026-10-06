@@ -919,3 +919,14 @@ test("the bundled fonts are served byte for byte", async (t) => {
   // The page itself still gets its per-run token.
   assert.doesNotMatch(f.html, /__SEMAPHORE_TOKEN__/);
 });
+
+test("Wake Claude is a Claude-only route that needs Claude to hold a turn", async (t) => {
+  const f = await fixture(t);
+  const room = (await f.request("/api/rooms", { method: "POST", body: { title: "Wake" } })).body.room;
+  const gpt = await f.request(`/api/rooms/${room.name}/wake/astra`, { method: "POST", body: {} });
+  assert.equal(gpt.status, 400);
+  assert.match(gpt.body.error, /Only a Claude chat can be woken from Semaphore/);
+  const off = await f.request(`/api/rooms/${room.name}/wake/claude`, { method: "POST", body: {} });
+  assert.equal(off.status, 409, "this app runs without Claude wake-ups");
+  assert.equal((await f.request(`/api/rooms/${room.name}/wake/claude`)).status, 405);
+});

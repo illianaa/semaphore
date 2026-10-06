@@ -21,7 +21,7 @@ import { artifactView, artifactViews } from './lib/artifacts.mjs';
 import { createPreviewServer, previewAvailability } from './lib/preview.mjs';
 import { titleText } from './lib/titles.mjs';
 import { timingView, timingReport } from './lib/timing.mjs';
-import { ClaudeSignalPump } from './lib/claude-wake.mjs';
+import { ClaudeSignalPump, requestClaudeWake } from './lib/claude-wake.mjs';
 import { isRegistered } from './lib/claude-registry.mjs';
 
 const SPEAKERS = ["astra", "claude"];
@@ -136,6 +136,7 @@ export function createAppServer({
             state: room.pending.state,
             at: room.pending.at,
             wake: room.pending.wake ?? null,
+            wakeRequestedAt: room.pending.claudeHook?.wakeRequestedAt ?? null,
             timing: timingView(room, store.dir),
             // Preparing a revision or claiming a hook is not native delivery confirmation.
             deliveredThrough: room.pending.speaker === 'astra'
@@ -423,7 +424,7 @@ export function createAppServer({
         return json(200, await previews.issue(room.name, artifactView(artifact)));
       }
       const match =
-        /^\/api\/rooms\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(?:\/(messages|opening|take|recover|pass|invite|unlock|limit|title|timings)(?:\/(astra|claude))?)?$/.exec(
+        /^\/api\/rooms\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(?:\/(messages|opening|take|recover|pass|invite|unlock|limit|title|timings|wake)(?:\/(astra|claude))?)?$/.exec(
           url.pathname,
         );
       if (!match) throw error(404, "Not found.");
@@ -445,7 +446,7 @@ export function createAppServer({
       }
       if (
         req.method !== "POST" ||
-        !["messages", "opening", "take", "recover", "pass", "unlock", "limit", "title"].includes(action)
+        !["messages", "opening", "take", "recover", "pass", "unlock", "limit", "title", "wake"].includes(action)
       )
         throw error(405, "Method not allowed.");
       const input = await body(req);
@@ -482,6 +483,9 @@ export function createAppServer({
           throw error(400, "A message request ID is required.");
       }
       if (action === "pass") assertSpeaker(input.to);
+      // GPT's chat is reopened from its link; only a hooked Claude chat can be woken from here.
+      if (action === "wake" && speaker !== "claude")
+        throw error(400, "Only a Claude chat can be woken from Semaphore. Open GPT's chat to continue it.");
       if (
         action === "limit" &&
         input.maxTurns !== null &&
@@ -525,6 +529,10 @@ export function createAppServer({
         if (action === "take") app.takeStick();
         if (action === "limit") app.setTurnLimit(input.maxTurns);
         if (action === "title") app.setTitle(input.title);
+        if (action === "wake") {
+          if (!claudeSignals) throw error(409, "Claude wake-ups are off in this app.");
+          requestClaudeWake(app);
+        }
         if (action === "recover") {
           if (input.acknowledged !== true)
             throw error(
@@ -537,6 +545,8 @@ export function createAppServer({
       let room;
       try {
         room = await mutate(name, change, { waitMs: action === "messages" ? 0 : 5000 });
+        // Signal at once rather than on the pump's next tick.
+        if (action === "wake") try { claudeSignals.tick(); } catch {}
       } catch (err) {
         if (action !== "messages" || err.code !== "ROOM_LOCKED") throw err;
         const { room: saved, store } = readRoom(name);

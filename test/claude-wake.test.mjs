@@ -9,7 +9,7 @@ import { RoomStore, Semaphore } from "../lib/core.mjs";
 import { queueHumanInput } from "../lib/inputs.mjs";
 import { sqliteDatabase } from "../lib/sqlite.mjs";
 import { registerSession, signalSession, isRegistered, signalPath, recordPath } from "../lib/claude-registry.mjs";
-import { wakeCheck, ClaudeSignalPump, claudeHookEntries, claudeHooksStatus, installClaudeHooks, uninstallClaudeHooks } from "../lib/claude-wake.mjs";
+import { wakeCheck, ClaudeSignalPump, requestClaudeWake, claudeHookEntries, claudeHooksStatus, installClaudeHooks, uninstallClaudeHooks } from "../lib/claude-wake.mjs";
 
 const SESSION = "11111111-2222-4333-8444-5555c1a0de00";
 const OTHER = "99999999-8888-4777-8666-555555555555";
@@ -177,6 +177,79 @@ test("the app signals a registered chat for a turn, input and take-back, and ret
   assert.equal(signal(), "", "a take-back is signaled once");
   new ClaudeSignalPump({ root: f.root, home: f.home }).tick();
   assert.equal(signal(), "", "restarting the app cannot replay the take-back");
+});
+
+test("Wake Claude replays a claimed turn the chat never started, once, and is signaled at once", async (t) => {
+  const f = fixture(t);
+  let now = 1_000_000;
+  const pump = new ClaudeSignalPump({ root: f.root, home: f.home, now: () => now });
+  const signal = () => fs.readFileSync(signalPath(SESSION, f.home), "utf8");
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home });
+  const r = f.room();
+  await r.app.send("Please review", "claude");
+  const id = r.app.room.pending.id;
+  r.done();
+  assert.equal(f.wake().code, 2, "the hook claims the turn");
+  fs.writeFileSync(signalPath(SESSION, f.home), "");
+  now += 120_000; pump.tick();
+  assert.equal(signal(), "", "a claimed turn is never signaled again on its own");
+  assert.equal(f.wake().code, 0);
+  // The chat never ran receive. The person presses Wake Claude.
+  const store = new RoomStore(f.root, "room");
+  store.acquire();
+  try { requestClaudeWake(new Semaphore(store, {}), { home: f.home }); } finally { store.release(); }
+  assert.equal(store.read().events.at(-1).type, "wake-requested");
+  pump.tick();
+  assert.match(signal(), new RegExp(`"reason":"${id}:wake:`));
+  const woke = f.wake();
+  assert.equal(woke.code, 2);
+  assert.match(woke.text, /the person pressed Wake Claude because this turn hasn't started yet\. it's your turn as Claude\. Read and acknowledge it first:/);
+  assert.match(woke.text, new RegExp(`receive room --root .* --turn ${id}`));
+  assert.equal(f.wake().code, 0, "one request, one replay");
+  fs.writeFileSync(signalPath(SESSION, f.home), "");
+  now += 120_000; pump.tick();
+  assert.equal(signal(), "", "an answered request isn't signaled again");
+});
+
+test("Wake Claude asks a chat that received its turn and went quiet to check in, once", async (t) => {
+  const f = fixture(t);
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home });
+  const r = f.room();
+  await r.app.send("Long task", "claude");
+  const id = r.app.room.pending.id;
+  r.app.receive(id, "claude");
+  r.done();
+  assert.equal(f.wake().code, 0, "nothing to say while it works");
+  const store = new RoomStore(f.root, "room");
+  store.acquire();
+  try { requestClaudeWake(new Semaphore(store, {}), { home: f.home }); } finally { store.release(); }
+  const pump = new ClaudeSignalPump({ root: f.root, home: f.home });
+  pump.tick();
+  assert.match(fs.readFileSync(signalPath(SESSION, f.home), "utf8"), new RegExp(`"reason":"${id}:check-in:`));
+  const woke = f.wake();
+  assert.equal(woke.code, 2);
+  assert.match(woke.text, new RegExp(`the person pressed Wake Claude\\. You still hold the stick for turn ${id}, which you already received\\. If your work is done, send your reply now:\\nnode .*reply room --root .* --turn ${id} --next <human\\|gpt\\|claude>`));
+  assert.match(woke.text, /post a status note/);
+  assert.equal(f.wake().code, 0);
+  // Human input that arrives with a pending request answers it too; no separate check-in follows.
+  store.acquire();
+  try { requestClaudeWake(new Semaphore(store, {}), { home: f.home }); } finally { store.release(); }
+  queueHumanInput(new RoomStore(f.root, "room"), { text: "Are you still on it?", to: "claude", clientId: "wake-input-001" });
+  const input = f.wake();
+  assert.match(input.text, /Human → Claude:\nAre you still on it\?/);
+  assert.equal(f.wake().code, 0);
+});
+
+test("Wake Claude is refused unless a hooked Claude chat holds a turn", async (t) => {
+  const f = fixture(t);
+  const r = f.room();
+  assert.throws(() => requestClaudeWake(r.app, { home: f.home }), /Claude doesn't hold a turn/);
+  await r.app.send("Please review", "claude");
+  assert.throws(() => requestClaudeWake(r.app, { home: f.home }), /can't wake this Claude chat from here/, "an unregistered chat");
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home });
+  r.app.takeStick();
+  assert.throws(() => requestClaudeWake(r.app, { home: f.home }), /Claude doesn't hold a turn/);
+  r.done();
 });
 
 test("concurrent native file events claim only one wake for the same turn", async (t) => {
