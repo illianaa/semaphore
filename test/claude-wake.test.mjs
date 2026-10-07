@@ -353,6 +353,21 @@ test("an install from before the Stop check upgrades in place and keeps everythi
   assert.deepEqual(JSON.parse(fs.readFileSync(settingsPath, "utf8")), { hooks: { Stop: [theirs] }, model: "opus" });
 });
 
+test("hook status and reinstall tolerate settings key reordering without rewriting the file", (t) => {
+  const f = fixture(t);
+  const settingsPath = path.join(f.dir, "settings.json");
+  const options = { settingsPath, command: path.join(f.home, "bin", "semaphore"), backupDir: path.join(f.dir, "backups") };
+  const entries = claudeHookEntries(options.command);
+  for (const group of Object.values(entries))
+    group.hooks = group.hooks.map(hook => Object.fromEntries(Object.entries(hook).reverse()));
+  const content = JSON.stringify({ hooks: Object.fromEntries(Object.entries(entries).map(([event, group]) => [event, [group]])) });
+  fs.writeFileSync(settingsPath, content);
+  assert.equal(claudeHooksStatus(options).installed, true);
+  assert.equal(claudeHooksStatus(options).stale, false);
+  assert.deepEqual(installClaudeHooks(options), { changed: false, backup: null });
+  assert.equal(fs.readFileSync(settingsPath, "utf8"), content);
+});
+
 test("the Stop check reminds a chat once per turn while it holds a received, unanswered turn", async (t) => {
   const f = fixture(t);
   const stop = (extra = {}) => stopCheck({ session_id: SESSION, hook_event_name: "Stop", stop_hook_active: false, ...extra }, { home: f.home, root: f.root });
