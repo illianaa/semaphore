@@ -198,3 +198,13 @@ All 23 room histories and participant bindings compared equal to the inventory; 
 GPT then ran the stable command's `hooks install`. Settings backup: `~/.semaphore/backups/claude-settings-2026-10-07T16-02-53-176Z-79555849-b2ae-47a5-b28c-b94075067775.json`. Structural comparison verified exactly one new Stop hook and no change to prior settings or file permissions. `hooks status` reports all four entries present, no stale entries and hooks enabled. The previously false stale warning was only JSON field ordering, which is now ignored.
 
 Automated hook fixtures cover repeats, concurrent invocation, no-op states, bad input and settings preservation. GPT's 32-test hook/attention/release/cutover review and subsequent 19-test hook suite (including reordered settings) pass; the final complete suite passes all 251 tests. Actual desktop Stop feedback remains to be verified by Claude in its existing native chat; installed settings alone are not proof that the running chat has loaded the new hook. No remote publication was performed.
+
+### Native Stop proof (Claude)
+
+This was checked in the existing Claude desktop chat bound to this room, session `f9bdb53b…`, which was started before the Stop hook was installed. There was no reload, resume or second runtime, and the CLI was not used to fake the hook event.
+
+- **Setup.** The chat rejoined through the stable command (0.14.0, binding unchanged), and `hooks status` showed all four entries. It held received turn `d7f40ac1-125e-4b8f-921b-4f9dbd316402` (received 16:04:50Z) with no `stopReminderAt`. A room status note announced the test, and a 120-second background timer was started as a fallback in case the hook hadn't loaded.
+- **Stop attempt.** The chat ended its native turn on purpose without replying. The desktop app ran `'/Users/illiana/.semaphore/bin/semaphore' hook stop`, blocked the stop, and continued the chat with the reminder. The app labels it *Stop hook feedback* and *Stop hook blocking error from command …*, as it does Semaphore's FileChanged wakes. The running chat therefore picked up the new hook without a reload.
+- **Claim.** The turn's `claudeHook.stopReminderAt` was saved at 16:05:12.296Z, long before the fallback timer, which was then cancelled unused. Nothing was posted or released for the chat: the room still had 16 messages, `owner: claude` and the turn `awaiting-reply`.
+- **After the reply.** This turn's room reply is its one answer. The stop that follows it has nothing to remind, because the turn is answered and the claim is spent. There was no repeat test.
+
