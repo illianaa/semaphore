@@ -1007,4 +1007,15 @@ test("a bound Claude seat links to its chat in the Claude app when the app has a
   assert.match(view.connections.astra.url ?? "codex://threads/", /^codex:\/\/threads\//, "GPT's link is unchanged");
   assert.equal((await f.request("/api/rooms")).body.rooms.find((item) => item.name === room.name).connections.claude.url,
     "claude://code/continue?session=local_abc");
+  assert.equal(view.connections.claude.recoveryPrompt, null, "an idle room has no recovery message");
+  const started = await f.request(`/api/rooms/${room.name}/messages`, {
+    method: "POST", body: { text: "Please continue", to: "claude", clientId: "recovery-message-1" },
+  });
+  assert.equal(started.status, 200, started.body.error);
+  const recovery = started.body.room.connections.claude.recoveryPrompt;
+  assert.ok(recovery.includes(`--turn ${started.body.room.pending.id} --as claude`));
+  assert.ok(recovery.includes(f.root), "uses the server's room root");
+  assert.equal(started.body.room.connections.claude.wake, undefined, "preparation also works without a registered hook");
+  const ended = await f.request(`/api/rooms/${room.name}/end`, { method: "POST", body: {} });
+  assert.equal(ended.body.room.connections.claude.recoveryPrompt, null);
 });

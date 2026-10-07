@@ -191,7 +191,7 @@ function pendingDetail(pending, room) {
     // turn stays stuck until the person wakes it again or opens it in the Claude app.
     if (claudeWakes(seat)) {
       const offer = claudeWakeOffer(room);
-      if (offer === "waking") return seat.url ? "opening Claude's chat · it picks up the turn once open" : "waking Claude's chat again";
+      if (offer === "waking") return seat.url ? "opening Claude's chat · check-in requested" : "waking Claude's chat again";
       if (offer === "stuck") return seat.url ? "Claude's chat hasn't started this turn · open its chat to continue" : "Claude's chat hasn't started this turn · press Wake Claude, or open it in the Claude app";
       return handedToChat(room, pending.speaker) ? `starting in ${hostApp(pending.speaker)}` : "waking Claude's chat";
     }
@@ -530,7 +530,7 @@ function renderStatus(room, setup) {
     ? `<span class="state-who"><i class="state-dot"></i><span><strong>You ended this conversation</strong><span class="state-detail"> · the loop is stopped</span></span></span><div class="state-actions">${deliverablesPill(room)}</div>`
     : setup
     ? ""
-    : `<span class="state-who">${who}</span><div class="state-actions">${deliverablesPill(room)}${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${["stuck", "quiet"].includes(claudeWakeOffer(room)) && !chatURL ? `<button class="primary" data-action="wake-claude" title="Signal Claude's chat through its Claude Code hook to ${claudeWakeOffer(room) === "stuck" ? "start this turn" : "check in on this turn"}">Wake Claude</button>` : ""}${chatURL ? `<a class="state-link" href="${escape(chatURL)}"${pending.speaker === "claude" && ["stuck", "quiet"].includes(claudeWakeOffer(room)) ? ` data-wake-claude title="Opens this chat in the Claude app, where it picks up its turn"` : ""}>Open chat ↗</a>` : recoveryAction === "setup" ? '<button data-action="setup">Check setup</button>' : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
+    : `<span class="state-who">${who}</span><div class="state-actions">${deliverablesPill(room)}${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${["stuck", "quiet"].includes(claudeWakeOffer(room)) && !chatURL ? `<button class="primary" data-action="wake-claude" title="Signal Claude's chat through its Claude Code hook to ${claudeWakeOffer(room) === "stuck" ? "start this turn" : "check in on this turn"}">Wake Claude</button>` : ""}${chatURL ? `<a class="state-link" href="${escape(chatURL)}"${pending.speaker === "claude" && ["stuck", "quiet"].includes(claudeWakeOffer(room)) ? ` data-wake-claude title="Opens this chat in the Claude app and requests a check-in"` : ""}>Open chat ↗</a>` : recoveryAction === "setup" ? '<button data-action="setup">Check setup</button>' : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
   if (changedRoom || banner.renderedMarkup !== markup) {
     const signal = changedRoom ? null : banner.querySelector(".signal");
     const focused = !changedRoom && banner.contains(document.activeElement) ? document.activeElement : null;
@@ -1653,7 +1653,7 @@ $("#state-banner").addEventListener("click", (event) => {
   const button = event.target.closest("[data-action]");
   if (button) action(button.dataset.action);
   // The link opens the chat in the Claude app; the same click asks Semaphore to offer the turn
-  // again, so the chat picks it up once the app has it open. The link itself is never blocked.
+  // again. Opening alone may not start a native turn. The link itself is never blocked.
   if (event.target.closest("[data-wake-claude]") && state.room) {
     const name = state.room.name;
     api(`/rooms/${name}/wake/claude`, { method: "POST", body: {} })

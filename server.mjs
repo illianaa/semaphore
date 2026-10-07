@@ -23,7 +23,7 @@ import { createPreviewServer, previewAvailability } from './lib/preview.mjs';
 import { titleText } from './lib/titles.mjs';
 import { timingView, timingReport } from './lib/timing.mjs';
 import { ClaudeSignalPump, requestClaudeWake } from './lib/claude-wake.mjs';
-import { ClaudeDesktopSessions } from './lib/claude-desktop.mjs';
+import { ClaudeDesktopSessions, claudeRecoveryPrompt } from './lib/claude-desktop.mjs';
 import { isRegistered } from './lib/claude-registry.mjs';
 
 const SPEAKERS = ["astra", "claude"];
@@ -102,6 +102,8 @@ export function createAppServer({
       SPEAKERS.map((speaker) => {
         const p = room.participants[speaker];
         const live = LIVE_TRANSPORTS.includes(p?.transport);
+        const claudeURL = speaker === "claude" && p?.transport === "claude-inbox" && p.id
+          ? claudeChats?.url(p.id) : null;
         return [
           speaker,
           {
@@ -119,8 +121,8 @@ export function createAppServer({
             /^[a-f0-9-]{36}$/i.test(p.id ?? "")
               ? { url: `codex://threads/${p.id}` }
               : {}),
-            ...(speaker === "claude" && p?.transport === "claude-inbox" && p.id && claudeChats?.url(p.id)
-              ? { url: claudeChats.url(p.id) }
+            ...(claudeURL
+              ? { url: claudeURL, recoveryPrompt: claudeRecoveryPrompt({ room, root }) }
               : {}),
           },
         ];

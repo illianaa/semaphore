@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ClaudeDesktopSessions, continueLink } from "../lib/claude-desktop.mjs";
+import { ClaudeDesktopSessions, continueLink, claudeRecoveryPrompt } from "../lib/claude-desktop.mjs";
 
 const CLI = "f9bdb53b-14f6-488f-9256-b0da362609ce";
 const LOCAL = "local_906b48d3-0c1b-42ad-a23c-5abc1437544f";
@@ -58,4 +58,39 @@ test("no link for unknown, invalid, archived or malformed chats, and misses resc
 test("a missing desktop folder (another platform, or no Claude app) means no link and no error", () => {
   const sessions = new ClaudeDesktopSessions({ dir: path.join(os.tmpdir(), "semaphore-no-such-claude-folder") });
   assert.equal(sessions.url(CLI), null);
+});
+
+test("recovery text targets the current native Claude turn and preserves a custom root", () => {
+  const room = { name: "recovery-room", owner: "claude",
+    participants: { claude: { id: CLI, transport: "claude-inbox" } },
+    pending: { id: "turn-before", speaker: "claude", state: "awaiting-reply" } };
+  const root = "/tmp/owner's rooms/$draft";
+  const prompt = claudeRecoveryPrompt({ room, root });
+  assert.ok(prompt.includes("--root '/tmp/owner'\\''s rooms/$draft'"));
+  assert.match(prompt, /receive recovery-room .* --turn turn-before --as claude/);
+  assert.match(prompt, /not new task authorization or approval/);
+  assert.match(prompt, /If the turn is stale or you no longer hold the stick, stop/);
+  assert.equal(room.pending.receivedAt, undefined, "preparation never acknowledges a turn");
+  room.pending.id = "turn-after";
+  room.pending.receivedAt = new Date().toISOString();
+  assert.match(claudeRecoveryPrompt({ room, root }), /--turn turn-after --as claude/);
+});
+
+test("no recovery message after end, take-back, uncertain delivery, or a seat change", () => {
+  const initial = { name: "recovery-room", owner: "claude",
+    participants: { claude: { id: CLI, transport: "claude-inbox" } },
+    pending: { id: "turn-one", speaker: "claude", state: "awaiting-reply" } };
+  for (const change of [
+    room => { room.ended = { at: new Date().toISOString() }; },
+    room => { room.owner = "human"; },
+    room => { room.pending.state = "uncertain"; },
+    room => { room.pending.speaker = "astra"; },
+    room => { room.pending = null; },
+    room => { delete room.participants.claude.id; },
+    room => { room.participants.claude.transport = "headless"; },
+  ]) {
+    const room = structuredClone(initial);
+    change(room);
+    assert.equal(claudeRecoveryPrompt({ room, root: "/tmp/custom" }), null);
+  }
 });
