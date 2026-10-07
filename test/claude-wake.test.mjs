@@ -211,6 +211,83 @@ test("Wake Claude replays a claimed turn the chat never started, once, and is si
   assert.equal(signal(), "", "an answered request isn't signaled again");
 });
 
+test("Open chat: a chat the app restarts after the click is signaled again within seconds, not a minute later", async (t) => {
+  // The 7 October field case: the click signaled at once, the app started the chat's session 0.7 s
+  // later, and the next retry came a minute after that.
+  const f = fixture(t);
+  let now = Date.now();
+  const pump = new ClaudeSignalPump({ root: f.root, home: f.home, now: () => now });
+  const signal = () => fs.readFileSync(signalPath(SESSION, f.home), "utf8");
+  const sent = () => { const text = signal(); fs.writeFileSync(signalPath(SESSION, f.home), ""); return text; };
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home, now: now - 3_600_000 });
+  const r = f.room();
+  await r.app.send("Please review", "claude");
+  const id = r.app.room.pending.id;
+  r.done();
+  assert.equal(f.wake().code, 2, "claimed earlier, then the chat's session was unloaded");
+  now += 300_000;
+  const store = new RoomStore(f.root, "room");
+  store.acquire();
+  try { requestClaudeWake(new Semaphore(store, {}), { home: f.home }); } finally { store.release(); }
+  now = Date.parse(store.read().pending.claudeHook.wakeRequestedAt);
+  pump.tick();
+  assert.match(sent(), new RegExp(`"reason":"${id}:wake:`), "signaled at the click; nothing watches yet");
+  now += 700;
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home, now });
+  now += 300; pump.tick();
+  assert.equal(sent(), "", "not before its watcher is armed");
+  now += 2_000; pump.tick();
+  assert.match(sent(), /:wake:/, "about two seconds after the chat started");
+  assert.equal(f.wake().code, 2, "the opened chat takes its turn");
+  now += 5_000; pump.tick();
+  assert.equal(sent(), "", "answered: no more signals");
+});
+
+test("an unanswered Open chat request is retried every five seconds for ten minutes, then every minute", async (t) => {
+  const f = fixture(t);
+  let now = Date.now();
+  const pump = new ClaudeSignalPump({ root: f.root, home: f.home, now: () => now });
+  const sent = () => { const text = fs.readFileSync(signalPath(SESSION, f.home), "utf8"); fs.writeFileSync(signalPath(SESSION, f.home), ""); return text; };
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home, now: now - 3_600_000 });
+  const r = f.room();
+  await r.app.send("Long task", "claude");
+  r.app.receive(r.app.room.pending.id, "claude");
+  requestClaudeWake(r.app, { home: f.home });
+  r.done();
+  now = Date.parse(new RoomStore(f.root, "room").read().pending.claudeHook.wakeRequestedAt);
+  pump.tick();
+  assert.match(sent(), /:check-in:/);
+  now += 4_000; pump.tick();
+  assert.equal(sent(), "");
+  now += 1_000; pump.tick();
+  assert.match(sent(), /:check-in:/, "five seconds later");
+  now += 10 * 60_000; pump.tick();
+  assert.match(sent(), /:check-in:/);
+  now += 30_000; pump.tick();
+  assert.equal(sent(), "", "after ten minutes, back to once a minute");
+  now += 30_000; pump.tick();
+  assert.match(sent(), /:check-in:/);
+});
+
+test("a queued turn reaches a chat the person reopens in the Claude app, without any button", async (t) => {
+  const f = fixture(t);
+  let now = Date.now();
+  const pump = new ClaudeSignalPump({ root: f.root, home: f.home, now: () => now });
+  const sent = () => { const text = fs.readFileSync(signalPath(SESSION, f.home), "utf8"); fs.writeFileSync(signalPath(SESSION, f.home), ""); return text; };
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home, now: now - 3_600_000 });
+  const r = f.room();
+  await r.app.send("Please review", "claude");
+  r.done();
+  pump.tick();
+  assert.match(sent(), /:turn"/, "the app's session is closed, so this is missed");
+  now += 20_000;
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home, now });
+  now += 2_000; pump.tick();
+  assert.match(sent(), /:turn"/, "re-signaled once the reopened chat is watching, not 40 seconds later");
+  now += 2_000; pump.tick();
+  assert.equal(sent(), "", "once per restart");
+});
+
 test("Wake Claude asks a chat that received its turn and went quiet to check in, once", async (t) => {
   const f = fixture(t);
   registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home });

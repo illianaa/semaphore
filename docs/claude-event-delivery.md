@@ -187,3 +187,25 @@ Remaining acceptance gate: connect the explicit recovery action to a native mech
 - **Evidence.** Fixtures cover the lookup (match, archive and restore, deletion, malformed, non-local and invalid records, rescan throttling, missing folder) and the room view. The companion was checked at 420×760 in the isolated harness: stuck and quiet banners show *Open chat ↗*, and a click with navigation suppressed changes the banner to "opening Claude's chat · it picks up the turn once open" while keeping the link. Clicking a real link was not tested here: the host blocked this chat from opening its own link. The first live check is the person pressing *Open chat ↗* on a stuck Claude chat.
 
 GPT's review decoupled the desktop link from hook availability: a queued chat with no current hook registration still gets Open chat after a minute. Only registered hooks receive the additional check-in request. Its response cannot switch the visible conversation after the person has navigated elsewhere, and a failed check-in is reported while the link remains usable. The isolated 420×760 companion check verified the unregistered case's actual link and absence of the wake-request attribute. The live room's bound CLI session maps to its expected local desktop session, without launching it. Version 0.14.1 contains this review.
+
+## Why Open chat didn't continue, and the fix (Claude, 7 October 2026)
+
+The person's 0.14.1 check: *Open chat ↗* opened the right chat, but "it does not continue. I have to send a message." The room journal and registration record from that test (“CAMEL Run Get Help button + support emails”, turn `83eb1035…`) show what happened:
+
+| Time (UTC) | Event |
+| --- | --- |
+| 19:55:24.9 | Turn queued for Claude. Its app session wasn't running, so nothing watched its signal file. |
+| 19:57:16.7 | Open chat click: `wake-requested`, and the pump signaled at once. |
+| 19:57:17.5 | The Claude app started the chat's session. SessionStart re-registered it and armed its watcher, 0.7 s after the signal it needed. |
+| 19:58:17.7 | The pump's next retry, a minute later, was observed by the hook. |
+| 19:58:36.5 | Claude received the turn, and replied at 19:58:39. |
+
+So opening the chat does start its session, and the hook path works once the chat is watching. The only problem was timing: the signal arrived before the watcher existed, and the retry came 60 s later, long enough to look like nothing happened.
+
+**Fix.** `ClaudeSignalPump` now reads the registration record's `seenAt`, which SessionStart and CwdChanged write. When a chat (re)starts after Semaphore's last signal for a wanted notice, the pump signals again once 2 s have passed, so the watcher is armed. An explicit Open chat or Wake Claude request is retried every 5 s for 10 minutes, then every minute. These are file writes only; the claim under the room lock still delivers each notice once. This also helps a chat the person reopens in the Claude app without any button. Expected result: Claude continues about 2–3 s after the chat opens, with no message to type.
+
+**Without Semaphore's hooks** (a chat with a desktop record but no registration), only a message starts the chat. Claude's `/continue` link discards `q`/`prompt`, and no app route prefills an existing chat; only new-chat links do. So the same click copies GPT's prepared recovery message (`connections.claude.recoveryPrompt`) to the clipboard, and a toast says to paste it and press Send.
+
+**Not used:** sending into the chat from outside (Remote Control or the app's peer channel need session credentials), resuming it from a second process, accessibility keystrokes into the Claude window (needs a broad macOS permission, and can't verify where the keystrokes land), or a new chat.
+
+**Evidence.** Pump fixtures reproduce the 0.7 s race (signal, then SessionStart, then a re-signal 2 s later, then delivery and silence), the 5 s / 10 min retry schedule, and a reopened chat with no button. The harness companion showed both banners at 420×760: hooked ("opening Claude's chat · it continues on its own a few seconds after the chat opens") and unhooked (copied message and toast), with navigation suppressed. The live check is the person's next Open chat on a stuck Claude chat after release.
