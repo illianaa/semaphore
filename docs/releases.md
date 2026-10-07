@@ -208,3 +208,12 @@ This was checked in the existing Claude desktop chat bound to this room, session
 - **Claim.** The turn's `claudeHook.stopReminderAt` was saved at 16:05:12.296Z, long before the fallback timer, which was then cancelled unused. Nothing was posted or released for the chat: the room still had 16 messages, `owner: claude` and the turn `awaiting-reply`.
 - **After the reply.** This turn's room reply is its one answer. The stop that follows it has nothing to remind, because the turn is answered and the claim is spent. There was no repeat test.
 
+## 0.14.1 cutover, 7 October 2026 (GPT)
+
+The person requested a direct Claude chat link like GPT's because the hook-only Wake button was unreliable. Claude implemented desktop-session lookup and Open chat (`c44432c`); GPT's review keeps the link available even without a registered hook, and prevents a late check-in response from switching the visible room. Runtime commit `64aa40e` includes the 0.14.1 metadata. All 256 tests pass. An isolated 420×760 companion check verified the unregistered-chat recovery link without issuing a hook request. The live Claude binding maps to the expected desktop record; opening that real link remains a user acceptance check.
+
+Frozen release: `~/.semaphore/releases/0.14.1-ccac8317ccca069e`, full build `ccac8317ccca069e651b17c4ba309f9062dbf1c18106188a34682708d2b98eeb`. Candidate health, shell and all nine static assets matched before installation; the dry run passed. At inventory, four saved turns existed (two awaiting replies and two already uncertain), with no delivery in flight.
+
+After a native heads-up and room status note, GPT applied the app-only cutover. Backup: `~/.semaphore/backups/cutover-2026-10-07T19-50-03-436Z`. App PID changed 48997 → 18484. Live health and all nine assets match the release. All 23 histories and participant bindings, and the pending turns, were preserved. Wake runner 99804, shared engine 99808 and ChatGPT 1885 kept their PIDs and start times. The stable command and both skill links now target 0.14.1; old releases and the wake-runner checkout remain untouched.
+
+Current turn `7f19e280-56cd-4e34-95a3-3bec465c29ef` was received on 0.14.0, then acknowledged at revision 21 through the installed 0.14.1 command after rejoining this same chat. Its identity and receipt remain unchanged. Both participants report automatic wake, and the live room API exposes the verified Claude desktop URL. No second runtime or native resume was used. This record is a separate post-install documentation commit; the immutable release is unchanged.
