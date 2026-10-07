@@ -1,6 +1,6 @@
 import { labels, avatar, escape, formatMessage } from "./render.mjs";
 import { prepareStartRequest } from "./start-request.mjs";
-import { currentNote, quietTurn, claudeWakeOffer, notifyQuietTurns } from "./attention.mjs";
+import { currentNote, quietTurn, claudeChatOffer, claudeWakeOffer, notifyQuietTurns } from "./attention.mjs";
 
 const $ = (selector) => document.querySelector(selector);
 const token = $("meta[name=semaphore-token]").content;
@@ -185,6 +185,8 @@ function pendingDetail(pending, room) {
     if (seat?.manual) return `queued in ${who}’s Codex chat · press Send there`;
     if (pending.speaker === "astra" && GPT_WAKE[seat?.wake]) return GPT_WAKE[seat.wake].detail;
     if (pending.wake?.status === "blocked") return "saved in GPT’s inbox · open its chat and reconnect";
+    if (pending.speaker === "claude" && seat?.url && claudeChatOffer(room) === "stuck")
+      return "Claude's chat hasn't started this turn · open its chat to continue";
     // Registered Claude chats are woken by their hook. One that was signaled but never started its
     // turn stays stuck until the person wakes it again or opens it in the Claude app.
     if (claudeWakes(seat)) {
@@ -206,7 +208,7 @@ function pendingAction(pending, room) {
   const seat = room.connections[pending.speaker];
   if (seat?.manual) return "chat";
   // Like GPT's, a stuck Claude chat is opened from its link when the Claude app has one for it.
-  if (pending.speaker === "claude") return seat?.url && claudeWakeOffer(room) === "stuck" ? "chat" : null;
+  if (pending.speaker === "claude") return seat?.url && claudeChatOffer(room) === "stuck" ? "chat" : null;
   return pending.speaker === "astra" ? GPT_WAKE[seat?.wake]?.action ?? (pending.wake?.status === "blocked" ? "chat" : null) : null;
 }
 function waitingOn(room) {
@@ -504,7 +506,7 @@ function renderStatus(room, setup) {
   const quiet = quietTurn(room);
   const recoveryAction = paused ? null : pendingAction(pending, room);
   // A Claude chat being woken keeps its link too, as GPT's does, until its turn starts.
-  const opening = pending?.speaker === "claude" && claudeWakeOffer(room) === "waking";
+  const opening = pending?.speaker === "claude" && claudeChatOffer(room) === "waking";
   const chatURL = approval || quiet || opening || recoveryAction === "chat" ? room.connections[pending.speaker]?.url : null;
   const holder = room.ended ? "ended" : paused ? "paused" : (pending?.speaker ?? "human");
   // The stick coming back from an AI plays the arrival once; later redraws stay calm.
@@ -1652,10 +1654,12 @@ $("#state-banner").addEventListener("click", (event) => {
   if (button) action(button.dataset.action);
   // The link opens the chat in the Claude app; the same click asks Semaphore to offer the turn
   // again, so the chat picks it up once the app has it open. The link itself is never blocked.
-  if (event.target.closest("[data-wake-claude]") && state.room)
-    api(`/rooms/${state.room.name}/wake/claude`, { method: "POST", body: {} })
-      .then(({ room }) => renderRoom(room))
-      .catch(() => {});
+  if (event.target.closest("[data-wake-claude]") && state.room) {
+    const name = state.room.name;
+    api(`/rooms/${name}/wake/claude`, { method: "POST", body: {} })
+      .then(({ room }) => { if (state.selected === name) renderRoom(room); })
+      .catch(() => { if (state.selected === name) toast("Couldn't request a check-in. You can still open the chat from its link."); });
+  }
 });
 for (const button of document.querySelectorAll("[data-recipient]"))
   button.addEventListener("click", () => {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { quietTurn, claudeWakeOffer, notifyQuietTurns, QUIET_MS } from "../web/attention.mjs";
+import { quietTurn, claudeChatOffer, claudeWakeOffer, notifyQuietTurns, QUIET_MS } from "../web/attention.mjs";
 
 const now = Date.parse("2026-10-07T12:00:00Z");
 const at = age => new Date(now - age).toISOString();
@@ -66,6 +66,18 @@ test("Wake Claude gets a cooldown and quiet grace, and still recovers unreceived
   assert.equal(claudeWakeOffer(r, now + 60_000), "stuck");
   r.connections.claude.wake = "unavailable";
   assert.equal(claudeWakeOffer(r, now + QUIET_MS), null);
+});
+
+test("opening a stalled desktop chat stays available when Claude's hook is unavailable", () => {
+  const r = room();
+  delete r.connections.claude.wake;
+  assert.equal(claudeChatOffer(r, now), "quiet");
+  assert.equal(claudeWakeOffer(r, now), null);
+  r.pending.progress = "queued";
+  assert.equal(claudeChatOffer(r, now), "stuck");
+  assert.equal(claudeWakeOffer(r, now), null);
+  r.owner = "human";
+  assert.equal(claudeChatOffer(r, now), null);
 });
 
 test("quiet notifications survive reloads without repeating, and a new turn can notify", () => {

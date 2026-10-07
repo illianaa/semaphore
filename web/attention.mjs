@@ -27,17 +27,22 @@ export function quietTurn(room, now = Date.now()) {
   return { turnId: pending.id, speaker: pending.speaker, since };
 }
 
-export function claudeWakeOffer(room, now = Date.now()) {
+// Opening the desktop chat must still work when its wake hook is unavailable.
+export function claudeChatOffer(room, now = Date.now()) {
   const pending = room?.pending;
   const seat = room?.connections?.claude;
   if (room?.ended || room?.lock?.state === "stale" || pending?.speaker !== "claude" ||
-      pending.state !== "awaiting-reply" || seat?.transport !== "claude-inbox" ||
-      seat.wake !== "automatic") return null;
+      pending.state !== "awaiting-reply" || room.owner !== "claude" ||
+      seat?.transport !== "claude-inbox") return null;
   const requested = time(pending.wakeRequestedAt);
   if (requested && now - requested < CLAUDE_RETRY_MS) return "waking";
   if (pending.progress === "received") return quietTurn(room, now) ? "quiet" : null;
   const since = Math.max(time(pending.timing?.queuedAt) || time(pending.at), requested);
   return since && now - since >= CLAUDE_RETRY_MS ? "stuck" : null;
+}
+
+export function claudeWakeOffer(room, now = Date.now()) {
+  return room?.connections?.claude?.wake === "automatic" ? claudeChatOffer(room, now) : null;
 }
 
 // Remember one notification per room turn, including across refreshes and companion windows.

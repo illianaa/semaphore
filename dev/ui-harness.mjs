@@ -63,7 +63,7 @@ const app = createAppServer({
   wakePump: false,
   claudePump: attentionPreview ? { start() {}, close() {}, tick() {} } : false,
   // A pretend Claude app record, so the fake hooked Claude chat has an Open chat link.
-  claudeDesktop: attentionPreview ? { url: (id) => (id === ids.claude ? "claude://code/continue?session=local_harness-preview" : null) } : false,
+  claudeDesktop: attentionPreview ? { url: (id) => ([ids.claude, "00000000-0000-4000-8000-000000000003"].includes(id) ? "claude://code/continue?session=local_harness-preview" : null) } : false,
 });
 const url = (await app.listen(port)).replace(/\/$/, "");
 
@@ -216,6 +216,15 @@ if (attentionPreview) {
     if (room.pending.receipt) room.pending.receipt.at = ago(3);
   });
   console.log(`Stuck Claude preview: ${url}/?view=companion#${stuck}`);
+  const disconnected = createLiveRoom(root, "Claude hook unavailable").room.name;
+  connect(disconnected);
+  edit(disconnected, room => { room.participants.claude.id = "00000000-0000-4000-8000-000000000003"; });
+  await send(disconnected, "Please review the plan when your chat reopens.", "claude");
+  edit(disconnected, room => {
+    room.pending.at = ago(3);
+    if (room.pending.receipt) room.pending.receipt.at = ago(3);
+  });
+  console.log(`Disconnected Claude preview: ${url}/?view=companion#${disconnected}`);
 }
 
 console.log(`UI harness ready at ${url} (rooms in ${root})`);
