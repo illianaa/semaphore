@@ -213,3 +213,7 @@ These records support a startup race: the signal preceded registration, and the 
 ### GPT review for 0.14.2
 
 A retry can also land *after* registration but *before* the watcher is armed. The pump now compares the last signal against `seenAt + 2 seconds`, so that early retry does not suppress the signal after startup. An additional fixture verifies this ordering and that a claimed notice remains silent. All **262 tests pass**, with syntax and whitespace checks clean. At 420×760 the unregistered-chat companion clearly describes the copy/paste fallback; its link has the copy action. Banner wording now reports that Semaphore is checking for a reply, without claiming that the model has already continued. There is no native composer prefill in this release; automatic recovery relies on the existing approved hooks, and the next real stuck-chat check remains necessary.
+
+### Live recovery accepted — 7 October 2026
+
+After installing 0.14.2, the human answered the Needs you check “After the 0.14.2 update, does Open chat wake a stuck Claude chat without you typing?” with **“Yes, it continues by itself.”** This is recorded in project room `room-baed5158272e307e4732fcbc`, human message 27, answering request `38eff1d2-dbc8-49f6-87b1-0fcb9d99b716`. The reported live recovery acceptance check passed. No response duration was supplied, so this confirms continuation without a manually sent message, not a specific latency guarantee. The request is answered and no further recovery check is outstanding.

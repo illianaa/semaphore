@@ -227,3 +227,7 @@ Frozen release: `~/.semaphore/releases/0.14.2-8da52466e93cd9bf`, full build `8da
 GPT rejoined this same native chat and acknowledged existing turn `f5572def-0c7c-433d-a4b0-3390d3ff3b82` at revision 25 through the installed release; its identity and receipt remain unchanged. Both seats report automatic wake, with live GPT steering. No permissions changed and no native chat was resumed from another process.
 
 The remaining acceptance check is a real Open chat click on a stuck Claude chat. The timing fix is expected to deliver its hook notice sooner; it does not prove actual model continuation. This release does not prefill an existing native composer. Chats without registered hooks get a clearly described copy/paste fallback. This post-install record is separate from the frozen runtime.
+
+### Live recovery acceptance, 7 October 2026
+
+The human subsequently answered the 0.14.2 Needs you check: **“Yes, it continues by itself.”** Project room message 27 records the answer to request `38eff1d2-dbc8-49f6-87b1-0fcb9d99b716`. Open chat recovery without typing is therefore confirmed by the person's live check, completing the outstanding acceptance step. This documentation update changes neither the installed release nor runtime behavior.
