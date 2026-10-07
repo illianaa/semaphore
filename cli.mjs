@@ -37,7 +37,7 @@ import { cancelQueuedWake } from "./lib/wake-delivery.mjs";
 import { bindNativeWork } from "./lib/steering.mjs";
 import os from "node:os";
 import { registerSession } from "./lib/claude-registry.mjs";
-import { wakeCheck, claudeHooksStatus, installClaudeHooks, uninstallClaudeHooks } from "./lib/claude-wake.mjs";
+import { wakeCheck, stopCheck, claudeHooksStatus, installClaudeHooks, uninstallClaudeHooks } from "./lib/claude-wake.mjs";
 import { RUNTIME, formatRuntime, runtimeIdentity, runtimeChange, sameBuild } from './lib/build-info.mjs';
 import { statusNote } from './lib/status-note.mjs';
 import { artifactViews, artifactView } from './lib/artifacts.mjs';
@@ -728,11 +728,15 @@ async function hookCommand(verb) {
         process.stderr.write(`${result.text}\n`);
         process.exitCode = 2;
       }
+    } else if (verb === "stop") {
+      // A documented Stop decision: Claude continues once with the reason; nothing else changes.
+      const result = stopCheck(event, { root });
+      if (result.block) process.stdout.write(JSON.stringify({ decision: "block", reason: result.reason }));
     }
   } catch { /* Never disturb a chat over Semaphore's own trouble. */ }
 }
 
-// Three entries in ~/.claude/settings.json. Everything else there is preserved, and a backup is
+// Four entries in ~/.claude/settings.json. Everything else there is preserved, and a backup is
 // written first. Chats pick them up when they start or are reopened.
 function hooksCommand(verb) {
   const paths = installPaths();

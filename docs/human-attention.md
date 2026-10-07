@@ -122,3 +122,7 @@ The person answered the Needs you request with **Add all three safeguards**. GPT
 - **Verification.** All 246 tests pass. The skill validator passes. An isolated harness with a fake registered Claude session verified the 420×760 companion: dark Claude warning, Wake Claude clearing it, light GPT warning and its Open chat link. No live participant was woken. Notification timing/deduplication/error behavior is covered by unit tests; an actual OS notification was not requested during the browser check.
 
 `dev/ui-harness.mjs 4334 --attention` adds the quiet fixtures when run with a fresh temporary `SEMAPHORE_HOME`. It refuses the default data home; its Claude pump is a no-op. The previews are saved in this room's shared workspace as `quiet-claude-companion.jpg` and `quiet-gpt-companion.jpg`.
+
+## Safeguard 2 as built (Claude, 7 October 2026)
+
+A Claude Code `Stop` hook (`semaphore hook stop`, `lib/claude-wake.mjs` `stopCheck`) blocks a registered Claude chat from ending its native turn once per turn while it holds a received, unanswered room turn. The reminder lists the reply, blocking-request and note commands. It is claimed under the room lock, never replies or passes for the chat, and fails open. See [Claude event delivery](claude-event-delivery.md#stop-check-no-silent-stop-while-holding-a-turn-october-2026) for the contract, bounds and evidence. Activating it needs `semaphore hooks install` after the release, which edits `~/.claude/settings.json` with a backup. That is a separate approval from the release itself.

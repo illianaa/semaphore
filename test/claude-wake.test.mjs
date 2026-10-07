@@ -9,7 +9,7 @@ import { RoomStore, Semaphore } from "../lib/core.mjs";
 import { queueHumanInput } from "../lib/inputs.mjs";
 import { sqliteDatabase } from "../lib/sqlite.mjs";
 import { registerSession, signalSession, isRegistered, signalPath, recordPath } from "../lib/claude-registry.mjs";
-import { wakeCheck, ClaudeSignalPump, requestClaudeWake, claudeHookEntries, claudeHooksStatus, installClaudeHooks, uninstallClaudeHooks } from "../lib/claude-wake.mjs";
+import { wakeCheck, stopCheck, ClaudeSignalPump, requestClaudeWake, claudeHookEntries, claudeHooksStatus, installClaudeHooks, uninstallClaudeHooks } from "../lib/claude-wake.mjs";
 
 const SESSION = "11111111-2222-4333-8444-5555c1a0de00";
 const OTHER = "99999999-8888-4777-8666-555555555555";
@@ -310,6 +310,9 @@ test("hook settings install beside existing settings, are idempotent, and uninst
   assert.deepEqual(installed.hooks.SessionStart, [want.SessionStart]);
   assert.deepEqual(installed.hooks.FileChanged, [want.FileChanged]);
   assert.equal(want.FileChanged.hooks[0].asyncRewake, true);
+  assert.deepEqual(installed.hooks.Stop, [want.Stop]);
+  assert.match(want.Stop.hooks[0].command, /\/bin\/semaphore' hook stop$|\/bin\/semaphore hook stop$/);
+  assert.equal(want.Stop.hooks[0].asyncRewake, undefined, "the stop check runs before the chat stops, not in the background");
   assert.equal(fs.statSync(settingsPath).mode & 0o777, 0o600, "the file keeps its permissions");
   assert.equal(claudeHooksStatus({ settingsPath, command }).installed, true);
   assert.equal(installClaudeHooks({ settingsPath, command, backupDir }).changed, false, "idempotent");
@@ -325,6 +328,125 @@ test("hook settings install beside existing settings, are idempotent, and uninst
   assert.deepEqual(JSON.parse(fs.readFileSync(settingsPath, "utf8")), { permissions: { allow: ["Bash(ls)"] }, alwaysThinkingEnabled: true,
     hooks: { CwdChanged: [{ hooks: [theirs] }] } });
   assert.equal(uninstallClaudeHooks({ settingsPath, backupDir }).changed, false);
+});
+
+test("an install from before the Stop check upgrades in place and keeps everything else", (t) => {
+  const f = fixture(t);
+  const settingsPath = path.join(f.dir, "settings.json");
+  const command = path.join(f.home, "bin", "semaphore");
+  const options = { settingsPath, command, backupDir: path.join(f.dir, "backups") };
+  const theirs = { hooks: [{ type: "command", command: "say done" }] };
+  const { Stop, ...older } = claudeHookEntries(command);
+  fs.writeFileSync(settingsPath, JSON.stringify({ hooks: { ...Object.fromEntries(Object.entries(older).map(([event, group]) => [event, [group]])), Stop: [theirs] }, model: "opus" }));
+  const before = claudeHooksStatus(options);
+  assert.equal(before.installed, false);
+  assert.equal(before.present.Stop, false);
+  assert.equal(before.present.FileChanged, true);
+  assert.equal(installClaudeHooks(options).changed, true);
+  const after = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  assert.deepEqual(after.hooks.Stop, [theirs, Stop], "their Stop hook stays first");
+  assert.equal(after.hooks.FileChanged.length, 1, "no duplicate entries");
+  assert.equal(after.model, "opus");
+  assert.equal(claudeHooksStatus(options).installed, true);
+  assert.equal(installClaudeHooks(options).changed, false);
+  uninstallClaudeHooks(options);
+  assert.deepEqual(JSON.parse(fs.readFileSync(settingsPath, "utf8")), { hooks: { Stop: [theirs] }, model: "opus" });
+});
+
+test("the Stop check reminds a chat once per turn while it holds a received, unanswered turn", async (t) => {
+  const f = fixture(t);
+  const stop = (extra = {}) => stopCheck({ session_id: SESSION, hook_event_name: "Stop", stop_hook_active: false, ...extra }, { home: f.home, root: f.root });
+  const r = f.room();
+  await r.app.send("Install the release", "claude");
+  const id = r.app.room.pending.id;
+  r.app.receive(id, "claude");
+  r.done();
+  assert.deepEqual(stop(), { block: false }, "an unregistered chat is never held");
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home });
+  assert.deepEqual(stop({ session_id: OTHER }), { block: false }, "another chat's turn is not this chat's business");
+  const first = stop({ stop_hook_active: true });
+  assert.equal(first.block, true, "Semaphore's own wake-ups can make stop_hook_active true; the per-turn claim is the guard");
+  assert.match(first.reason, /^Semaphore: before you stop, answer your room turn\. This reminder appears once per turn\./);
+  assert.match(first.reason, new RegExp(`you still hold the talking stick for turn ${id}, which you received but haven't answered`));
+  assert.match(first.reason, new RegExp(`Done\\? Reply now: node .*reply room --root .* --turn ${id} --next <human\\|gpt\\|claude>`));
+  assert.match(first.reason, /Blocked .*file it as a blocking request, and pass to human:\n  node .*ask room --root .* --turn .* --blocking /);
+  assert.doesNotMatch(first.reason, /\[--blocking\]/);
+  assert.match(first.reason, /Still working on purpose .*Post a status note, then you may stop: node .*note room/);
+  const saved = new RoomStore(f.root, "room").read();
+  assert.ok(saved.pending.claudeHook.stopReminderAt);
+  assert.equal(saved.messages.length, 1, "nothing is said on the chat's behalf");
+  assert.equal(saved.owner, "claude", "and the stick isn't released for it");
+  assert.equal(saved.pending.state, "awaiting-reply");
+  assert.deepEqual(stop(), { block: false }, "the second stop in the same turn goes through, so it can't loop");
+  assert.deepEqual(new ClaudeSignalPump({ root: f.root, home: f.home }).wants(new ClaudeSignalPump({ root: f.root, home: f.home }).summary("room")), null,
+    "the reminder never makes the app wake the chat");
+});
+
+test("the Stop check stays out of the way: queued, replied, taken, ended, busy or damaged rooms", async (t) => {
+  const f = fixture(t);
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home });
+  const stop = () => stopCheck({ session_id: SESSION, hook_event_name: "Stop" }, { home: f.home, root: f.root });
+  const r = f.room();
+  await r.app.send("Review the plan", "claude");
+  const id = r.app.room.pending.id;
+  assert.deepEqual(stop(), { block: false }, "a turn the chat hasn't received is left to the wake path");
+  r.app.receive(id, "claude");
+  await r.app.accept({ turnId: id, speaker: "claude", message: "Reviewed.", next: "human" });
+  assert.deepEqual(stop(), { block: false }, "answered");
+  await r.app.send("One more pass", "claude");
+  const second = r.app.room.pending.id;
+  r.app.receive(second, "claude");
+  r.app.takeStick();
+  assert.deepEqual(stop(), { block: false }, "taken back");
+  r.app.recover();
+  await r.app.send("Last pass", "claude");
+  const third = r.app.room.pending.id;
+  r.app.receive(third, "claude");
+  // Someone else is saving the room: let the chat stop, and don't use up the reminder.
+  assert.deepEqual(stopCheck({ session_id: SESSION }, { home: f.home, root: f.root }), { block: false });
+  r.done();
+  fs.mkdirSync(path.join(f.root, "broken"), { recursive: true });
+  fs.writeFileSync(path.join(f.root, "broken", "room.json"), "{not json");
+  const reminded = stop();
+  assert.equal(reminded.block, true, "a damaged room doesn't hide the others");
+  assert.match(reminded.reason, new RegExp(`turn ${third}`));
+  const store = new RoomStore(f.root, "room");
+  store.acquire();
+  try {
+    const app = new Semaphore(store, {});
+    delete app.room.pending.claudeHook;
+    app.save();
+    app.end();
+  } finally { store.release(); }
+  assert.deepEqual(stop(), { block: false }, "ended");
+});
+
+test("concurrent Stop hook processes remind once, and bad input never blocks a chat", async (t) => {
+  const f = fixture(t);
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home });
+  const r = f.room();
+  await r.app.send("Ship it", "claude");
+  r.app.receive(r.app.room.pending.id, "claude");
+  r.done();
+  const cli = path.join(path.dirname(new URL(import.meta.url).pathname), "..", "cli.mjs");
+  const env = { ...process.env, SEMAPHORE_HOME: f.home };
+  const hook = (input) => new Promise((resolve) => {
+    const child = execFile(process.execPath, [cli, "hook", "stop", "--root", f.root], { env }, (error, stdout, stderr) =>
+      resolve({ code: error?.code ?? 0, stdout, stderr }));
+    child.stdin.end(input);
+  });
+  const event = JSON.stringify({ session_id: SESSION, hook_event_name: "Stop", stop_hook_active: false });
+  const results = await Promise.all([hook(event), hook(event), hook(event)]);
+  assert.deepEqual(results.map((result) => result.code), [0, 0, 0]);
+  const blocked = results.filter((result) => result.stdout);
+  assert.equal(blocked.length, 1, "exactly one process claims the reminder");
+  const decision = JSON.parse(blocked[0].stdout);
+  assert.equal(decision.decision, "block");
+  assert.match(decision.reason, /you still hold the talking stick/);
+  for (const input of ["", "not json", "[]", JSON.stringify({ session_id: "../escape" })]) {
+    const result = await hook(input);
+    assert.deepEqual([result.code, result.stdout, result.stderr], [0, "", ""]);
+  }
 });
 
 test("uninstall preserves mixed hook groups and revokes stale automatic-wake registrations", (t) => {
