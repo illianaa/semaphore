@@ -3811,3 +3811,17 @@ em,
   align-content: start;
   pointer-events: auto;
 }
+
+/* A missing update needs attention without claiming that native work has stopped. */
+.room-alerts .state-banner.quiet-holder {
+  background: var(--approval-bg);
+  border-color: var(--approval-line);
+  border-left: 3px solid var(--amber);
+}
+.state-banner.quiet-holder .state-who strong { color: var(--approval-strong); }
+.quiet-help {
+  display: block;
+  margin-top: 6px;
+  color: var(--text);
+  line-height: 1.45;
+}

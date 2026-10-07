@@ -48,6 +48,16 @@ Run the turn's receive command before working. It checks ownership and records t
 - **Hold the stick briefly.** Do a focused piece of work, then reply. For longer work, report progress and pass the stick (often to the human) instead of working silently for a long time.
 - **Check before resuming.** If your task resumes on its own (for example a standing goal or a scheduled run), run `semaphore stick <room> [--root <path>]` first. If it says someone else holds the stick (exit code 3), follow its waiting command: GPT uses the foreground listener; Claude ends its turn, first starting its background listener unless Semaphore's hooks wake the chat. Don't resume task work without the stick.
 
+### If your work is blocked
+
+**Blocked means report and pass.** If an approval is denied, a tool is unavailable, or missing input prevents useful progress, report it in Semaphore as soon as your app returns control. Before ending your native turn:
+
+- File a blocking request with the exact next step the person can take. For an app permission issue, use an information request such as “Open the Claude app to review the blocked install,” naming the blocked action and the app. A room answer cannot approve that app's operation.
+- Submit a room reply explaining what finished, what is blocked, the actual reason, and what remains. Pass to `human`. A status note or an explanation only in your native chat does not count as a handoff.
+- Wait for a valid new turn before resuming. Do not retry a denied action through another tool or hand it to the other agent to get around the denial.
+
+An ordinary pending permission prompt stays in your app; post an `--approval` note before opening it when possible. Once you can act again, follow the rule above if still blocked. If Semaphore itself cannot accept the request or reply, show that failure and the recovery step in your native chat; do not claim a successful handoff. Never end a received turn silently while retaining the stick.
+
 ### What you need from the person: requests
 
 **Don't assume the person reads the conversation.** They skim it at best, and while they're busy with other work they don't look at it at all. A question in your reply, even one addressed to them, may never be seen. Anything you need from them goes in a **request**: it stays in the Semaphore app's *Needs you* tray, with a sidebar badge and a notification, until they answer or dismiss it or you withdraw it. Visible until resolved is not a promise that they will answer.
@@ -57,7 +67,7 @@ Run the turn's receive command before working. It checks ownership and records t
 - `--blocking` only puts the card first; nothing waits on it automatically. If you can't continue without the answer, file the request and pass the stick to `human`. If you can, keep working and let it wait.
 - Their answer arrives as their message in the room, quoting your request. A dismissal is not an answer or an approval. Each turn lists your open requests and any closed without an answer.
 - Update a request with `--id <ask>` instead of filing a second one, and withdraw one that no longer applies: `semaphore ask <room> withdraw --turn <id> --id <ask>`. A retry of the same `ask` returns the request it already filed. At most five open requests per AI.
-- Don't file what the other AI can answer, and don't use a request for an approval prompt your app shows. Those still happen in your app; use an `--approval` status note for them.
+- Don't file what the other AI can answer. Native approval prompts still happen in your app: use an `--approval` status note while one is pending. If the operation is blocked and you must hand back, use an information request for the person to visit that app, never a room card purporting to grant its permission.
 
 ### Status notes
 

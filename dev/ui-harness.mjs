@@ -3,13 +3,20 @@
 // Usage: node dev/ui-harness.mjs [port]   (default 4321)
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { createAppServer } from "../server.mjs";
 import { RoomStore } from "../lib/core.mjs";
 import { createLiveRoom } from "../lib/rooms.mjs";
+import { registerSession } from "../lib/claude-registry.mjs";
+import { dataHome } from "../lib/paths.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.join(here, "..", ".semaphore", "dev-rooms");
+// --attention registers a fake Claude hook only in an explicitly isolated data home.
+const attentionPreview = process.argv.includes("--attention");
+if (attentionPreview && (!process.env.SEMAPHORE_HOME || dataHome === path.join(os.homedir(), ".semaphore")))
+  throw new Error("Use a fresh temporary SEMAPHORE_HOME for --attention.");
+const root = attentionPreview ? path.join(dataHome, "rooms") : path.join(here, "..", ".semaphore", "dev-rooms");
 const port = Number(process.argv[2] ?? 4321);
 fs.rmSync(root, { recursive: true, force: true });
 
@@ -54,7 +61,7 @@ const app = createAppServer({
   transports: { astra: fake("astra-inbox"), claude: fake("claude-inbox") },
   wake,
   wakePump: false,
-  claudePump: false,
+  claudePump: attentionPreview ? { start() {}, close() {}, tick() {} } : false,
 });
 const url = (await app.listen(port)).replace(/\/$/, "");
 
@@ -184,6 +191,21 @@ await send(
   { members: ["astra", "claude"] },
 );
 connect(launch, ["claude"]);
+
+if (attentionPreview) {
+  registerSession({ session_id: ids.claude, hook_event_name: "SessionStart" });
+  for (const speaker of ["claude", "astra"]) {
+    const name = createLiveRoom(root, `${speaker === "claude" ? "Claude" : "GPT"} went quiet`).room.name;
+    connect(name);
+    await send(name, "Please review the companion layout.", speaker);
+    edit(name, room => {
+      room.pending.receivedAt = ago(8);
+      room.statusNote = { turnId: room.pending.id, speaker, kind: "working",
+        text: "Checking the companion layout", updatedAt: ago(7), expiresAt: ago(-23) };
+    });
+    console.log(`Attention preview: ${url}/?view=companion#${name}`);
+  }
+}
 
 console.log(`UI harness ready at ${url} (rooms in ${root})`);
 console.log(

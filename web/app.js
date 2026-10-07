@@ -1,5 +1,6 @@
 import { labels, avatar, escape, formatMessage } from "./render.mjs";
 import { prepareStartRequest } from "./start-request.mjs";
+import { currentNote, quietTurn, claudeWakeOffer, notifyQuietTurns } from "./attention.mjs";
 
 const $ = (selector) => document.querySelector(selector);
 const token = $("meta[name=semaphore-token]").content;
@@ -39,6 +40,7 @@ const state = {
   startLimit: savedStartLimit(),
   owners: {},
   approvals: {},
+  quietNotified: {},
   readySeen: {},
   holders: {},
   deliverablesOpen: null,
@@ -119,18 +121,6 @@ let toastTimer;
 
 // Where each AI works, and where it asks the person for approval.
 const hostApp = (speaker) => (speaker === "astra" ? "ChatGPT" : "the Claude app");
-// A status note is the AI's own line about the turn it holds. Show it only while that exact
-// turn is pending, and always as the AI's words, never as Semaphore's.
-function currentNote(room) {
-  const note = room?.statusNote;
-  const pending = room?.pending;
-  if (!note || pending?.state !== "awaiting-reply" || note.turnId !== pending.id || note.speaker !== pending.speaker)
-    return null;
-  if (!["working", "approval"].includes(note.kind) || typeof note.text !== "string" || !note.text.trim())
-    return null;
-  if (note.expiresAt && !(Date.parse(note.expiresAt) > Date.now())) return null;
-  return note;
-}
 const awaitingApproval = (room) => currentNote(room)?.kind === "approval";
 // These per-seat states come from the room poll, not a cached global switch.
 const GPT_WAKE = {
@@ -162,23 +152,6 @@ function justReplied(room, speaker) {
   return !!last && Date.now() - Date.parse(last.at) < LISTEN_AGAIN_MS;
 }
 const claudeWakes = (seat) => seat?.transport === "claude-inbox" && seat.wake === "automatic";
-// A hooked Claude chat can be woken from the banner, like reopening GPT's chat from its link:
-// once its turn hasn't started for a minute, or once it has gone quiet for a while mid-turn.
-const CLAUDE_STUCK_MS = 60_000;
-const CLAUDE_QUIET_MS = 5 * 60_000;
-const time = (at) => (at ? Date.parse(at) || 0 : 0);
-function claudeWakeOffer(room) {
-  const pending = room.pending;
-  if (pending?.speaker !== "claude" || pending.state !== "awaiting-reply" || !claudeWakes(room.connections.claude)) return null;
-  const requested = time(pending.wakeRequestedAt);
-  if (Date.now() - requested < CLAUDE_STUCK_MS) return "waking";
-  if (pending.progress === "received") {
-    const since = Math.max(time(pending.timing?.acknowledgedAt) || time(pending.at), time(currentNote(room)?.updatedAt), requested);
-    return Date.now() - since > CLAUDE_QUIET_MS ? "quiet" : null;
-  }
-  const since = Math.max(time(pending.timing?.queuedAt) || time(pending.at), requested);
-  return Date.now() - since > CLAUDE_STUCK_MS ? "stuck" : null;
-}
 function memberDetail(room, speaker) {
   const seat = room.connections[speaker];
   if (!seat?.connected) return speaker === "human" ? "" : "not connected";
@@ -188,6 +161,7 @@ function memberDetail(room, speaker) {
 }
 function connectionDescription(room, speaker) {
   const seat = room.connections[speaker];
+  if (quietTurn(room)?.speaker === speaker) return `${labels[speaker]} received this turn, but hasn't posted a reply or status update for at least five minutes. Open its chat to check on it.`;
   if (receivedBy(room, speaker)) return `${labels[speaker]} has received this turn and is working in ${hostApp(speaker)}.`;
   if (speaker === "claude" && claudeWakes(seat)) return "Semaphore wakes this chat through its Claude Code hook, so no listener is needed. Keep the chat open in the Claude app.";
   if (speaker === "claude") return "Keep this chat open and listening. You can continue speaking to Claude in its app.";
@@ -201,7 +175,7 @@ function pendingDetail(pending, room) {
   if (pending.progress === "received") {
     const offer = claudeWakeOffer(room);
     if (offer === "waking") return "asked Claude's chat to check in";
-    if (offer === "quiet") return "no word from Claude for a while · Wake Claude asks it to check in";
+    if (quietTurn(room)) return "no reply or status update for at least 5 minutes";
     return `working in ${hostApp(pending.speaker)}`;
   }
   if (pending.wake?.status === "uncertain") return "wake status uncertain · check GPT’s chat";
@@ -442,6 +416,7 @@ function roomSubtitle(room) {
         : "Starting…";
   }
   if (awaitingApproval(room)) return `${labels[room.pending.speaker]} needs your approval`;
+  if (quietTurn(room)) return `${labels[room.pending.speaker]} has gone quiet`;
   const ready = room.deliverables?.ready ? ` · ${room.deliverables.ready} ready` : "";
   if (room.pending) return `${labels[room.pending.speaker]}’s turn${ready}`;
   return room.messageCount
@@ -524,8 +499,9 @@ function renderStatus(room, setup) {
   banner.dataset.room = room.name;
   const note = paused ? null : currentNote(room);
   const approval = note?.kind === "approval";
+  const quiet = quietTurn(room);
   const recoveryAction = paused ? null : pendingAction(pending, room);
-  const chatURL = approval || recoveryAction === "chat" ? room.connections[pending.speaker]?.url : null;
+  const chatURL = approval || quiet || recoveryAction === "chat" ? room.connections[pending.speaker]?.url : null;
   const holder = room.ended ? "ended" : paused ? "paused" : (pending?.speaker ?? "human");
   // The stick coming back from an AI plays the arrival once; later redraws stay calm.
   const arrived = holder === "human" && ["astra", "claude"].includes(state.holders[room.name]);
@@ -534,20 +510,21 @@ function renderStatus(room, setup) {
   banner.classList.toggle("paused", paused);
   banner.classList.toggle("ended", !!room.ended);
   banner.classList.toggle("approval", approval);
+  banner.classList.toggle("quiet-holder", !!quiet);
   if (arrived) banner.classList.add("arrived");
   else if (holder !== "human" || changedRoom) banner.classList.remove("arrived");
   banner.dataset.holder = holder;
   const who = paused
     ? `<i class="state-dot"></i><span>${stale ? "A previous app process stopped. Your conversation is saved." : "Paused · a previous delivery needs your review"}</span>`
     : pending
-      ? `${signalMark(pending.speaker, approval ? "" : "working")}<span>${approval ? `<strong>${labels[pending.speaker]} is waiting for your approval in ${hostApp(pending.speaker)}</strong>` : `<strong>${labels[pending.speaker]} has the stick</strong><span class="state-detail"> · ${escape(pendingDetail(pending, room))}${Number.isInteger(room.maxTurns) ? ` · reply ${Math.min((room.autoTurns ?? 0) + 1, room.maxTurns)} of ${room.maxTurns}` : ""}</span>`}${note ? `<span class="state-note" title="${escape(note.text)}">“${escape(note.text)}” · ${escape(relativeTime(note.updatedAt))}</span>` : ""}</span>`
+      ? `${signalMark(pending.speaker, approval || quiet ? "" : "working")}<span>${approval ? `<strong>${labels[pending.speaker]} is waiting for your approval in ${hostApp(pending.speaker)}</strong>` : `<strong>${labels[pending.speaker]} ${quiet ? "has gone quiet" : "has the stick"}</strong><span class="state-detail"> · ${escape(pendingDetail(pending, room))}${Number.isInteger(room.maxTurns) ? ` · reply ${Math.min((room.autoTurns ?? 0) + 1, room.maxTurns)} of ${room.maxTurns}` : ""}</span>`}${quiet ? `<span class="quiet-help">${pending.speaker === "claude" && claudeWakes(room.connections.claude) ? "Wake Claude to ask for an update" : `Open ${hostApp(pending.speaker)} to check on it`}, or take the stick. Its work may still be running.</span>` : ""}${note ? `<span class="state-note" title="${escape(note.text)}">“${escape(note.text)}” · ${escape(relativeTime(note.updatedAt))}</span>` : ""}</span>`
       : `${signalMark("human")}<span><strong>Your turn</strong><span class="state-detail"> · ${room.asks?.length ? `${room.asks.length === 1 ? "a request needs" : `${room.asks.length} requests need`} you below` : "reply, or hand the stick to one of them"}</span></span>`;
   // During the guided start, the start card is the only call to action.
   const markup = room.ended
     ? `<span class="state-who"><i class="state-dot"></i><span><strong>You ended this conversation</strong><span class="state-detail"> · the loop is stopped</span></span></span><div class="state-actions">${deliverablesPill(room)}</div>`
     : setup
     ? ""
-    : `<span class="state-who">${who}</span><div class="state-actions">${deliverablesPill(room)}${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${["stuck", "quiet"].includes(claudeWakeOffer(room)) ? `<button class="${claudeWakeOffer(room) === "stuck" ? "primary" : ""}" data-action="wake-claude" title="Signal Claude's chat through its Claude Code hook to ${claudeWakeOffer(room) === "stuck" ? "start this turn" : "check in on this turn"}">Wake Claude</button>` : ""}${chatURL ? `<a class="state-link" href="${escape(chatURL)}">Open chat ↗</a>` : recoveryAction === "setup" ? '<button data-action="setup">Check setup</button>' : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
+    : `<span class="state-who">${who}</span><div class="state-actions">${deliverablesPill(room)}${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${["stuck", "quiet"].includes(claudeWakeOffer(room)) ? `<button class="primary" data-action="wake-claude" title="Signal Claude's chat through its Claude Code hook to ${claudeWakeOffer(room) === "stuck" ? "start this turn" : "check in on this turn"}">Wake Claude</button>` : ""}${chatURL ? `<a class="state-link" href="${escape(chatURL)}">Open chat ↗</a>` : recoveryAction === "setup" ? '<button data-action="setup">Check setup</button>' : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
   if (changedRoom || banner.renderedMarkup !== markup) {
     const signal = changedRoom ? null : banner.querySelector(".signal");
     const focused = !changedRoom && banner.contains(document.activeElement) ? document.activeElement : null;
@@ -1282,6 +1259,18 @@ async function refresh() {
     notifyTurns(list.rooms);
     notifyApprovals(list.rooms);
     notifyAsks(list.rooms);
+    notifyQuietTurns(list.rooms, {
+      enabled: canNotify(), foreground: !document.hidden && document.hasFocus(),
+      read: key => state.quietNotified[key] ?? storageGet(key),
+      write: (key, value) => { state.quietNotified[key] = value; storageSet(key, value); },
+      notify: (room, quiet) => {
+        const alert = new Notification(`${labels[quiet.speaker]} has gone quiet · ${room.title}`, {
+          body: "No reply or status update for at least 5 minutes. Open Semaphore to check on the chat or take the stick. Work may still be running.",
+          tag: `${room.name}:quiet:${quiet.turnId}`,
+        });
+        alert.onclick = () => { window.focus(); selectRoom(room.name); alert.close(); };
+      },
+    });
     renderSidebar();
     if (detail && selected === state.selected) renderRoom(detail.room);
     countAsksInTitle();

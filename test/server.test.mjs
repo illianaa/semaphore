@@ -139,6 +139,7 @@ test("web shell is available, uses restrictive headers, and never exposes raw ro
   assert.match(f.html, /<script src="\/theme\.js"><\/script>/);
   assert.equal((await fetch(f.url + "/theme.js")).status, 200);
   assert.equal((await fetch(f.url + "/start-request.mjs")).status, 200);
+  assert.equal((await fetch(f.url + "/attention.mjs")).status, 200);
   assert.equal(
     (await fetch(f.url + "/.semaphore/rooms/hello/room.json")).status,
     401,
