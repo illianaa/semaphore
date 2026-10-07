@@ -189,8 +189,8 @@ function pendingDetail(pending, room) {
     // turn stays stuck until the person wakes it again or opens it in the Claude app.
     if (claudeWakes(seat)) {
       const offer = claudeWakeOffer(room);
-      if (offer === "waking") return "waking Claude's chat again";
-      if (offer === "stuck") return "Claude's chat hasn't started this turn · press Wake Claude, or open it in the Claude app";
+      if (offer === "waking") return seat.url ? "opening Claude's chat · it picks up the turn once open" : "waking Claude's chat again";
+      if (offer === "stuck") return seat.url ? "Claude's chat hasn't started this turn · open its chat to continue" : "Claude's chat hasn't started this turn · press Wake Claude, or open it in the Claude app";
       return handedToChat(room, pending.speaker) ? `starting in ${hostApp(pending.speaker)}` : "waking Claude's chat";
     }
     if (handedToChat(room, pending.speaker)) return `starting in ${hostApp(pending.speaker)}`;
@@ -205,6 +205,8 @@ function pendingAction(pending, room) {
   if (["uncertain", "needs-send"].includes(pending.wake?.status)) return "chat";
   const seat = room.connections[pending.speaker];
   if (seat?.manual) return "chat";
+  // Like GPT's, a stuck Claude chat is opened from its link when the Claude app has one for it.
+  if (pending.speaker === "claude") return seat?.url && claudeWakeOffer(room) === "stuck" ? "chat" : null;
   return pending.speaker === "astra" ? GPT_WAKE[seat?.wake]?.action ?? (pending.wake?.status === "blocked" ? "chat" : null) : null;
 }
 function waitingOn(room) {
@@ -501,7 +503,9 @@ function renderStatus(room, setup) {
   const approval = note?.kind === "approval";
   const quiet = quietTurn(room);
   const recoveryAction = paused ? null : pendingAction(pending, room);
-  const chatURL = approval || quiet || recoveryAction === "chat" ? room.connections[pending.speaker]?.url : null;
+  // A Claude chat being woken keeps its link too, as GPT's does, until its turn starts.
+  const opening = pending?.speaker === "claude" && claudeWakeOffer(room) === "waking";
+  const chatURL = approval || quiet || opening || recoveryAction === "chat" ? room.connections[pending.speaker]?.url : null;
   const holder = room.ended ? "ended" : paused ? "paused" : (pending?.speaker ?? "human");
   // The stick coming back from an AI plays the arrival once; later redraws stay calm.
   const arrived = holder === "human" && ["astra", "claude"].includes(state.holders[room.name]);
@@ -517,14 +521,14 @@ function renderStatus(room, setup) {
   const who = paused
     ? `<i class="state-dot"></i><span>${stale ? "A previous app process stopped. Your conversation is saved." : "Paused · a previous delivery needs your review"}</span>`
     : pending
-      ? `${signalMark(pending.speaker, approval || quiet ? "" : "working")}<span>${approval ? `<strong>${labels[pending.speaker]} is waiting for your approval in ${hostApp(pending.speaker)}</strong>` : `<strong>${labels[pending.speaker]} ${quiet ? "has gone quiet" : "has the stick"}</strong><span class="state-detail"> · ${escape(pendingDetail(pending, room))}${Number.isInteger(room.maxTurns) ? ` · reply ${Math.min((room.autoTurns ?? 0) + 1, room.maxTurns)} of ${room.maxTurns}` : ""}</span>`}${quiet ? `<span class="quiet-help">${pending.speaker === "claude" && claudeWakes(room.connections.claude) ? "Wake Claude to ask for an update" : `Open ${hostApp(pending.speaker)} to check on it`}, or take the stick. Its work may still be running.</span>` : ""}${note ? `<span class="state-note" title="${escape(note.text)}">“${escape(note.text)}” · ${escape(relativeTime(note.updatedAt))}</span>` : ""}</span>`
+      ? `${signalMark(pending.speaker, approval || quiet ? "" : "working")}<span>${approval ? `<strong>${labels[pending.speaker]} is waiting for your approval in ${hostApp(pending.speaker)}</strong>` : `<strong>${labels[pending.speaker]} ${quiet ? "has gone quiet" : "has the stick"}</strong><span class="state-detail"> · ${escape(pendingDetail(pending, room))}${Number.isInteger(room.maxTurns) ? ` · reply ${Math.min((room.autoTurns ?? 0) + 1, room.maxTurns)} of ${room.maxTurns}` : ""}</span>`}${quiet ? `<span class="quiet-help">${room.connections[pending.speaker]?.url ? "Open its chat to check on it" : pending.speaker === "claude" && claudeWakes(room.connections.claude) ? "Wake Claude to ask for an update" : `Open ${hostApp(pending.speaker)} to check on it`}, or take the stick. Its work may still be running.</span>` : ""}${note ? `<span class="state-note" title="${escape(note.text)}">“${escape(note.text)}” · ${escape(relativeTime(note.updatedAt))}</span>` : ""}</span>`
       : `${signalMark("human")}<span><strong>Your turn</strong><span class="state-detail"> · ${room.asks?.length ? `${room.asks.length === 1 ? "a request needs" : `${room.asks.length} requests need`} you below` : "reply, or hand the stick to one of them"}</span></span>`;
   // During the guided start, the start card is the only call to action.
   const markup = room.ended
     ? `<span class="state-who"><i class="state-dot"></i><span><strong>You ended this conversation</strong><span class="state-detail"> · the loop is stopped</span></span></span><div class="state-actions">${deliverablesPill(room)}</div>`
     : setup
     ? ""
-    : `<span class="state-who">${who}</span><div class="state-actions">${deliverablesPill(room)}${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${["stuck", "quiet"].includes(claudeWakeOffer(room)) ? `<button class="primary" data-action="wake-claude" title="Signal Claude's chat through its Claude Code hook to ${claudeWakeOffer(room) === "stuck" ? "start this turn" : "check in on this turn"}">Wake Claude</button>` : ""}${chatURL ? `<a class="state-link" href="${escape(chatURL)}">Open chat ↗</a>` : recoveryAction === "setup" ? '<button data-action="setup">Check setup</button>' : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
+    : `<span class="state-who">${who}</span><div class="state-actions">${deliverablesPill(room)}${stale ? '<button class="primary" data-action="unlock">Recover stopped process</button>' : paused ? '<button class="primary" data-action="recover">Review &amp; continue</button>' : pending ? `${["stuck", "quiet"].includes(claudeWakeOffer(room)) && !chatURL ? `<button class="primary" data-action="wake-claude" title="Signal Claude's chat through its Claude Code hook to ${claudeWakeOffer(room) === "stuck" ? "start this turn" : "check in on this turn"}">Wake Claude</button>` : ""}${chatURL ? `<a class="state-link" href="${escape(chatURL)}"${pending.speaker === "claude" && ["stuck", "quiet"].includes(claudeWakeOffer(room)) ? ` data-wake-claude title="Opens this chat in the Claude app, where it picks up its turn"` : ""}>Open chat ↗</a>` : recoveryAction === "setup" ? '<button data-action="setup">Check setup</button>' : ""}<button data-action="take">Take the stick</button>` : room.messages.length && !room.legacy ? (room.members ?? SEATS).map((speaker) => `<button data-action="pass-${speaker}">Ask ${labels[speaker]}</button>`).join("") : ""}</div>`;
   if (changedRoom || banner.renderedMarkup !== markup) {
     const signal = changedRoom ? null : banner.querySelector(".signal");
     const focused = !changedRoom && banner.contains(document.activeElement) ? document.activeElement : null;
@@ -1646,6 +1650,12 @@ $("#state-banner").addEventListener("click", (event) => {
     return setDeliverablesOpen(state.deliverablesOpen !== state.room?.name);
   const button = event.target.closest("[data-action]");
   if (button) action(button.dataset.action);
+  // The link opens the chat in the Claude app; the same click asks Semaphore to offer the turn
+  // again, so the chat picks it up once the app has it open. The link itself is never blocked.
+  if (event.target.closest("[data-wake-claude]") && state.room)
+    api(`/rooms/${state.room.name}/wake/claude`, { method: "POST", body: {} })
+      .then(({ room }) => renderRoom(room))
+      .catch(() => {});
 });
 for (const button of document.querySelectorAll("[data-recipient]"))
   button.addEventListener("click", () => {

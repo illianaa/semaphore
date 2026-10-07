@@ -62,6 +62,8 @@ const app = createAppServer({
   wake,
   wakePump: false,
   claudePump: attentionPreview ? { start() {}, close() {}, tick() {} } : false,
+  // A pretend Claude app record, so the fake hooked Claude chat has an Open chat link.
+  claudeDesktop: attentionPreview ? { url: (id) => (id === ids.claude ? "claude://code/continue?session=local_harness-preview" : null) } : false,
 });
 const url = (await app.listen(port)).replace(/\/$/, "");
 
@@ -205,6 +207,15 @@ if (attentionPreview) {
     });
     console.log(`Attention preview: ${url}/?view=companion#${name}`);
   }
+  // A turn the hooked Claude chat was signaled for three minutes ago and never started.
+  const stuck = createLiveRoom(root, "Claude didn't start").room.name;
+  connect(stuck);
+  await send(stuck, "Please tighten the onboarding copy.", "claude");
+  edit(stuck, (room) => {
+    room.pending.at = ago(3);
+    if (room.pending.receipt) room.pending.receipt.at = ago(3);
+  });
+  console.log(`Stuck Claude preview: ${url}/?view=companion#${stuck}`);
 }
 
 console.log(`UI harness ready at ${url} (rooms in ${root})`);

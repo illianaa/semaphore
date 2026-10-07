@@ -23,6 +23,7 @@ import { createPreviewServer, previewAvailability } from './lib/preview.mjs';
 import { titleText } from './lib/titles.mjs';
 import { timingView, timingReport } from './lib/timing.mjs';
 import { ClaudeSignalPump, requestClaudeWake } from './lib/claude-wake.mjs';
+import { ClaudeDesktopSessions } from './lib/claude-desktop.mjs';
 import { isRegistered } from './lib/claude-registry.mjs';
 
 const SPEAKERS = ["astra", "claude"];
@@ -38,6 +39,7 @@ export function createAppServer({
   diagnosticsProvider,
   wakePump,
   claudePump,
+  claudeDesktop,
   wake = {
     status: wakeStatus,
     enable: enableWake,
@@ -72,6 +74,8 @@ export function createAppServer({
   const pump = wakePump === false ? null : wakePump ?? new WakePump({ root });
   // Wakes registered Claude chats through their Claude Code hook (lib/claude-wake.mjs).
   const claudeSignals = claudePump === false ? null : claudePump ?? new ClaudeSignalPump({ root });
+  // Links that open a bound Claude chat in the Claude desktop app (lib/claude-desktop.mjs).
+  const claudeChats = claudeDesktop === false ? null : claudeDesktop ?? new ClaudeDesktopSessions();
 
   function readRoom(name) {
     let store;
@@ -114,6 +118,9 @@ export function createAppServer({
             live &&
             /^[a-f0-9-]{36}$/i.test(p.id ?? "")
               ? { url: `codex://threads/${p.id}` }
+              : {}),
+            ...(speaker === "claude" && p?.transport === "claude-inbox" && p.id && claudeChats?.url(p.id)
+              ? { url: claudeChats.url(p.id) }
               : {}),
           },
         ];

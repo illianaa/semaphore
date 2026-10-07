@@ -79,7 +79,7 @@ test("a fresh checkout starts its CLI and app without optional wake dependencies
     import { createAppServer } from './server.mjs';
     import { wakeWebSocket } from './lib/codex-runtime.mjs';
     assert.throws(() => wakeWebSocket(), /npm ci --omit=dev/);
-    const app = createAppServer({ root: './data/rooms', wakePump: false, claudePump: false });
+    const app = createAppServer({ root: './data/rooms', wakePump: false, claudePump: false, claudeDesktop: false });
     const url = await app.listen(0);
     const response = await fetch(url + '/health');
     assert.equal(response.status, 200);
@@ -406,6 +406,7 @@ test("the app serves the shared invitations and doctor by default", async (t) =>
   const app = createAppServer({
     root,
     claudePump: false,
+    claudeDesktop: false,
     diagnosticsProvider: async () => ({
       ok: true,
       checks: [{ name: "Stub", ok: true, detail: "fine" }],

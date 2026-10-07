@@ -28,6 +28,7 @@ async function fixture(t, options = {}) {
     root,
     wakePump: false,
     claudePump: false,
+    claudeDesktop: false,
     transports: { astra: fake("astra-inbox"), claude: fake("claude-inbox") },
     ...options,
   });
@@ -990,4 +991,20 @@ test("the app shows open requests and answers or dismisses them through their ow
   const again = await f.request(route(first.id, "answer"), { method: "POST", body: { revision: 1, option: 1, text: "Thursday works.", clientId: "answer-3002" } });
   assert.equal(again.status, 200);
   assert.equal(again.body.room.messages.length, answered.body.room.messages.length);
+});
+
+test("a bound Claude seat links to its chat in the Claude app when the app has a record for it", async (t) => {
+  const links = new Map();
+  const f = await fixture(t, { claudeDesktop: { url: (id) => links.get(id) ?? null } });
+  const room = (await f.request("/api/rooms", { method: "POST", body: { title: "Links" } })).body.room;
+  assert.equal(room.connections.claude.url, undefined, "an unbound seat has no link");
+  f.bind(room.name);
+  const bound = new RoomStore(f.root, room.name).read().participants.claude.id;
+  assert.equal((await f.request(`/api/rooms/${room.name}`)).body.room.connections.claude.url, undefined, "no record, no link");
+  links.set(bound, "claude://code/continue?session=local_abc");
+  const view = (await f.request(`/api/rooms/${room.name}`)).body.room;
+  assert.equal(view.connections.claude.url, "claude://code/continue?session=local_abc");
+  assert.match(view.connections.astra.url ?? "codex://threads/", /^codex:\/\/threads\//, "GPT's link is unchanged");
+  assert.equal((await f.request("/api/rooms")).body.rooms.find((item) => item.name === room.name).connections.claude.url,
+    "claude://code/continue?session=local_abc");
 });
