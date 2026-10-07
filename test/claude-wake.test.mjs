@@ -269,6 +269,28 @@ test("an unanswered Open chat request is retried every five seconds for ten minu
   assert.match(sent(), /:check-in:/);
 });
 
+test("a signal sent during watcher startup is retried after arming, even when newer than registration", async (t) => {
+  const f = fixture(t);
+  let now = Date.now();
+  const pump = new ClaudeSignalPump({ root: f.root, home: f.home, now: () => now });
+  const sent = () => { const text = fs.readFileSync(signalPath(SESSION, f.home), "utf8"); fs.writeFileSync(signalPath(SESSION, f.home), ""); return text; };
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home, now });
+  const r = f.room();
+  await r.app.send("Please review", "claude");
+  r.done();
+  now += 500; pump.tick();
+  assert.match(sent(), /:turn"/, "the first signal may arrive before the watcher is armed");
+  now += 1_000; pump.tick();
+  assert.equal(sent(), "");
+  now += 500; pump.tick();
+  assert.match(sent(), /:turn"/, "retry after arming instead of waiting a minute");
+  now += 1_000; pump.tick();
+  assert.equal(sent(), "", "one post-registration signal");
+  assert.equal(f.wake().code, 2);
+  now += 60_000; pump.tick();
+  assert.equal(sent(), "", "a claimed notice stays claimed");
+});
+
 test("a queued turn reaches a chat the person reopens in the Claude app, without any button", async (t) => {
   const f = fixture(t);
   let now = Date.now();
