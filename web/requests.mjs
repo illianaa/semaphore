@@ -5,6 +5,16 @@ const LONG_OPTION = 32;
 const MAX_INLINE_OPTIONS = 3;
 const LONG_TITLE = 140;
 
+// Empty/cleared browser storage means no choice, not a choice made on revision zero.
+export function choiceState(ask, saved) {
+  const match = typeof saved === "string" && /^([1-9]\d*):(\d+)$/.exec(saved);
+  if (!match) return { index: undefined, changed: false };
+  const revision = Number(match[1]), index = Number(match[2]);
+  if (!Number.isSafeInteger(revision) || !Number.isSafeInteger(index)) return { index: undefined, changed: false };
+  const changed = revision !== (ask.revision ?? 1);
+  return { index: !changed && index < (ask.options?.length ?? 0) ? index : undefined, changed };
+}
+
 export const wordCount = (text) => (String(text ?? "").match(/[\p{L}\p{N}][\p{L}\p{N}'’.,/:$%-]*/gu) ?? []).length;
 
 // A request answers in its card only when all of it fits there. Anything longer gets a summary

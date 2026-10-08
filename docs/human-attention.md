@@ -178,3 +178,19 @@ A user working in the main desktop window reported that long requests couldn't b
 - the Dismiss confirmation stacking over the reader (with a real click; Chrome groups Esc for script-opened dialogs).
 
 Screenshots: `after-*.jpg`. Safari wasn't run here.
+
+### GPT review (8 October 2026)
+
+Two additional independent critics reviewed the reader's usability and answer lifecycle. Their findings were fixed before release:
+
+- Empty or cleared choice storage no longer creates a false “changed request” warning or blocks a note-only answer. A regression test covers absent, cleared, malformed, current and stale saved choices.
+- A delayed answer or dismissal cannot replace a different request, a reopened reader or its stale-version warning. Each filled reader has a generation; only its own response can advance it.
+- Answer fields are locked while their submission is pending. A failed submission unlocks the current view even if the request was closed and reopened while waiting, and preserves the draft.
+- Paging resets every scroll region. If multiple requests disappear, the pager still reaches the remaining requests.
+- Long unbroken option labels wrap inside both inline cards and the reader.
+
+The correctness critic rechecked the fixes with isolated delayed-response mocks, including reopened-reader failure and stale-reader restrictions. In the isolated browser harness, GPT verified the long detail reaches its final paragraph at 1280×800 with Send visible, the 760×800 single-column reader reaches its answer and returns to scroll position zero on paging, and a short card submits a note without an option or false revision warning. The reviewed desktop screenshot is `workspace/needs-you-audit/gpt-reader-reviewed-1280x800.jpg` in this room. No live conversation was answered or woken in these checks. Safari remains untested.
+
+All 267 tests pass, along with the JavaScript syntax check, diff whitespace check and skill validator.
+
+The human subsequently requested fewer false asleep warnings and cross-conversation recovery indicators. These are the next coordinated change before the combined release; the installed app remains 0.14.2.

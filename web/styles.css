@@ -4091,6 +4091,11 @@ em,
 .ask-reader-option input {
   margin-top: 3px;
 }
+.ask-option > span,
+.ask-reader-option > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .ask-reader-option:hover,
 .ask-reader-option:has(input:checked) {
   border-color: var(--green);

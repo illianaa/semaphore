@@ -1,7 +1,7 @@
 import { labels, avatar, escape, formatMessage } from "./render.mjs";
 import { prepareStartRequest } from "./start-request.mjs";
 import { currentNote, quietTurn, claudeChatOffer, claudeWakeOffer, notifyQuietTurns } from "./attention.mjs";
-import { isLong, plainPreview, sizeLabel } from "./requests.mjs";
+import { isLong, plainPreview, sizeLabel, choiceState } from "./requests.mjs";
 
 const $ = (selector) => document.querySelector(selector);
 const token = $("meta[name=semaphore-token]").content;
@@ -1136,19 +1136,14 @@ let askBusy = null;
 // What the person has picked or typed but not sent, per request. A choice belongs to the revision
 // it was made on: an AI's update can replace the options, so the index would point elsewhere.
 const askDraft = (id) => storageGet(`semaphore:ask-draft:${id}`) ?? "";
-function askChoice(ask) {
-  const [revision, index] = (storageGet(`semaphore:ask-choice:${ask.id}`) ?? "").split(":").map(Number);
-  return revision === (ask.revision ?? 1) && Number.isInteger(index) && index >= 0 && index < ask.options.length ? index : undefined;
-}
+const savedAskChoice = (ask) => choiceState(ask, storageGet(`semaphore:ask-choice:${ask.id}`));
+const askChoice = (ask) => savedAskChoice(ask).index;
 function setAskChoice(ask, index) {
   storageSet(`semaphore:ask-choice:${ask.id}`, index === undefined ? "" : `${ask.revision ?? 1}:${index}`);
 }
 const askUnsent = (ask) => askChoice(ask) !== undefined || !!askDraft(ask.id).trim();
 // The person picked an option on a version the AI has since changed: never send that silently.
-function askChoiceChanged(ask) {
-  const [revision] = (storageGet(`semaphore:ask-choice:${ask.id}`) ?? "").split(":").map(Number);
-  return Number.isInteger(revision) && revision !== (ask.revision ?? 1);
-}
+const askChoiceChanged = (ask) => savedAskChoice(ask).changed;
 function askMeta(ask) {
   return `${avatar(ask.from)}<span><strong>${labels[ask.from]}</strong> · ${ASK_KINDS[ask.kind] ?? "Request"}</span>${ask.blocking ? '<span class="ask-tag">Blocking</span>' : ""}<time datetime="${escape(ask.updatedAt ?? ask.createdAt)}">${escape(formatTime(ask.updatedAt ?? ask.createdAt))}</time>`;
 }
@@ -1159,6 +1154,7 @@ const approvalNote = (ask) => ask.kind === "approval"
 function askCard(ask) {
   const id = escape(ask.id);
   const busy = askBusy === ask.id ? ' aria-disabled="true"' : "";
+  const locked = askBusy === ask.id ? " disabled" : "";
   const head = `<div class="ask-meta">${askMeta(ask)}</div><h3 class="ask-heading"><button type="button" class="ask-title" data-ask-open="${id}" data-focus="open:${id}" title="Read the full request"><span>${escape(ask.title)}</span></button></h3>`;
   if (isLong(ask)) {
     const preview = ask.detail ? plainPreview(ask.detail) : "";
@@ -1174,8 +1170,8 @@ ${ask.detail ? `<div class="ask-detail message-text">${formatMessage(ask.detail)
 ${approvalNote(ask) ? `<p class="ask-where">${escape(approvalNote(ask))}</p>` : ""}
 ${askChoiceChanged(ask) ? `<p class="ask-changed" role="status">${escape(labels[ask.from])} changed this request since you picked an answer. Pick again.</p>` : ""}
 <form class="ask-answer" data-ask-form="${id}" data-ask-revision="${Number(ask.revision ?? 1)}" novalidate>
-${ask.options.length ? `<fieldset class="ask-options"><legend class="sr-only">Choices for ${escape(who)}</legend>${ask.options.map((option, index) => `<label class="ask-option"><input type="radio" name="ask-choice-${id}" value="${index}" data-ask-choice="${id}" data-focus="choice:${id}:${index}"${choice === index ? " checked" : ""}><span>${escape(option)}</span></label>`).join("")}</fieldset>` : ""}
-<div class="ask-reply"><label class="sr-only" for="ask-text-${id}">${ask.options.length ? "Note" : `Answer ${escape(who)}`}</label><input id="ask-text-${id}" data-ask-text="${id}" data-focus="text:${id}" maxlength="4000" autocomplete="off" placeholder="${ask.options.length ? "Add a note (optional)" : `Answer ${escape(who)}`}"><button type="submit" class="ask-send" data-focus="send:${id}"${busy}>Send</button><button type="button" class="ask-dismiss" data-ask-dismiss="${id}" data-focus="dismiss:${id}"${busy}>Dismiss</button></div>
+${ask.options.length ? `<fieldset class="ask-options"><legend class="sr-only">Choices for ${escape(who)}</legend>${ask.options.map((option, index) => `<label class="ask-option"><input type="radio" name="ask-choice-${id}" value="${index}" data-ask-choice="${id}"${locked} data-focus="choice:${id}:${index}"${choice === index ? " checked" : ""}><span>${escape(option)}</span></label>`).join("")}</fieldset>` : ""}
+<div class="ask-reply"><label class="sr-only" for="ask-text-${id}">${ask.options.length ? "Note" : `Answer ${escape(who)}`}</label><input id="ask-text-${id}" data-ask-text="${id}"${locked} data-focus="text:${id}" maxlength="4000" autocomplete="off" placeholder="${ask.options.length ? "Add a note (optional)" : `Answer ${escape(who)}`}"><button type="submit" class="ask-send" data-focus="send:${id}"${busy}>Send</button><button type="button" class="ask-dismiss" data-ask-dismiss="${id}" data-focus="dismiss:${id}"${busy}>Dismiss</button></div>
 </form>
 </article>`;
 }
@@ -1232,6 +1228,12 @@ $("#asks").addEventListener("keydown", (event) => {
 
 // Answering and dismissing are shared by the card and the reader. Each resolves to the server's
 // outcome; the caller decides where to say it. The same request ID makes a retry idempotent.
+function setAskBusy(id) {
+  askBusy = id;
+  // A request can be reopened during a pending POST. Unlock its current view even when the
+  // completion belongs to an older reader generation and must not change its content.
+  if (readerDialog.open) setReaderBlocked(reader.stale || reader.gone);
+}
 async function sendAnswer(room, ask, { revision, option, text }) {
   if (askBusy) return { ok: false };
   if (option === undefined && !text)
@@ -1239,7 +1241,7 @@ async function sendAnswer(room, ask, { revision, option, text }) {
   const key = JSON.stringify([ask.id, revision, option ?? null, text]);
   const clientId = askRequests.get(key) ?? crypto.randomUUID();
   askRequests.set(key, clientId);
-  askBusy = ask.id;
+  setAskBusy(ask.id);
   renderAsks(room, false);
   try {
     const result = await api(`/rooms/${room.name}/asks/${ask.id}/answer`, { method: "POST", body: { option, text, clientId, revision } });
@@ -1247,7 +1249,7 @@ async function sendAnswer(room, ask, { revision, option, text }) {
     setAskChoice(ask, undefined);
     askRequests.delete(key);
     const worker = result.room.pending?.speaker;
-    askBusy = null;
+    setAskBusy(null);
     renderRoom(result.room, true);
     refresh();
     return { ok: true, message: result.room.pending?.state === "uncertain"
@@ -1256,7 +1258,7 @@ async function sendAnswer(room, ask, { revision, option, text }) {
       ? `Answer saved. ${labels[worker]} reads it now; ${labels[ask.from]} sees it on its next turn.`
       : `Answer sent to ${labels[ask.from]}.` };
   } catch (err) {
-    askBusy = null;
+    setAskBusy(null);
     if (err.room) renderRoom(err.room, true);
     else if (state.selected === room.name) renderAsks(room, false);
     return { ok: false, message: err.message };
@@ -1267,18 +1269,18 @@ async function dismissRequest(room, ask, revision = ask.revision ?? 1) {
   if (askBusy) return { ok: false };
   if (!await confirmAction({ title: "Dismiss this request?", text: `${labels[ask.from]} is told you closed it without answering. That isn't an approval.`, action: "Dismiss" }))
     return { ok: false, cancelled: true };
-  askBusy = ask.id;
+  setAskBusy(ask.id);
   renderAsks(room, false);
   try {
     const result = await api(`/rooms/${room.name}/asks/${ask.id}/dismiss`, { method: "POST", body: { revision } });
     storageSet(`semaphore:ask-draft:${ask.id}`, "");
     setAskChoice(ask, undefined);
-    askBusy = null;
+    setAskBusy(null);
     renderRoom(result.room, true);
     refresh();
     return { ok: true, message: `Request dismissed. ${labels[ask.from]} will see it was closed without an answer.` };
   } catch (err) {
-    askBusy = null;
+    setAskBusy(null);
     if (err.room) renderRoom(err.room, true);
     else if (state.selected === room.name) renderAsks(room, false);
     return { ok: false, message: err.message };
@@ -1326,7 +1328,7 @@ $("#asks").addEventListener("click", async (event) => {
 // the detail beside the answer, so the question and choices never scroll away. It pages through
 // all open requests. It is filled when opened or moved, and on an AI's update only once the person
 // asks to see it; polling never rewrites what they're reading or typing.
-const reader = { room: null, id: null, index: 0, revision: null, gone: false, stale: false };
+const reader = { room: null, id: null, index: 0, revision: null, generation: 0, gone: false, stale: false };
 const readerDialog = $("#ask-reader");
 const readerAsks = (room) => (room && !room.ended ? room.asks ?? [] : []);
 function readerAsk(room) { return readerAsks(room).find((ask) => ask.id === reader.id); }
@@ -1336,8 +1338,12 @@ function setReaderNotice(text, action = "") {
   notice.classList.toggle("shown", !!text);
 }
 function setReaderBlocked(blocked) {
+  const busy = askBusy === reader.id;
+  blocked ||= busy;
   for (const control of [$("#ask-reader-send"), $("#ask-reader-dismiss")]) control.setAttribute("aria-disabled", String(blocked));
   $("#ask-reader-choices").disabled = blocked;
+  $("#ask-reader-clear").disabled = blocked;
+  $("#ask-reader-text").readOnly = busy;
 }
 function readerChoiceLabel(ask) {
   const picked = $("#ask-reader-options [name=ask-reader-choice]:checked");
@@ -1351,6 +1357,7 @@ function readerChoiceLabel(ask) {
 function fillReader(room) {
   const ask = readerAsk(room);
   if (!ask) return;
+  reader.generation += 1;
   reader.revision = ask.revision ?? 1;
   reader.index = readerAsks(room).indexOf(ask);
   reader.gone = reader.stale = false;
@@ -1377,6 +1384,8 @@ function fillReader(room) {
   setReaderBlocked(false);
   readerChoiceLabel(ask);
   readerPager(room);
+  readerDialog.querySelector(".ask-reader-main").scrollTop = 0;
+  readerDialog.querySelector(".ask-reader-head").scrollTop = 0;
   $("#ask-reader-detail").scrollTop = 0;
   readerDialog.querySelector(".ask-reader-answer").scrollTop = 0;
 }
@@ -1385,6 +1394,7 @@ function readerNeighbours(room) {
   const asks = readerAsks(room);
   const at = asks.findIndex((ask) => ask.id === reader.id);
   if (at >= 0) reader.index = at;
+  else reader.index = Math.min(reader.index, asks.length);
   return { asks, at, prev: asks[(at >= 0 ? at : reader.index) - 1], next: asks[at >= 0 ? at + 1 : reader.index] };
 }
 function readerPager(room) {
@@ -1516,21 +1526,31 @@ $("#ask-reader-form").addEventListener("submit", async (event) => {
   }
   setReaderNotice("Sending…");
   $("#ask-reader-send").setAttribute("aria-disabled", "true");
+  const generation = reader.generation;
   const result = await sendAnswer(room, ask, { revision: reader.revision, option, text });
-  afterReaderOutcome(result, ask.id);
+  afterReaderOutcome(result, ask.id, generation);
 });
 $("#ask-reader-dismiss").addEventListener("click", async () => {
   const room = state.room;
   const ask = readerAsk(room);
   if (!ask || askBusy || $("#ask-reader-dismiss").getAttribute("aria-disabled") === "true") return;
+  const generation = reader.generation;
   const result = await dismissRequest(room, ask, reader.revision);
-  if (result.cancelled) return $("#ask-reader-dismiss").focus();
-  afterReaderOutcome(result, ask.id);
+  if (result.cancelled) {
+    if (readerDialog.open && reader.generation === generation) $("#ask-reader-dismiss").focus();
+    return;
+  }
+  afterReaderOutcome(result, ask.id, generation);
 });
 // After an answer or dismissal, go on to the next open request, or close and confirm.
-function afterReaderOutcome(result, id) {
+function afterReaderOutcome(result, id, generation) {
+  // Closing/reopening, paging or explicitly loading a new revision starts a different view.
+  // A delayed response must never refill it or clear its stale-version warning.
+  if (!readerDialog.open || reader.id !== id || reader.generation !== generation || reader.room !== state.room?.name) {
+    if (result.message) toast(result.message);
+    return;
+  }
   if (!result.ok) {
-    if (!readerDialog.open || reader.id !== id) { if (result.message) toast(result.message); return; }
     // A 409 has already shown why (changed or gone) through syncReader; keep that state.
     setReaderBlocked(reader.stale || reader.gone);
     if (!reader.stale && !reader.gone) setReaderNotice(result.message ?? "");

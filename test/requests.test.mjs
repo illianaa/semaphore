@@ -1,6 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isLong, plainPreview, sizeLabel, wordCount } from "../web/requests.mjs";
+import { isLong, plainPreview, sizeLabel, wordCount, choiceState } from "../web/requests.mjs";
+
+test("absent or cleared choices permit a note-only answer, while stale choices require review", () => {
+  const ask = { revision: 2, options: ["One", "Two"] };
+  for (const saved of [null, undefined, "", "0:0", "bad", "2:-1", "2:", "2:0:1", "999999999999999999999:0"])
+    assert.deepEqual(choiceState(ask, saved), { index: undefined, changed: false });
+  assert.deepEqual(choiceState(ask, "2:0"), { index: 0, changed: false });
+  assert.deepEqual(choiceState(ask, "2:1"), { index: 1, changed: false });
+  assert.deepEqual(choiceState(ask, "1:1"), { index: undefined, changed: true });
+  assert.deepEqual(choiceState(ask, "2:9"), { index: undefined, changed: false });
+});
 
 test("a request answers in its card only when all of it fits there", () => {
   const short = { title: "Ship it?", detail: "The tests pass and the copy is approved.", options: ["Yes", "Not yet"] };
