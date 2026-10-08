@@ -56,6 +56,7 @@ export function createAppServer({
     ["/app.js", ["app.js", "text/javascript; charset=utf-8"]],
     ["/render.mjs", ["render.mjs", "text/javascript; charset=utf-8"]],
     ["/attention.mjs", ["attention.mjs", "text/javascript; charset=utf-8"]],
+    ["/requests.mjs", ["requests.mjs", "text/javascript; charset=utf-8"]],
     ["/styles.css", ["styles.css", "text/css; charset=utf-8"]],
     ["/icon.svg", ["icon.svg", "image/svg+xml"]],
     // Fonts are bundled under the SIL Open Font License (web/fonts/*-OFL.txt), never fetched.

@@ -126,3 +126,55 @@ The person answered the Needs you request with **Add all three safeguards**. GPT
 ## Safeguard 2 as built (Claude, 7 October 2026)
 
 A Claude Code `Stop` hook (`semaphore hook stop`, `lib/claude-wake.mjs` `stopCheck`) blocks a registered Claude chat from ending its native turn once per turn while it holds a received, unanswered room turn. The reminder lists the reply, blocking-request and note commands. It is claimed under the room lock, never replies or passes for the chat, and fails open. See [Claude event delivery](claude-event-delivery.md#stop-check-no-silent-stop-while-holding-a-turn-october-2026) for the contract, bounds and evidence. Activating it needs `semaphore hooks install` after the release, which edits `~/.claude/settings.json` with a backup. That is a separate approval from the release itself.
+
+## Reading long requests (Claude, 8 October 2026)
+
+A user working in the main desktop window reported that long requests couldn't be read in full. They had to go back to the source chat to see what was being asked.
+
+**Audit** (dev harness, 1280×800, worst-case request: 152-character title, 1,835 characters of Markdown, six options of about 76 characters each):
+- The whole message area is about 385 px tall, and the Needs you stack (banner plus cards) scrolled inside about 370 px.
+- The long card was about 450 px collapsed and about 1,100 px with "Details" open, so about five lines of detail were visible at a time.
+- The question and choices scrolled away while reading, and the stick banner scrolled away with the cards.
+- Screenshots: `workspace/needs-you-audit/before-*.jpg` in this room.
+
+**Design review.** Three sub-agent critics reviewed the proposal before it was built (product/UX, visual design, accessibility/robustness), and a fourth reviewed the build. They agreed on these points:
+- a modal reader, not the Deliverables popover, which shares the same cramped height and closes on any outside click;
+- no options pinned in the footer, which would recreate the cramped problem inside the reader;
+- detail and answer side by side on wide windows;
+- one answer model everywhere (pick, then send);
+- a summary card for long requests;
+- the reader kept outside the tray, which re-renders every poll;
+- no silent swap when an AI updates a request.
+
+**As built** (`web/requests.mjs`, `web/app.js`, `web/styles.css`, `#ask-reader` in `web/index.html`):
+- **Long requests** have more than 60 words of detail, more than three options, or any option over 32 characters. They show a summary card:
+  - the title (a button, clamped to 3 lines);
+  - a 3-line plain-text preview of the first prose paragraph, never a heading, table or code;
+  - **Read & answer**;
+  - "281 words · 6 options";
+  - "Answer not sent" while a draft or choice exists;
+  - Dismiss.
+- **Short requests** answer in the card with radio choices: pick, then send. Enter in the note sends; Safari's IME keyCode 229 is ignored.
+- **The tray** keeps the stick banner and its header pinned; only the request list scrolls, with a fade when more sits below. Its header offers *Review all (n)*.
+- **The reader** is a native modal `<dialog>`:
+  - head: Needs you · n of N, ‹ › pager, ×, the full title, and a notice region;
+  - at 1000 px and wider: the detail on the left (15 px/1.7, 70ch) and the answer on the right (option rows numbered 1–9, Clear choice, a growing note);
+  - narrower windows and the companion: one scroll;
+  - footer: "Answer: …" (or "Pick an answer ↓"), Dismiss request, Send answer;
+  - long requests get the full height; short ones size to fit.
+- **Keyboard and focus.** Keys 1–9 pick an option, and Cmd/Ctrl+Enter sends. Focus opens on the detail region and returns to the card on close. Esc closes and keeps the draft and choice.
+- **Live updates.**
+  - A request changed by its AI: the reader keeps the text the person is reading, blocks Send and offers *Show the new version*, which clears the choice (the options may have shifted) and keeps the note.
+  - A request answered, withdrawn or dismissed elsewhere: Send is disabled and the note stays to copy.
+  - Switching rooms or going home closes the reader.
+- **After sending.** Sending or dismissing moves to the next open request ("Answer sent to Claude. Next request:"), or closes the reader and confirms.
+- **Writing guidance.** The skill now asks for titles of about 100 characters, a first detail sentence "What's blocked: …", then the recommendation, and short option labels (about 40 characters) explained in the detail.
+
+**Checked** in the harness at 1280×800 and 420×760 companion, dark and light:
+- the summary card, short-card answering and the pager;
+- send moving to the next request;
+- the revision notice and *Show the new version*;
+- focus return and Esc;
+- the Dismiss confirmation stacking over the reader (with a real click; Chrome groups Esc for script-opened dialogs).
+
+Screenshots: `after-*.jpg`. Safari wasn't run here.

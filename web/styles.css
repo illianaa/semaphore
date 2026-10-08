@@ -3593,8 +3593,26 @@ em,
 .ended-composer .primary-button { width: auto; margin: 0 auto; padding: 10px 18px; }
 
 /* Needs you: what the AIs need from the person, kept apart from the conversation and in view
-   until answered, dismissed or withdrawn. Amber, like an approval, because it waits on them. */
-.room-alerts .asks-tray {
+   until answered, dismissed or withdrawn. Amber, like an approval, because it waits on them.
+   The banner and the tray's header stay put; only the list of requests scrolls. */
+.room-alerts:has(.asks-tray:not([hidden])) {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100% - 16px);
+}
+.room-alerts:has(.asks-tray:not([hidden])) > * {
+  flex: none;
+}
+.room-alerts:has(.asks-tray:not([hidden])) > .connection-guide {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.room-alerts .asks-tray:not([hidden]) {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-height: 150px;
   margin: 0;
   border: 1px solid var(--approval-line);
   border-radius: var(--radius);
@@ -3607,6 +3625,7 @@ em,
 }
 .asks-head {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 10px;
@@ -3620,6 +3639,21 @@ em,
   text-transform: uppercase;
   color: var(--approval-strong);
 }
+.asks-review {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--approval-line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--approval-strong);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.asks-review:hover {
+  background: var(--amber-bg);
+}
 .asks-fold {
   margin-left: auto;
   padding: 2px 8px;
@@ -3630,14 +3664,31 @@ em,
   font-size: 12px;
   cursor: pointer;
 }
+.asks-review + .asks-fold {
+  margin-left: 0;
+}
 .asks-fold:hover {
   color: var(--approval-strong);
   text-decoration: underline;
 }
 .asks-list {
   display: grid;
+  align-content: start;
   gap: 8px;
+  min-height: 0;
   padding: 0 8px 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.asks-list:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
+}
+/* Fades out the last lines when more requests sit below. */
+.asks-list.has-more {
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(#000 calc(100% - 28px), transparent);
 }
 .ask {
   padding: 12px 14px;
@@ -3669,31 +3720,105 @@ em,
   margin-left: auto;
   font-variant-numeric: tabular-nums;
 }
-.ask-blocking {
-  color: var(--amber);
-  font-weight: 600;
+.ask-tag {
+  padding: 1px 6px;
+  border: 1px solid var(--approval-line);
+  border-radius: var(--radius-sm);
+  background: var(--amber-bg);
+  color: var(--approval-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ask-heading {
+  margin: 8px 0 0;
+  font: inherit;
 }
 .ask-title {
-  margin: 8px 0 0;
-  font-size: 17px;
-  line-height: 1.35;
-  font-weight: 600;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--text);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
   overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.ask.long .ask-title > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.ask-changed {
+  margin: 8px 0 0;
+  color: var(--approval-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.ask-title:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.ask-title:focus-visible,
+.ask-read:focus-visible,
+.ask-option:has(input:focus-visible) {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.ask-preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  margin: 6px 0 0;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.ask-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.ask-summary > span {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.ask-summary .ask-unsent {
+  color: var(--approval-ink);
+  font-family: inherit;
+  font-weight: 600;
+}
+.ask-summary .ask-dismiss {
+  margin-left: auto;
+}
+.ask-read {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--green);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 }
 .ask-detail {
   margin-top: 6px;
   font-size: 14px;
   color: var(--text-2);
-}
-.ask-detail summary {
-  width: fit-content;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--text-3);
-}
-.ask-detail .message-text {
-  margin-top: 6px;
 }
 .ask-where {
   margin: 6px 0 0;
@@ -3709,20 +3834,38 @@ em,
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
 }
 .ask-option {
-  padding: 6px 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--surface-2);
   color: var(--text);
-  font: inherit;
   font-size: 13px;
+  line-height: 1.35;
   cursor: pointer;
 }
-.ask-option:hover:not(:disabled),
-.ask-option:focus-visible {
+.ask-option input,
+.ask-reader-option input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  flex: none;
+  accent-color: var(--green);
+}
+.ask-option:hover,
+.ask-option:has(input:checked) {
   border-color: var(--green);
+}
+.ask-option:has(input:checked) {
+  background: var(--accent);
   color: var(--green-text);
 }
 .ask-reply {
@@ -3740,7 +3883,8 @@ em,
   font: inherit;
   font-size: 14px;
 }
-.ask-reply input:focus {
+.ask-reply input:focus,
+.ask-reader-answer textarea:focus {
   outline: none;
   border-color: var(--green);
   box-shadow: 0 0 0 3px var(--focus-glow);
@@ -3765,11 +3909,11 @@ em,
   font-size: 13px;
   cursor: pointer;
 }
-.ask-dismiss:hover:not(:disabled) {
+.ask-dismiss:hover:not([aria-disabled="true"]) {
   color: var(--text);
 }
-.ask button:disabled,
-.ask input:disabled {
+[aria-disabled="true"].ask-send,
+[aria-disabled="true"].ask-dismiss {
   opacity: 0.55;
   cursor: progress;
 }
@@ -3788,7 +3932,344 @@ em,
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+
+/* The full reader. Wide windows put the detail beside the answer so the question and choices
+   never scroll away; narrower ones scroll detail, then answer, with Send always visible. */
+.dialog.ask-reader {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  overflow: hidden;
+}
+.dialog.ask-reader[open] {
+  display: flex;
+  flex-direction: column;
+}
+.dialog.ask-reader::backdrop {
+  background: var(--backdrop, #0009);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.ask-reader-head {
+  flex: none;
+  max-block-size: 40dvh;
+  overflow: auto;
+  padding: 12px 24px 14px;
+  border-bottom: 1px solid var(--approval-line);
+  background: var(--approval-bg);
+}
+.ask-reader.blocking .ask-reader-head {
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+.ask-reader-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--approval-ink);
+}
+.ask-reader-bar strong {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--approval-strong);
+}
+.ask-reader-bar #ask-reader-count {
+  font-variant-numeric: tabular-nums;
+}
+.ask-reader-pager {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.ask-reader-pager .icon-button,
+#ask-reader-close {
+  color: var(--approval-ink);
+}
+.ask-reader-pager .icon-button:disabled {
+  opacity: 0.35;
+}
+#ask-reader-title {
+  margin: 8px 0 0;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.ask-reader-notice {
+  display: none;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--approval-line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+.ask-reader-notice.shown {
+  display: flex;
+}
+.ask-reader-update {
+  padding: 3px 10px;
+  border: 1px solid var(--green);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--green-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ask-reader-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.ask-reader-detail {
+  padding: 18px 24px 4px;
+}
+.ask-reader-detail:focus-visible,
+.ask-reader-answer:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
+}
+.ask-reader-detail .message-text {
+  font-size: 15px;
+  line-height: 1.7;
+}
+.ask-reader-detail .message-text :is(p, li) {
+  max-width: 70ch;
+}
+.ask-reader-empty {
+  margin: 0;
+  color: var(--text-3);
+}
+.ask-reader-answer {
+  padding: 14px 24px 18px;
+}
+.ask-reader-choices {
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.ask-reader-choices legend,
+.ask-reader-answer > label {
+  display: block;
+  margin: 0 0 8px;
+  padding: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+#ask-reader-options {
+  display: grid;
+  gap: 6px;
+}
+.ask-reader-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.ask-reader-option input {
+  margin-top: 3px;
+}
+.ask-reader-option:hover,
+.ask-reader-option:has(input:checked) {
+  border-color: var(--green);
+}
+.ask-reader-option:has(input:checked) {
+  background: var(--accent);
+}
+.ask-reader-option:has(input:focus-visible) {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.ask-reader-key {
+  flex: none;
+  min-width: 18px;
+  color: var(--text-3);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 20px;
+}
+.ask-clear {
+  margin-top: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--text-3);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.ask-reader-answer textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 64px;
+  max-height: 160px;
+  padding: 9px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+@supports (field-sizing: content) {
+  .ask-reader-answer textarea {
+    field-sizing: content;
+  }
+}
+.ask-reader-answer .ask-where {
+  margin-top: 10px;
+}
+.ask-reader-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.ask-reader-jump {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--green-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ask-reader-choice {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* The shared dialog styles are written for short forms; undo them inside the reader. */
+.dialog.ask-reader label.ask-reader-option {
+  display: flex;
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+}
+.dialog.ask-reader .ask-reader-answer > label {
+  margin: 0 0 8px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.dialog.ask-reader input[type="radio"] {
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 3px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  flex: none;
+}
+.dialog.ask-reader .message-text p {
+  margin: 0 0 12px;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.dialog.ask-reader p.ask-where,
+.dialog.ask-reader p.ask-reader-empty {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.dialog.ask-reader p.ask-where {
+  color: var(--approval-ink);
+}
+/* Wide windows: detail on the left, the answer beside it. */
+@media (min-width: 1000px) {
+  .dialog.ask-reader {
+    width: min(1080px, calc(100vw - 48px));
+  }
+  .dialog.ask-reader.long {
+    height: min(860px, calc(100dvh - 48px));
+  }
+  .dialog.ask-reader.no-detail {
+    width: min(760px, calc(100vw - 48px));
+    height: auto;
+  }
+  .ask-reader-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+    overflow: hidden;
+  }
+  .ask-reader.no-detail .ask-reader-main {
+    display: block;
+    overflow-y: auto;
+  }
+  .ask-reader-detail,
+  .ask-reader-answer {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .ask-reader-detail {
+    padding-bottom: 24px;
+  }
+  .ask-reader:not(.no-detail) .ask-reader-answer {
+    padding-top: 18px;
+    border-left: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .ask-reader.no-detail .ask-reader-detail {
+    display: none;
+  }
+}
+/* Companion and other narrow windows. */
 @media (max-width: 760px) {
+  .dialog.ask-reader {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+  .ask-reader-head,
+  .ask-reader-detail,
+  .ask-reader-answer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .ask-reader-foot {
+    flex-wrap: wrap;
+    padding: 10px 16px;
+  }
+  .ask-reader-choice {
+    flex-basis: 100%;
+  }
+  .ask-reader-foot .ask-send {
+    margin-left: auto;
+  }
   .asks-head > span {
     order: 3;
     flex-basis: 100%;
@@ -3799,17 +4280,12 @@ em,
   .ask-reply input {
     flex-basis: 100%;
   }
-
 }
-
-/* Bound all stacked notices together: connection warnings and the banner vary in height.
-   A single scroller keeps every request reachable without covering the companion composer. */
-.room-alerts:has(.asks-tray:not([hidden])) {
-  max-height: calc(100% - 16px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  align-content: start;
-  pointer-events: auto;
+@media (prefers-reduced-motion: reduce) {
+  .dialog.ask-reader::backdrop {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 /* A missing update needs attention without claiming that native work has stopped. */

@@ -1,6 +1,7 @@
 import { labels, avatar, escape, formatMessage } from "./render.mjs";
 import { prepareStartRequest } from "./start-request.mjs";
 import { currentNote, quietTurn, claudeChatOffer, claudeWakeOffer, notifyQuietTurns } from "./attention.mjs";
+import { isLong, plainPreview, sizeLabel } from "./requests.mjs";
 
 const $ = (selector) => document.querySelector(selector);
 const token = $("meta[name=semaphore-token]").content;
@@ -642,6 +643,7 @@ function renderRoom(room, force = false) {
     guide.innerHTML = `<div><strong>${room.legacy ? "This is an earlier headless conversation" : missing.length ? `Make room for ${missing.map((s) => labels[s]).join(" and ")}` : `${resting.map((s) => labels[s]).join(" and ")} ${resting.length > 1 ? "aren’t" : "isn’t"} listening`}</strong><p>${room.legacy ? "Create a new conversation to connect your live desktop chats." : missing.length ? "Invite each model from its desktop chat. We’ll show you when they join." : `Open ${resting.map((s) => labels[s]).join(" and ")}’s chat and ask it to listen to this room again. Messages wait in its inbox until then.`}</p></div><button data-action="connect">${missing.length ? "Connect apps" : "View connection"} ↗</button>`;
   renderStatus(room, setup);
   renderAsks(room, setup);
+  syncReader(room);
   const messages = setup ? room.messages.filter((message) => !message.opening) : room.messages;
   const markup = (setup ? startCard(room) : "") + messages
         .map(
@@ -1131,17 +1133,49 @@ function countAsksInTitle() {
 const ASK_KINDS = { decision: "Decision", approval: "Sign-off", info: "Information", review: "Review" };
 const askRequests = new Map();
 let askBusy = null;
+// What the person has picked or typed but not sent, per request. A choice belongs to the revision
+// it was made on: an AI's update can replace the options, so the index would point elsewhere.
+const askDraft = (id) => storageGet(`semaphore:ask-draft:${id}`) ?? "";
+function askChoice(ask) {
+  const [revision, index] = (storageGet(`semaphore:ask-choice:${ask.id}`) ?? "").split(":").map(Number);
+  return revision === (ask.revision ?? 1) && Number.isInteger(index) && index >= 0 && index < ask.options.length ? index : undefined;
+}
+function setAskChoice(ask, index) {
+  storageSet(`semaphore:ask-choice:${ask.id}`, index === undefined ? "" : `${ask.revision ?? 1}:${index}`);
+}
+const askUnsent = (ask) => askChoice(ask) !== undefined || !!askDraft(ask.id).trim();
+// The person picked an option on a version the AI has since changed: never send that silently.
+function askChoiceChanged(ask) {
+  const [revision] = (storageGet(`semaphore:ask-choice:${ask.id}`) ?? "").split(":").map(Number);
+  return Number.isInteger(revision) && revision !== (ask.revision ?? 1);
+}
+function askMeta(ask) {
+  return `${avatar(ask.from)}<span><strong>${labels[ask.from]}</strong> · ${ASK_KINDS[ask.kind] ?? "Request"}</span>${ask.blocking ? '<span class="ask-tag">Blocking</span>' : ""}<time datetime="${escape(ask.updatedAt ?? ask.createdAt)}">${escape(formatTime(ask.updatedAt ?? ask.createdAt))}</time>`;
+}
+const approvalNote = (ask) => ask.kind === "approval"
+  ? `Your answer is a reply in this conversation. Any permission prompt still appears in ${hostApp(ask.from)}.` : "";
+// A request answers in its card only when all of it fits there; a long one gets a summary card
+// that opens the full reader, so nothing is cut off. Either way: pick, then send.
 function askCard(ask) {
+  const id = escape(ask.id);
+  const busy = askBusy === ask.id ? ' aria-disabled="true"' : "";
+  const head = `<div class="ask-meta">${askMeta(ask)}</div><h3 class="ask-heading"><button type="button" class="ask-title" data-ask-open="${id}" data-focus="open:${id}" title="Read the full request"><span>${escape(ask.title)}</span></button></h3>`;
+  if (isLong(ask)) {
+    const preview = ask.detail ? plainPreview(ask.detail) : "";
+    return `<article class="ask long${ask.blocking ? " blocking" : ""}" data-ask="${id}">${head}
+${preview ? `<p class="ask-preview">${escape(preview)}</p>` : ""}
+<div class="ask-summary"><button type="button" class="ask-read" data-ask-open="${id}" data-focus="read:${id}">Read &amp; answer</button><span>${escape(sizeLabel(ask))}</span>${askChoiceChanged(ask) ? '<span class="ask-unsent">Changed since you picked</span>' : askUnsent(ask) ? '<span class="ask-unsent">Answer not sent</span>' : ""}<button type="button" class="ask-dismiss" data-ask-dismiss="${id}" data-focus="dismiss:${id}"${busy}>Dismiss</button></div>
+</article>`;
+  }
+  const choice = askChoice(ask);
   const who = labels[ask.from];
-  const busy = askBusy === ask.id;
-  return `<article class="ask${ask.blocking ? " blocking" : ""}" data-ask="${escape(ask.id)}" data-from="${escape(ask.from)}">
-<div class="ask-meta">${avatar(ask.from)}<span><strong>${who}</strong> · ${ASK_KINDS[ask.kind] ?? "Request"}${ask.blocking ? ' · <b class="ask-blocking">Blocking</b>' : ""}</span><time datetime="${escape(ask.updatedAt ?? ask.createdAt)}">${escape(formatTime(ask.updatedAt ?? ask.createdAt))}</time></div>
-<h3 class="ask-title">${escape(ask.title)}</h3>
-${ask.detail ? `<details class="ask-detail"><summary>Details</summary><div class="message-text">${formatMessage(ask.detail)}</div></details>` : ""}
-${ask.kind === "approval" ? `<p class="ask-where">Your answer is a reply in this conversation. Any permission prompt still appears in ${escape(hostApp(ask.from))}.</p>` : ""}
-<form class="ask-answer" data-ask-form="${escape(ask.id)}" data-ask-revision="${Number(ask.revision ?? 1)}">
-${ask.options.length ? `<div class="ask-options" role="group" aria-label="Choices">${ask.options.map((option, index) => `<button type="submit" class="ask-option" name="option" value="${index}"${busy ? " disabled" : ""}>${escape(option)}</button>`).join("")}</div>` : ""}
-<div class="ask-reply"><label class="sr-only" for="ask-text-${escape(ask.id)}">Answer ${who}</label><input id="ask-text-${escape(ask.id)}" data-ask-text="${escape(ask.id)}" maxlength="4000" autocomplete="off" placeholder="${ask.options.length ? "Add a note to your choice, or answer in your own words" : `Answer ${who}`}"${busy ? " disabled" : ""}><button type="submit" class="ask-send" name="option" value=""${busy ? " disabled" : ""}>Send</button><button type="button" class="ask-dismiss" data-ask-dismiss="${escape(ask.id)}"${busy ? " disabled" : ""}>Dismiss</button></div>
+  return `<article class="ask${ask.blocking ? " blocking" : ""}" data-ask="${id}">${head}
+${ask.detail ? `<div class="ask-detail message-text">${formatMessage(ask.detail)}</div>` : ""}
+${approvalNote(ask) ? `<p class="ask-where">${escape(approvalNote(ask))}</p>` : ""}
+${askChoiceChanged(ask) ? `<p class="ask-changed" role="status">${escape(labels[ask.from])} changed this request since you picked an answer. Pick again.</p>` : ""}
+<form class="ask-answer" data-ask-form="${id}" data-ask-revision="${Number(ask.revision ?? 1)}" novalidate>
+${ask.options.length ? `<fieldset class="ask-options"><legend class="sr-only">Choices for ${escape(who)}</legend>${ask.options.map((option, index) => `<label class="ask-option"><input type="radio" name="ask-choice-${id}" value="${index}" data-ask-choice="${id}" data-focus="choice:${id}:${index}"${choice === index ? " checked" : ""}><span>${escape(option)}</span></label>`).join("")}</fieldset>` : ""}
+<div class="ask-reply"><label class="sr-only" for="ask-text-${id}">${ask.options.length ? "Note" : `Answer ${escape(who)}`}</label><input id="ask-text-${id}" data-ask-text="${id}" data-focus="text:${id}" maxlength="4000" autocomplete="off" placeholder="${ask.options.length ? "Add a note (optional)" : `Answer ${escape(who)}`}"><button type="submit" class="ask-send" data-focus="send:${id}"${busy}>Send</button><button type="button" class="ask-dismiss" data-ask-dismiss="${id}" data-focus="dismiss:${id}"${busy}>Dismiss</button></div>
 </form>
 </article>`;
 }
@@ -1151,77 +1185,122 @@ function renderAsks(room, setup) {
   // The tray can be folded to its header, per conversation, until a new request arrives.
   const ids = asks.map((ask) => ask.id).join();
   const folded = storageGet(`semaphore:asks-folded:${room.name}`) === ids && !!ids;
+  const review = asks.length > 1 || asks.some(isLong);
   const markup = asks.length
-    ? `<header class="asks-head"><strong>Needs you</strong><span>${asks.length === 1 ? "1 request" : `${asks.length} requests`} · stays here until you answer or dismiss it</span><button type="button" class="asks-fold" data-asks-fold aria-expanded="${!folded}">${folded ? "Show" : "Hide"}</button></header>${folded ? "" : `<div class="asks-list">${asks.map(askCard).join("")}</div>`}`
+    ? `<header class="asks-head"><strong>Needs you</strong><span>${asks.length === 1 ? "1 request" : `${asks.length} requests`} · stays here until you answer or dismiss it</span>${review && !folded ? `<button type="button" class="asks-review" data-ask-review data-focus="review">${asks.length > 1 ? `Review all (${asks.length})` : "Open"}</button>` : ""}<button type="button" class="asks-fold" data-asks-fold data-focus="fold" aria-expanded="${!folded}">${folded ? "Show" : "Hide"}</button></header>${folded ? "" : `<div class="asks-list" tabindex="0" role="region" aria-label="Requests that need you" data-focus="list">${asks.map(askCard).join("")}</div>`}`
     : "";
   tray.hidden = !asks.length;
-  if (tray.dataset.room === room.name && tray.renderedMarkup === markup) return;
+  if (tray.dataset.room === room.name && tray.renderedMarkup === markup) return updateAsksScroll();
   const sameRoom = tray.dataset.room === room.name;
-  const drafts = new Map(sameRoom ? [...tray.querySelectorAll("[data-ask-text]")].map((input) => [input.dataset.askText, input.value]) : []);
-  const open = new Set(sameRoom ? [...tray.querySelectorAll(".ask-detail[open]")].map((detail) => detail.closest("[data-ask]").dataset.ask) : []);
-  const active = sameRoom && tray.contains(document.activeElement) ? document.activeElement : null;
-  const focusKey = active && (active.dataset.askText ? `[data-ask-text="${CSS.escape(active.dataset.askText)}"]` : null);
-  const scroll = tray.querySelector(".asks-list")?.scrollTop ?? 0;
+  const focusKey = sameRoom && tray.contains(document.activeElement) ? document.activeElement.closest("[data-focus]")?.dataset.focus : null;
+  const scroll = sameRoom ? tray.querySelector(".asks-list")?.scrollTop ?? 0 : 0;
   tray.innerHTML = markup;
   tray.renderedMarkup = markup;
   tray.dataset.room = room.name;
-  for (const input of tray.querySelectorAll("[data-ask-text]"))
-    input.value = drafts.get(input.dataset.askText) ?? storageGet(`semaphore:ask-draft:${input.dataset.askText}`) ?? "";
-  for (const id of open) tray.querySelector(`[data-ask="${CSS.escape(id)}"] .ask-detail`)?.setAttribute("open", "");
-  if (tray.querySelector(".asks-list")) tray.querySelector(".asks-list").scrollTop = scroll;
-  if (focusKey) tray.querySelector(focusKey)?.focus({ preventScroll: true });
+  // Every keystroke is saved, so the stored draft is always the latest, including from the reader.
+  for (const input of tray.querySelectorAll("[data-ask-text]")) input.value = askDraft(input.dataset.askText);
+  const list = tray.querySelector(".asks-list");
+  if (list) list.scrollTop = scroll;
+  if (focusKey) tray.querySelector(`[data-focus="${CSS.escape(focusKey)}"]`)?.focus({ preventScroll: true });
+  updateAsksScroll();
 }
+// A soft fade at the bottom says there's more below.
+function updateAsksScroll() {
+  const list = $("#asks .asks-list");
+  if (list) list.classList.toggle("has-more", list.scrollHeight - list.scrollTop - list.clientHeight > 4);
+}
+$("#asks").addEventListener("scroll", updateAsksScroll, true);
+new ResizeObserver(updateAsksScroll).observe($("#asks"));
+addEventListener("resize", updateAsksScroll);
 $("#asks").addEventListener("input", (event) => {
   const id = event.target.dataset?.askText;
   if (id) storageSet(`semaphore:ask-draft:${id}`, event.target.value);
 });
-// Enter in the free-text box sends that text, never implicitly choosing the first option.
-$("#asks").addEventListener("keydown", (event) => {
-  if (event.key !== "Enter" || event.isComposing || !event.target.matches("[data-ask-text]")) return;
-  event.preventDefault();
-  const form = event.target.closest("[data-ask-form]");
-  form.requestSubmit(form.querySelector(".ask-send"));
+$("#asks").addEventListener("change", (event) => {
+  const id = event.target.dataset?.askChoice;
+  const ask = id && state.room?.asks?.find((item) => item.id === id);
+  if (ask) setAskChoice(ask, Number(event.target.value));
 });
+// Enter in the note sends it with the chosen option. Safari reports some IME confirmations as
+// keyCode 229 with isComposing false.
+const composing = (event) => event.isComposing || event.keyCode === 229;
+$("#asks").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.shiftKey || composing(event) || !event.target.matches("[data-ask-text]")) return;
+  event.preventDefault();
+  event.target.closest("[data-ask-form]").requestSubmit();
+});
+
+// Answering and dismissing are shared by the card and the reader. Each resolves to the server's
+// outcome; the caller decides where to say it. The same request ID makes a retry idempotent.
+async function sendAnswer(room, ask, { revision, option, text }) {
+  if (askBusy) return { ok: false };
+  if (option === undefined && !text)
+    return { ok: false, message: ask.options.length ? "Choose an option, or write an answer." : "Write an answer first." };
+  const key = JSON.stringify([ask.id, revision, option ?? null, text]);
+  const clientId = askRequests.get(key) ?? crypto.randomUUID();
+  askRequests.set(key, clientId);
+  askBusy = ask.id;
+  renderAsks(room, false);
+  try {
+    const result = await api(`/rooms/${room.name}/asks/${ask.id}/answer`, { method: "POST", body: { option, text, clientId, revision } });
+    storageSet(`semaphore:ask-draft:${ask.id}`, "");
+    setAskChoice(ask, undefined);
+    askRequests.delete(key);
+    const worker = result.room.pending?.speaker;
+    askBusy = null;
+    renderRoom(result.room, true);
+    refresh();
+    return { ok: true, message: result.room.pending?.state === "uncertain"
+      ? "Answer saved. It will be read when the conversation continues."
+      : worker && worker !== ask.from
+      ? `Answer saved. ${labels[worker]} reads it now; ${labels[ask.from]} sees it on its next turn.`
+      : `Answer sent to ${labels[ask.from]}.` };
+  } catch (err) {
+    askBusy = null;
+    if (err.room) renderRoom(err.room, true);
+    else if (state.selected === room.name) renderAsks(room, false);
+    return { ok: false, message: err.message };
+  }
+}
+// Dismissal names the revision the person was looking at, so a changed request isn't closed unseen.
+async function dismissRequest(room, ask, revision = ask.revision ?? 1) {
+  if (askBusy) return { ok: false };
+  if (!await confirmAction({ title: "Dismiss this request?", text: `${labels[ask.from]} is told you closed it without answering. That isn't an approval.`, action: "Dismiss" }))
+    return { ok: false, cancelled: true };
+  askBusy = ask.id;
+  renderAsks(room, false);
+  try {
+    const result = await api(`/rooms/${room.name}/asks/${ask.id}/dismiss`, { method: "POST", body: { revision } });
+    storageSet(`semaphore:ask-draft:${ask.id}`, "");
+    setAskChoice(ask, undefined);
+    askBusy = null;
+    renderRoom(result.room, true);
+    refresh();
+    return { ok: true, message: `Request dismissed. ${labels[ask.from]} will see it was closed without an answer.` };
+  } catch (err) {
+    askBusy = null;
+    if (err.room) renderRoom(err.room, true);
+    else if (state.selected === room.name) renderAsks(room, false);
+    return { ok: false, message: err.message };
+  }
+}
 $("#asks").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.target.closest("[data-ask-form]");
   if (!form || !state.room || askBusy) return;
-  const id = form.dataset.askForm;
-  const revision = Number(form.dataset.askRevision);
   const room = state.room;
-  const ask = room.asks?.find((item) => item.id === id);
+  const ask = room.asks?.find((item) => item.id === form.dataset.askForm);
   if (!ask) return;
-  const option = event.submitter?.value ? Number(event.submitter.value) : undefined;
+  const picked = form.querySelector("[data-ask-choice]:checked");
+  const option = picked ? Number(picked.value) : undefined;
   const text = form.querySelector("[data-ask-text]").value.trim();
-  if (option === undefined && !text) {
-    form.querySelector("[data-ask-text]").focus();
-    return toast(ask.options.length ? "Choose an option, or write an answer." : "Write an answer first.");
+  if (option === undefined && askChoiceChanged(ask) && ask.options.length) {
+    form.querySelector("[data-ask-choice]")?.focus();
+    return toast(`${labels[ask.from]} changed this request since you picked. Pick again before sending.`);
   }
-  // The same request ID makes a retried answer idempotent.
-  const key = JSON.stringify([id, revision, option ?? null, text]);
-  const clientId = askRequests.get(key) ?? crypto.randomUUID();
-  askRequests.set(key, clientId);
-  askBusy = id;
-  renderAsks(room, false);
-  try {
-    const result = await api(`/rooms/${room.name}/asks/${id}/answer`, { method: "POST", body: { option, text, clientId, revision } });
-    storageSet(`semaphore:ask-draft:${id}`, "");
-    askRequests.delete(key);
-    const worker = result.room.pending?.speaker;
-    toast(result.room.pending?.state === "uncertain"
-      ? "Answer saved. It will be read when the conversation continues."
-      : worker && worker !== ask.from
-      ? `Answer saved. ${labels[worker]} reads it now; ${labels[ask.from]} sees it on its next turn.`
-      : `Answer sent to ${labels[ask.from]}.`);
-    askBusy = null;
-    renderRoom(result.room, true);
-    await refresh();
-  } catch (err) {
-    askBusy = null;
-    if (err.room) renderRoom(err.room, true);
-    else renderAsks(room, false);
-    toast(err.message);
-  }
+  if (option === undefined && !text) form.querySelector("[data-ask-text]").focus();
+  const result = await sendAnswer(room, ask, { revision: Number(form.dataset.askRevision), option, text });
+  if (result.message) toast(result.message);
 });
 $("#asks").addEventListener("click", async (event) => {
   if (event.target.closest("[data-asks-fold]") && state.room) {
@@ -1232,27 +1311,244 @@ $("#asks").addEventListener("click", async (event) => {
     $("#asks [data-asks-fold]")?.focus({ preventScroll: true });
     return;
   }
+  if (event.target.closest("[data-ask-review]") && state.room?.asks?.length) return openReader(state.room.asks[0].id);
+  const open = event.target.closest("[data-ask-open]");
+  if (open) return openReader(open.dataset.askOpen);
   const button = event.target.closest("[data-ask-dismiss]");
-  if (!button || !state.room || askBusy) return;
-  const id = button.dataset.askDismiss;
+  if (!button || !state.room || askBusy || button.getAttribute("aria-disabled") === "true") return;
+  const ask = state.room.asks?.find((item) => item.id === button.dataset.askDismiss);
+  if (!ask) return;
+  const result = await dismissRequest(state.room, ask);
+  if (result.message) toast(result.message);
+});
+
+// The full reader: the whole request, every option and a note, with room to read. Wide windows put
+// the detail beside the answer, so the question and choices never scroll away. It pages through
+// all open requests. It is filled when opened or moved, and on an AI's update only once the person
+// asks to see it; polling never rewrites what they're reading or typing.
+const reader = { room: null, id: null, index: 0, revision: null, gone: false, stale: false };
+const readerDialog = $("#ask-reader");
+const readerAsks = (room) => (room && !room.ended ? room.asks ?? [] : []);
+function readerAsk(room) { return readerAsks(room).find((ask) => ask.id === reader.id); }
+function setReaderNotice(text, action = "") {
+  const notice = $("#ask-reader-notice");
+  notice.innerHTML = text ? `<span>${escape(text)}</span>${action}` : "";
+  notice.classList.toggle("shown", !!text);
+}
+function setReaderBlocked(blocked) {
+  for (const control of [$("#ask-reader-send"), $("#ask-reader-dismiss")]) control.setAttribute("aria-disabled", String(blocked));
+  $("#ask-reader-choices").disabled = blocked;
+}
+function readerChoiceLabel(ask) {
+  const picked = $("#ask-reader-options [name=ask-reader-choice]:checked");
+  const text = picked ? ask.options[Number(picked.value)] : "";
+  // With nothing picked, the bar offers a jump to the choices, which sit below the detail when narrow.
+  $("#ask-reader-choice").innerHTML = picked ? escape(`Answer: ${text}`)
+    : ask.options.length ? '<button type="button" class="ask-reader-jump" data-reader-jump>Pick an answer ↓</button> <span>or write a note</span>' : "";
+  $("#ask-reader-choice").title = text;
+  $("#ask-reader-clear").hidden = !picked;
+}
+function fillReader(room) {
+  const ask = readerAsk(room);
+  if (!ask) return;
+  reader.revision = ask.revision ?? 1;
+  reader.index = readerAsks(room).indexOf(ask);
+  reader.gone = reader.stale = false;
+  readerDialog.classList.toggle("blocking", !!ask.blocking);
+  // Long requests get the full height; short ones size to their content.
+  readerDialog.classList.toggle("long", isLong(ask));
+  $("#ask-reader-meta").innerHTML = askMeta(ask);
+  $("#ask-reader-title").textContent = ask.title;
+  $("#ask-reader-detail").innerHTML = ask.detail
+    ? `<div class="message-text">${formatMessage(ask.detail)}</div>`
+    : '<p class="ask-reader-empty">No further detail.</p>';
+  $("#ask-reader-detail").hidden = false;
+  readerDialog.classList.toggle("no-detail", !ask.detail);
+  const choice = askChoice(ask);
+  $("#ask-reader-options").innerHTML = ask.options.map((option, index) =>
+    `<label class="ask-reader-option"><input type="radio" name="ask-reader-choice" value="${index}"${choice === index ? " checked" : ""}><span class="ask-reader-key" aria-hidden="true">${index + 1}</span><span>${escape(option)}</span></label>`).join("");
+  $("#ask-reader-choices").hidden = !ask.options.length;
+  $("#ask-reader-text-label").textContent = ask.options.length ? "Note (optional)" : `Your answer to ${labels[ask.from]}`;
+  $("#ask-reader-text").value = askDraft(ask.id);
+  fitReaderNote();
+  $("#ask-reader-where").textContent = approvalNote(ask);
+  $("#ask-reader-where").hidden = !approvalNote(ask);
+  setReaderNotice("");
+  setReaderBlocked(false);
+  readerChoiceLabel(ask);
+  readerPager(room);
+  $("#ask-reader-detail").scrollTop = 0;
+  readerDialog.querySelector(".ask-reader-answer").scrollTop = 0;
+}
+// Where ‹ and › lead. If the request on screen is gone, its neighbours are around where it was.
+function readerNeighbours(room) {
+  const asks = readerAsks(room);
+  const at = asks.findIndex((ask) => ask.id === reader.id);
+  if (at >= 0) reader.index = at;
+  return { asks, at, prev: asks[(at >= 0 ? at : reader.index) - 1], next: asks[at >= 0 ? at + 1 : reader.index] };
+}
+function readerPager(room) {
+  const { asks, at, prev, next } = readerNeighbours(room);
+  $("#ask-reader-count").textContent = at >= 0 && asks.length > 1 ? `${at + 1} of ${asks.length}` : at < 0 && asks.length ? `${asks.length} still open` : "";
+  $("#ask-reader-prev").hidden = $("#ask-reader-next").hidden = asks.length < (at >= 0 ? 2 : 1);
+  $("#ask-reader-prev").disabled = !prev;
+  $("#ask-reader-next").disabled = !next;
+}
+function openReader(id) {
   const room = state.room;
-  const ask = room.asks?.find((item) => item.id === id);
-  if (!ask || !await confirmAction({ title: "Dismiss this request?", text: `${labels[ask.from]} is told you closed it without answering. That isn't an approval.`, action: "Dismiss" })) return;
-  askBusy = id;
-  renderAsks(room, false);
-  try {
-    const result = await api(`/rooms/${room.name}/asks/${id}/dismiss`, { method: "POST", body: { revision: ask.revision ?? 1 } });
-    storageSet(`semaphore:ask-draft:${id}`, "");
-    askBusy = null;
-    renderRoom(result.room, true);
-    await refresh();
-  } catch (err) {
-    askBusy = null;
-    if (err.room) renderRoom(err.room, true);
-    else renderAsks(room, false);
-    toast(err.message);
+  if (!room || !readerAsks(room).some((ask) => ask.id === id)) return;
+  Object.assign(reader, { room: room.name, id });
+  fillReader(room);
+  if (!readerDialog.open) readerDialog.showModal();
+  focusReader(readerAsk(room));
+}
+function closeReader() {
+  if (!readerDialog.open) return;
+  readerDialog.close();
+}
+// Focus goes back to the card that opened the reader; a poll may have replaced it.
+readerDialog.addEventListener("close", () => {
+  const id = reader.id;
+  reader.id = null;
+  if (state.room) renderAsks(state.room, false);
+  const target = (id && $(`#asks [data-ask="${CSS.escape(id)}"] [data-ask-open]`)) || $("#asks [data-asks-fold]") || $("#message");
+  target?.focus({ preventScroll: true });
+});
+// Called on every render. Says what changed without touching the request on screen.
+function syncReader(room) {
+  if (!readerDialog.open) return;
+  if (!room || room.name !== reader.room) return closeReader();
+  readerPager(room);
+  const ask = readerAsk(room);
+  if (!ask) {
+    if (!reader.gone) {
+      reader.gone = true;
+      setReaderBlocked(true);
+      setReaderNotice(room.ended ? "This conversation ended, so the request was closed." : "This request was answered, dismissed or withdrawn elsewhere. Your note is still here to copy.");
+    }
+    return;
+  }
+  if ((ask.revision ?? 1) !== reader.revision && !reader.stale) {
+    reader.stale = true;
+    setReaderBlocked(true);
+    setReaderNotice(`${labels[ask.from]} changed this request. Read the new version before answering; your note is kept.`,
+      '<button type="button" class="ask-reader-update" data-reader-update>Show the new version</button>');
+  }
+}
+function fitReaderNote() {
+  const note = $("#ask-reader-text");
+  if (CSS.supports?.("field-sizing", "content")) return;
+  note.style.height = "auto";
+  note.style.height = `${Math.min(note.scrollHeight + 2, 160)}px`;
+}
+$("#ask-reader-close").addEventListener("click", closeReader);
+$("#ask-reader-prev").addEventListener("click", () => moveReader(-1));
+$("#ask-reader-next").addEventListener("click", () => moveReader(1));
+function moveReader(step) {
+  if (askBusy) return;
+  const { prev, next } = readerNeighbours(state.room);
+  const target = step < 0 ? prev : next;
+  if (target) { reader.id = target.id; fillReader(state.room); focusReader(target); }
+}
+// The detail region, or the first control when a request has no detail (it is hidden then).
+function focusReader(ask) {
+  const target = ask?.detail ? $("#ask-reader-detail") : $("#ask-reader-options input") ?? $("#ask-reader-text");
+  target?.focus({ preventScroll: true });
+}
+$("#ask-reader-notice").addEventListener("click", (event) => {
+  if (!event.target.closest("[data-reader-update]")) return;
+  fillReader(state.room);
+  focusReader(readerAsk(state.room));
+});
+$("#ask-reader-options").addEventListener("change", (event) => {
+  const ask = readerAsk(state.room);
+  if (!ask || reader.stale) return;
+  setAskChoice(ask, Number(event.target.value));
+  readerChoiceLabel(ask);
+  renderAsks(state.room, false);
+});
+$("#ask-reader-choice").addEventListener("click", (event) => {
+  if (!event.target.closest("[data-reader-jump]")) return;
+  $("#ask-reader-choices").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  $("#ask-reader-options input")?.focus({ preventScroll: true });
+});
+$("#ask-reader-clear").addEventListener("click", () => {
+  const ask = readerAsk(state.room);
+  for (const radio of $("#ask-reader-options").querySelectorAll("input")) radio.checked = false;
+  if (ask) { setAskChoice(ask, undefined); readerChoiceLabel(ask); renderAsks(state.room, false); }
+  $("#ask-reader-choices").querySelector("input")?.focus();
+});
+$("#ask-reader-text").addEventListener("input", (event) => {
+  if (!reader.id) return;
+  storageSet(`semaphore:ask-draft:${reader.id}`, event.target.value);
+  const card = $(`#asks [data-ask-text="${CSS.escape(reader.id)}"]`);
+  if (card) card.value = event.target.value;
+  fitReaderNote();
+});
+// Keys 1–9 pick an option; Cmd/Ctrl+Enter sends from anywhere in the reader.
+readerDialog.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && !composing(event)) {
+    event.preventDefault();
+    $("#ask-reader-form").requestSubmit();
+    return;
+  }
+  if (event.metaKey || event.ctrlKey || event.altKey || /^(TEXTAREA|INPUT)$/.test(event.target.tagName) && event.target.type !== "radio") return;
+  const radio = /^[1-9]$/.test(event.key) && $("#ask-reader-options").querySelectorAll("input")[Number(event.key) - 1];
+  if (radio && !$("#ask-reader-choices").disabled) {
+    event.preventDefault();
+    radio.checked = true;
+    radio.dispatchEvent(new Event("change", { bubbles: true }));
+    radio.focus();
   }
 });
+$("#ask-reader-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const room = state.room;
+  const ask = readerAsk(room);
+  if (!ask || askBusy || $("#ask-reader-send").getAttribute("aria-disabled") === "true") return;
+  const picked = $("#ask-reader-options [name=ask-reader-choice]:checked");
+  const option = picked ? Number(picked.value) : undefined;
+  const text = $("#ask-reader-text").value.trim();
+  if (option === undefined && !text) {
+    setReaderNotice(ask.options.length ? "Pick an answer above, or write a note." : "Write your answer first.");
+    (ask.options.length ? $("#ask-reader-options input") : $("#ask-reader-text"))?.focus();
+    return;
+  }
+  setReaderNotice("Sending…");
+  $("#ask-reader-send").setAttribute("aria-disabled", "true");
+  const result = await sendAnswer(room, ask, { revision: reader.revision, option, text });
+  afterReaderOutcome(result, ask.id);
+});
+$("#ask-reader-dismiss").addEventListener("click", async () => {
+  const room = state.room;
+  const ask = readerAsk(room);
+  if (!ask || askBusy || $("#ask-reader-dismiss").getAttribute("aria-disabled") === "true") return;
+  const result = await dismissRequest(room, ask, reader.revision);
+  if (result.cancelled) return $("#ask-reader-dismiss").focus();
+  afterReaderOutcome(result, ask.id);
+});
+// After an answer or dismissal, go on to the next open request, or close and confirm.
+function afterReaderOutcome(result, id) {
+  if (!result.ok) {
+    if (!readerDialog.open || reader.id !== id) { if (result.message) toast(result.message); return; }
+    // A 409 has already shown why (changed or gone) through syncReader; keep that state.
+    setReaderBlocked(reader.stale || reader.gone);
+    if (!reader.stale && !reader.gone) setReaderNotice(result.message ?? "");
+    return;
+  }
+  const asks = readerAsks(state.room).filter((ask) => ask.id !== id);
+  if (!asks.length || !readerDialog.open) {
+    closeReader();
+    if (result.message) toast(result.message);
+    return;
+  }
+  // The request that took this one's place, or the last one.
+  const next = asks[Math.min(reader.index, asks.length - 1)];
+  reader.id = next.id;
+  fillReader(state.room);
+  setReaderNotice(`${result.message} Next request:`);
+  focusReader(next);
+}
 
 async function refresh() {
   const selected = state.selected;
@@ -1330,6 +1626,7 @@ function closeRename() {
 }
 async function selectRoom(name, { route = "push" } = {}) {
   closeRename();
+  if (name !== reader.room) closeReader();
   setDeliverablesOpen(false, { focus: false });
   if (state.selected)
     storageSet(`semaphore:draft:${state.selected}`, $("#message").value);
@@ -1370,6 +1667,7 @@ async function selectRoom(name, { route = "push" } = {}) {
 
 // Home is where a new conversation starts: one message, who joins, who replies first.
 function showHome(prefill, { route = "push" } = {}) {
+  closeReader();
   setDeliverablesOpen(false, { focus: false });
   if (state.selected)
     storageSet(`semaphore:draft:${state.selected}`, $("#message").value);
@@ -1482,7 +1780,8 @@ function sendOnEnter(box, form) {
       event.key !== "Enter" ||
       event.shiftKey ||
       event.altKey ||
-      event.isComposing
+      event.isComposing ||
+      event.keyCode === 229
     )
       return;
     event.preventDefault();
@@ -2017,7 +2316,7 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     toggleSidebar();
   }
-  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k" && !$("dialog[open]")) {
     event.preventDefault();
     showHome();
   }

@@ -182,6 +182,52 @@ edit(pricing, (room) => {
   ];
 });
 
+// The longest request an AI can file: a 160-character title, 2,000 characters of Markdown detail
+// and six 80-character options. Every part must stay readable in the main window and the companion.
+const longDetail = [
+  "**What's blocked:** the migration plan for the billing tables. I can't write the backfill script until I know which customers keep their legacy pricing, because the script deletes the old rate rows once it has copied them.",
+  "",
+  "## Context",
+  "",
+  "- 1,284 accounts are still on the 2023 price list; 212 of them pay annually and renew between now and March.",
+  "- Finance asked last week to *honour existing contracts*, but the sales team promised three enterprise accounts a price lock until 2028.",
+  "- Support has 41 open tickets that mention pricing, mostly from annual customers who saw the new rates on the pricing page.",
+  "",
+  "## Options in more detail",
+  "",
+  "1. **Grandfather everyone until renewal.** Simplest to explain and to build; costs about $18k/month in deferred revenue until March.",
+  "2. **Grandfather annual plans only.** Monthly customers move at their next invoice with 30 days' notice; about $6k/month deferred.",
+  "3. **Move everyone now with a one-time credit.** Fastest cleanup, but support expects a spike in tickets and the three enterprise promises would be broken.",
+  "",
+  "## My recommendation",
+  "",
+  "Option 2, plus a manual exception list for the three enterprise accounts. I've drafted the email for monthly customers in `workspace/pricing-email.md` and the backfill dry run is in `workspace/backfill-dry-run.txt`.",
+  "",
+  "| Option | Deferred / month | Risk |",
+  "| --- | --- | --- |",
+  "| Grandfather all | $18k | Low |",
+  "| Annual only | $6k | Medium |",
+  "| Move now | $0 | High |",
+  "",
+  "## What happens after you answer",
+  "",
+  "I'll write the backfill script for the option you pick, run it against the staging copy first, and post the row counts and a sample of twenty migrated accounts here before anything touches production. Nothing is deleted until you've seen that sample. If you pick option 5, I'll stop the migration work and draft a one-page policy for finance and sales instead.",
+].join("\n");
+edit(pricing, (room) => {
+  room.asks.push({ id: "00000000-0000-4000-8000-0000000000a3", requestId: "harness-ask-3", from: "claude", turnId: "harness", kind: "decision",
+    title: "Which customers keep their current price when the new billing tables go live, so I can write the backfill script without breaking any existing contract?",
+    detail: longDetail,
+    options: [
+      "Grandfather every existing customer until their renewal date, then move them",
+      "Grandfather annual plans only; move monthly plans at next invoice with notice",
+      "Move everyone to the new prices now and give each account a one-time credit",
+      "Option 2, plus a manual exception list for the three enterprise price locks",
+      "Pause the migration until finance and sales agree on one written policy first",
+      "Something else: I'll explain my answer in the reply box below these choices",
+    ],
+    blocking: true, status: "open", createdAt: ago(12) });
+});
+
 await send(received, "One more thing: keep the fix small enough to review today.", "claude");
 
 const launch = createLiveRoom(root, "Launch checklist").room.name;

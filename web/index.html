@@ -394,6 +394,41 @@
         </button>
       </div>
     </dialog>
+    <!-- The full reader for a request. It lives outside the tray, which re-renders on every poll. -->
+    <dialog id="ask-reader" class="dialog ask-reader" aria-labelledby="ask-reader-title" aria-describedby="ask-reader-meta">
+      <div class="ask-reader-head">
+        <div class="ask-reader-bar">
+          <strong>Needs you</strong>
+          <span id="ask-reader-count"></span>
+          <span class="ask-reader-pager">
+            <button type="button" class="icon-button" id="ask-reader-prev" aria-label="Previous request" title="Previous request">‹</button
+            ><button type="button" class="icon-button" id="ask-reader-next" aria-label="Next request" title="Next request">›</button>
+          </span>
+          <button type="button" class="icon-button" id="ask-reader-close" aria-label="Close" title="Close (Esc)">×</button>
+        </div>
+        <div class="ask-meta" id="ask-reader-meta"></div>
+        <h2 id="ask-reader-title"></h2>
+        <div class="ask-reader-notice" id="ask-reader-notice" role="status" aria-live="polite"></div>
+      </div>
+      <div class="ask-reader-main">
+        <div class="ask-reader-detail" id="ask-reader-detail" tabindex="0" role="region" aria-label="Request detail"></div>
+        <form class="ask-reader-answer" id="ask-reader-form" novalidate>
+          <fieldset class="ask-reader-choices" id="ask-reader-choices">
+            <legend>Your answer</legend>
+            <div id="ask-reader-options"></div>
+            <button type="button" class="ask-clear" id="ask-reader-clear" hidden>Clear choice</button>
+          </fieldset>
+          <label for="ask-reader-text" id="ask-reader-text-label">Note</label>
+          <textarea id="ask-reader-text" rows="3" maxlength="4000"></textarea>
+          <p class="ask-where" id="ask-reader-where" hidden></p>
+        </form>
+      </div>
+      <div class="ask-reader-foot">
+        <span class="ask-reader-choice" id="ask-reader-choice"></span>
+        <button type="button" class="ask-dismiss" id="ask-reader-dismiss">Dismiss request</button>
+        <button type="submit" form="ask-reader-form" class="ask-send" id="ask-reader-send" title="Send answer (⌘↩ or Ctrl+Enter)" aria-keyshortcuts="Meta+Enter Control+Enter">Send answer</button>
+      </div>
+    </dialog>
     <dialog id="confirm-dialog" class="dialog">
       <div class="dialog-heading"><div class="dialog-icon">↻</div></div>
       <h2 id="confirm-title"></h2>
