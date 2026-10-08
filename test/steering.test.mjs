@@ -186,6 +186,23 @@ test('a locked room keeps a recent steering answer but cannot refresh its age', 
   await pump.tick(); assert.equal(capable(), true);
 });
 
+test('GPT idle evidence expires under a room lock and clears when native work resumes', async t => {
+  const f = fixture(t); f.store.release(); let now = 1000;
+  const pump = new WakePump({ root: f.root, paths: { socket: '/tmp/test.sock' }, settings: () => ({ enabled: true }),
+    clientFactory: () => f.native, run: f.run, now: () => now });
+  const idle = () => pump.nativeIdleSince(f.store.read());
+  f.native.activeId = null;
+  await pump.tick(); assert.equal(idle(), new Date(now).toISOString());
+  f.store.acquire(); now += 1500;
+  await pump.tick(); assert.ok(idle(), 'a brief lock does not flicker');
+  f.native.activeId = 'resumed-native-turn'; now += 11000;
+  await pump.tick(); assert.equal(idle(), null, 'global engine polling cannot renew uninspected room evidence');
+  f.store.release(); await pump.tick(); assert.equal(idle(), null, 'a new active turn is not idle');
+  f.native.activeId = null; now += 1500;
+  await pump.tick(); assert.equal(idle(), new Date(now).toISOString(), 'a later stop starts a fresh observation');
+  f.native.activeId = 'native-turn'; await pump.tick(); assert.equal(idle(), null);
+});
+
 test('ending steers a stop once into the exact working GPT turn, never a replacement turn', async t => {
   const f = fixture(t);
   new Semaphore(f.store, {}).end();

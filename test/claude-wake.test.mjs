@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { RoomStore, Semaphore } from "../lib/core.mjs";
 import { queueHumanInput } from "../lib/inputs.mjs";
 import { sqliteDatabase } from "../lib/sqlite.mjs";
-import { registerSession, signalSession, isRegistered, signalPath, recordPath } from "../lib/claude-registry.mjs";
+import { registerSession, recordActivity, readRecord, signalSession, isRegistered, signalPath, recordPath } from "../lib/claude-registry.mjs";
 import { wakeCheck, stopCheck, ClaudeSignalPump, requestClaudeWake, claudeHookEntries, claudeHooksStatus, installClaudeHooks, uninstallClaudeHooks } from "../lib/claude-wake.mjs";
 
 const SESSION = "11111111-2222-4333-8444-5555c1a0de00";
@@ -33,6 +33,21 @@ function fixture(t) {
   const wake = (extra = {}) => wakeCheck({ session_id: SESSION, hook_event_name: "FileChanged", file_path: signalPath(SESSION, home), event: "change", ...extra }, { home, root });
   return { dir, home, root, room, wake };
 }
+
+test("native prompt activity records only time for registered chats and survives directory registration", (t) => {
+  const f = fixture(t);
+  const event = { session_id: SESSION, hook_event_name: "UserPromptSubmit", prompt: "private native prompt" };
+  recordActivity(event, { home: f.home, now: 2000 });
+  assert.equal(readRecord(SESSION, f.home), null, 'activity cannot register a new chat');
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home, now: 1000 });
+  const before = readRecord(SESSION, f.home);
+  assert.equal(recordActivity(event, { home: f.home, now: 2000 }), undefined, 'no context or decision output');
+  assert.deepEqual(readRecord(SESSION, f.home), { ...before, activityAt: new Date(2000).toISOString() });
+  registerSession({ session_id: SESSION, hook_event_name: "CwdChanged" }, { home: f.home, now: 100000 });
+  assert.equal(readRecord(SESSION, f.home).activityAt, new Date(2000).toISOString());
+  recordActivity({ ...event, hook_event_name: 'Stop' }, { home: f.home, now: 110000 });
+  assert.equal(readRecord(SESSION, f.home).activityAt, new Date(2000).toISOString(), 'other events cannot claim resumed work');
+});
 
 test("registration gives each chat a private watched signal in the shape the runtime reads", (t) => {
   const f = fixture(t);
@@ -449,6 +464,7 @@ test("hook settings install beside existing settings, are idempotent, and uninst
   assert.deepEqual(installed.hooks.FileChanged, [want.FileChanged]);
   assert.equal(want.FileChanged.hooks[0].asyncRewake, true);
   assert.deepEqual(installed.hooks.Stop, [want.Stop]);
+  assert.deepEqual(installed.hooks.UserPromptSubmit, [want.UserPromptSubmit]);
   assert.match(want.Stop.hooks[0].command, /\/bin\/semaphore' hook stop$|\/bin\/semaphore hook stop$/);
   assert.equal(want.Stop.hooks[0].asyncRewake, undefined, "the stop check runs before the chat stops, not in the background");
   assert.equal(fs.statSync(settingsPath).mode & 0o777, 0o600, "the file keeps its permissions");
@@ -489,6 +505,22 @@ test("an install from before the Stop check upgrades in place and keeps everythi
   assert.equal(installClaudeHooks(options).changed, false);
   uninstallClaudeHooks(options);
   assert.deepEqual(JSON.parse(fs.readFileSync(settingsPath, "utf8")), { hooks: { Stop: [theirs] }, model: "opus" });
+});
+
+test("the activity hook upgrades a four-hook install without replacing native prompt hooks", (t) => {
+  const f = fixture(t);
+  const settingsPath = path.join(f.dir, "settings.json");
+  const command = path.join(f.home, "bin", "semaphore");
+  const { UserPromptSubmit, ...previous } = claudeHookEntries(command);
+  const theirs = { hooks: [{ type: "command", command: "check-my-prompt" }] };
+  const hooks = { ...Object.fromEntries(Object.entries(previous).map(([event, group]) => [event, [group]])), UserPromptSubmit: [theirs] };
+  fs.writeFileSync(settingsPath, JSON.stringify({ hooks, model: "opus" }));
+  const options = { settingsPath, command, backupDir: path.join(f.dir, "backups") };
+  assert.equal(claudeHooksStatus(options).present.UserPromptSubmit, false);
+  assert.equal(installClaudeHooks(options).changed, true);
+  const after = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  assert.deepEqual(after, { hooks: { ...hooks, UserPromptSubmit: [theirs, UserPromptSubmit] }, model: "opus" });
+  assert.equal(installClaudeHooks(options).changed, false);
 });
 
 test("hook status and reinstall tolerate settings key reordering without rewriting the file", (t) => {

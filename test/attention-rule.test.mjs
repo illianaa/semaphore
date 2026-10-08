@@ -61,18 +61,23 @@ test("Claude stopped without replying alerts only with the Stop hook's evidence 
   assert.equal(reason(view("claude", { received: true, seat: { wake: "automatic" }, pending: { ...stopped, claudeInputAt: at(5 * 60_000 + 25_000) } })), null,
     "it took a notice after stopping: still going");
   assert.equal(reason(view("claude", { received: true, seat: { wake: "automatic" }, pending: { claudeReminderAt: at(5 * 60_000) } })), null, "reminded but not stopped");
+  assert.equal(reason(view("claude", { received: true, seat: { wake: "automatic", activityAt: at(5 * 60_000 + 25_000) }, pending: stopped })), null,
+    "a native prompt resumes work without requiring a room note");
+  assert.equal(reason(view("claude", { received: true, seat: { wake: "automatic", activityAt: at(5 * 60_000 + 10_000) }, pending: stopped })), "claude-stopped",
+    "activity before the stop cannot hide a later stop");
 });
 
 test("an older headless seat never needs waking", () => {
   assert.equal(reason(view("claude", { seat: { transport: "headless" } })), null);
 });
 
-test("an approval note alerts until the AI plainly moves on; nothing alerts once the turn is over or taken", () => {
+test("an approval note persists through native stop or idle; nothing alerts once the turn is over or taken", () => {
   const note = { turnId: "turn-1", kind: "approval", text: "Approve the deploy", updatedAt: at(60_000) };
   assert.equal(reason(view("claude", { received: true, note })), "approval");
-  assert.equal(reason(view("claude", { received: true, note, pending: { noteAt: note.updatedAt, claudeStoppedAt: at(120_000) } })), null,
-    "Claude stopped after asking: the approval is retired, and its note keeps the stop calm");
-  assert.equal(reason(view("astra", { received: true, note, seat: { nativeIdleSince: at(120_000) } })), "gpt-stopped", "GPT's chat went idle instead");
+  assert.equal(reason(view("claude", { received: true, note, pending: { noteAt: note.updatedAt, claudeStoppedAt: at(120_000) } })), "approval",
+    "Claude stopping does not resolve a permission request");
+  for (const idle of [at(0), at(120_000)])
+    assert.equal(reason(view("astra", { received: true, note, seat: { nativeIdleSince: idle } })), "approval", "idle before or after the note is not an answer");
   assert.equal(reason({ ...view("astra", { seat: { wake: "unloaded" } }), owner: "human" }), null, "the person took the stick");
   assert.equal(reason({ ...view("astra", { seat: { wake: "unloaded" } }), ended: { at: at(0) } }), null);
   assert.equal(reason({ ...view("astra", { seat: { wake: "unloaded" } }), lock: { state: "stale" } }), null);

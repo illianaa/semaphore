@@ -36,7 +36,7 @@ import { WakeClient, verifyNativeSeat, sameRuntime } from "./lib/codex-runtime.m
 import { cancelQueuedWake } from "./lib/wake-delivery.mjs";
 import { bindNativeWork } from "./lib/steering.mjs";
 import os from "node:os";
-import { registerSession } from "./lib/claude-registry.mjs";
+import { registerSession, recordActivity } from "./lib/claude-registry.mjs";
 import { wakeCheck, stopCheck, claudeHooksStatus, installClaudeHooks, uninstallClaudeHooks } from "./lib/claude-wake.mjs";
 import { RUNTIME, formatRuntime, runtimeIdentity, runtimeChange, sameBuild } from './lib/build-info.mjs';
 import { statusNote } from './lib/status-note.mjs';
@@ -722,6 +722,8 @@ async function hookCommand(verb) {
     if (verb === "register") {
       const output = registerSession(event);
       if (output) process.stdout.write(JSON.stringify(output));
+    } else if (verb === "activity") {
+      recordActivity(event);
     } else if (verb === "wake") {
       const result = wakeCheck(event, { root });
       if (result.code === 2) {
@@ -736,7 +738,7 @@ async function hookCommand(verb) {
   } catch { /* Never disturb a chat over Semaphore's own trouble. */ }
 }
 
-// Four entries in ~/.claude/settings.json. Everything else there is preserved, and a backup is
+// Semaphore entries in ~/.claude/settings.json. Everything else there is preserved, and a backup is
 // written first. Chats pick them up when they start or are reopened.
 function hooksCommand(verb) {
   const paths = installPaths();

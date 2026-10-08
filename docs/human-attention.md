@@ -205,7 +205,7 @@ The person reported that the "has gone quiet / might be asleep" alert had been w
 
 - **No silence-based alerts.** A received turn with no evidence never alerts. After 20 minutes the banner says "working in the Claude app · no update for 25 min" in plain text, with no colour and no notification.
 - **Evidence, held for a grace period.** The grace is timed from when this server first saw the reason for this room and turn, not from when the turn was queued. One calm snapshot resets it, and a restarted app starts calm.
-  - **Approval** (no grace): a current `--approval` note, retired once Claude's Stop hook sees it stop afterwards or GPT's chat goes idle.
+  - **Approval** (no grace): a current `--approval` note, retained until the agent replaces/clears it or the room turn ends. Native stop/idle is not an answer.
   - **GPT, turn not received yet.** None of these fires if the chat already has the notice, its listener is running, or it replied in the last 90 s.
     - The engine reports the chat `unloaded` (45 s): "Open GPT to continue".
     - `reconnect` (60 s): "Reconnect GPT's chat".
@@ -219,7 +219,7 @@ The person reported that the "has gone quiet / might be asleep" alert had been w
   - **Claude, turn not received yet.**
     - Hooked: alerts only if the hook hasn't claimed or observed the turn since it last needed delivering (when queued, after an Open chat or Wake request, or after the chat restarted following a claim). Grace 2 min: "Open Claude to continue". A delivered turn is calm even if Claude is busy for a long time.
     - Without hooks: no listener (60 s).
-  - **Claude stopped** (60 s): the Stop hook reminded the chat once, and it stopped anyway. This doesn't apply if Claude posted any status note this turn, or did anything after the stop.
+  - **Claude stopped** (60 s): the Stop hook reminded the chat once, and it stopped anyway. This doesn't apply if Claude posted any status note this turn, or took a notice/check-in or native prompt after the stop.
 - **Self-healing restarts.** `semaphore hook register` records `startedAt` on SessionStart `startup` or `resume`, but not `clear`, `compact` or a missing source. A notice claimed before a restart is offered again once: the turn if it wasn't received, a check-in if it was. A lost notice therefore recovers without the person.
 
 **App.**
@@ -239,3 +239,13 @@ The person reported that the "has gone quiet / might be asleep" alert had been w
   - calm "went quiet" rooms (received, with an 8-minute-old note).
 
 Screenshots: `needs-you-audit/attention-*.jpg`. Not exercised live: a real ChatGPT unload, and a real Claude restart replay.
+
+### Final GPT review
+
+The additional correctness critic identified three cases, fixed before staging:
+
+- A room lock could keep an old GPT idle observation fresh while global engine polling continued. Idle records now carry their own inspection time, which a lock cannot renew. The regression test resumes native work while the room is locked, expires its old evidence, then verifies a fresh active inspection clears it.
+- A manual message in an already-open Claude chat could leave its old stopped warning visible. A fifth installed hook, `UserPromptSubmit → semaphore hook activity`, records only an activity timestamp for an already-registered session. It stores no prompt, emits no context or decision, and never starts or resumes a model. A prompt after the stop clears the warning; a later stop can alert again. Existing SessionStart/CwdChanged registration preserves this timestamp. The [official hook contract](https://code.claude.com/docs/en/hooks#userpromptsubmit) also covers native background continuations. Hook settings migration preserves other prompt hooks and unrelated settings and is idempotent.
+- Native stopping or going idle no longer dismisses an explicit approval note. Approval stays actionable until explicitly cleared/replaced or the room turn ends.
+
+The desktop browser review at 1280×800 verified an amber Open GPT row and banner, calm received turns with old notes, and the collapsed sidebar's accessible dot/count for other conversations. Screenshots: `needs-you-audit/gpt-attention-sidebar-reviewed.jpg` and `gpt-attention-toggle-reviewed.jpg`. The preview uses isolated data and zero alert grace; production grace periods are covered by tests. All 278 tests pass; syntax, whitespace and skill validation pass. The critic independently checked the three fixes, silent activity CLI behavior, hook ownership and four-to-five-hook migration. Real OS notifications, unload/restart behavior and the new prompt hook still need ordinary native-use observation.

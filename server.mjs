@@ -118,7 +118,8 @@ export function createAppServer({
               nativeIdleSince: pump?.nativeIdleSince?.(room) ?? null } : {}),
             // A Claude chat whose hook registered it is woken by Semaphore; it needs no listener.
             ...(speaker === "claude" && p?.transport === "claude-inbox" && claudeSignals && isRegistered(p.id)
-              ? { wake: "automatic", startedAt: readRecord(p.id)?.startedAt ?? null } : {}),
+              ? { wake: "automatic", startedAt: readRecord(p.id)?.startedAt ?? null,
+                activityAt: readRecord(p.id)?.activityAt ?? null } : {}),
             ...(INBOX_TRANSPORTS.includes(p?.transport) && p.id
               ? { listening: listenerStatus(store.dir, speaker).active }
               : {}),
