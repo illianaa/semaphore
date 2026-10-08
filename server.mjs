@@ -24,7 +24,8 @@ import { titleText } from './lib/titles.mjs';
 import { timingView, timingReport } from './lib/timing.mjs';
 import { ClaudeSignalPump, requestClaudeWake } from './lib/claude-wake.mjs';
 import { ClaudeDesktopSessions, claudeRecoveryPrompt } from './lib/claude-desktop.mjs';
-import { isRegistered } from './lib/claude-registry.mjs';
+import { isRegistered, readRecord } from './lib/claude-registry.mjs';
+import { AttentionTracker } from './lib/attention.mjs';
 
 const SPEAKERS = ["astra", "claude"];
 const MAX_BODY = 80_000;
@@ -40,6 +41,7 @@ export function createAppServer({
   wakePump,
   claudePump,
   claudeDesktop,
+  attentionTracker,
   wake = {
     status: wakeStatus,
     enable: enableWake,
@@ -75,6 +77,7 @@ export function createAppServer({
   const pump = wakePump === false ? null : wakePump ?? new WakePump({ root });
   // Wakes registered Claude chats through their Claude Code hook (lib/claude-wake.mjs).
   const claudeSignals = claudePump === false ? null : claudePump ?? new ClaudeSignalPump({ root });
+  const attention = attentionTracker ?? new AttentionTracker();
   // Links that open a bound Claude chat in the Claude desktop app (lib/claude-desktop.mjs).
   const claudeChats = claudeDesktop === false ? null : claudeDesktop ?? new ClaudeDesktopSessions();
 
@@ -111,9 +114,11 @@ export function createAppServer({
             connected: !!(live && p.id),
             manual: p?.transport === "codex-queue",
             transport: p?.transport,
-            ...(speaker === "astra" ? { wake: pump?.mode(p, store.dir, room), steering: pump?.canSteer?.(room, store.dir) === true } : {}),
+            ...(speaker === "astra" ? { wake: pump?.mode(p, store.dir, room), steering: pump?.canSteer?.(room, store.dir) === true,
+              nativeIdleSince: pump?.nativeIdleSince?.(room) ?? null } : {}),
             // A Claude chat whose hook registered it is woken by Semaphore; it needs no listener.
-            ...(speaker === "claude" && p?.transport === "claude-inbox" && claudeSignals && isRegistered(p.id) ? { wake: "automatic" } : {}),
+            ...(speaker === "claude" && p?.transport === "claude-inbox" && claudeSignals && isRegistered(p.id)
+              ? { wake: "automatic", startedAt: readRecord(p.id)?.startedAt ?? null } : {}),
             ...(INBOX_TRANSPORTS.includes(p?.transport) && p.id
               ? { listening: listenerStatus(store.dir, speaker).active }
               : {}),
@@ -131,7 +136,7 @@ export function createAppServer({
     );
     const last = room.messages.at(-1);
     const artifacts = artifactViews(summary ? { artifacts: room.artifacts?.filter(item => item.ready) } : room, { cache: artifactCache });
-    return {
+    const result = {
       name: room.name,
       title: room.title || room.name,
       titleSource: room.titleSource ?? "existing",
@@ -150,6 +155,15 @@ export function createAppServer({
             at: room.pending.at,
             wake: room.pending.wake ?? null,
             wakeRequestedAt: room.pending.claudeHook?.wakeRequestedAt ?? null,
+            // Evidence for "Claude stopped without replying": the Stop hook's reminder, the stop
+            // after it, and the last status note's time (expired or not).
+            claudeReminderAt: room.pending.claudeHook?.stopReminderAt ?? null,
+            claudeStoppedAt: room.pending.claudeHook?.stoppedAt ?? null,
+            claudeClaimedAt: room.pending.claudeHook?.turnAt ?? null,
+            claudeInputAt: room.pending.claudeHook?.inputAt ?? null,
+            claudeCheckInAt: room.pending.claudeHook?.checkInAt ?? null,
+            nativeBound: !!room.pending.nativeWork?.turnId,
+            noteAt: room.statusNote?.turnId === room.pending.id ? room.statusNote.updatedAt ?? null : null,
             timing: timingView(room, store.dir),
             // Preparing a revision or claiming a hook is not native delivery confirmation.
             deliveredThrough: room.pending.speaker === 'astra'
@@ -193,10 +207,18 @@ export function createAppServer({
             ),
           }),
     };
+    // What the person must do so an AI can continue, if anything (lib/attention.mjs).
+    const lastReplyAt = {};
+    for (let i = room.messages.length - 1; i >= 0 && Object.keys(lastReplyAt).length < 2; i--) {
+      const message = room.messages[i];
+      if (message.speaker !== "human") lastReplyAt[message.speaker] ??= message.at;
+    }
+    result.attention = attention.check(room.name, result, { lastReplyAt });
+    return result;
   }
 
   function listRooms() {
-    return fs
+    const rooms = fs
       .readdirSync(root, { withFileTypes: true })
       .filter(
         (entry) =>
@@ -212,6 +234,8 @@ export function createAppServer({
         } // One damaged room must not hide the other conversations.
       })
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    attention.prune(rooms.map((room) => room.name));
+    return rooms;
   }
 
   async function mutate(name, action, { waitMs = 5000 } = {}) {

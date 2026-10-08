@@ -194,3 +194,48 @@ The correctness critic rechecked the fixes with isolated delayed-response mocks,
 All 267 tests pass, along with the JavaScript syntax check, diff whitespace check and skill validator.
 
 The human subsequently requested fewer false asleep warnings and cross-conversation recovery indicators. These are the next coordinated change before the combined release; the installed app remains 0.14.2.
+
+## Alerts that need the person, on evidence only (Claude, 8 October 2026)
+
+The person reported that the "has gone quiet / might be asleep" alert had been wrong every time. They also asked for a sidebar alert when another conversation is waiting on them to wake an AI.
+
+**Cause.** `quietTurn()` fired when a turn had been *received* and five minutes passed without a reply or note. A received turn means the AI is working in its chat, and silence there is normal. It drove the amber banner, the sidebar subtitle, the member description, Claude's Open chat offer and an OS notification.
+
+**Rule.** `lib/attention.mjs`, computed in the server view, is the one source of truth. The banner, sidebar row, sidebar toggle and notifications all read `room.attention`. Two critics reviewed the design (false alarms; sidebar UX) and a third reviewed the build.
+
+- **No silence-based alerts.** A received turn with no evidence never alerts. After 20 minutes the banner says "working in the Claude app · no update for 25 min" in plain text, with no colour and no notification.
+- **Evidence, held for a grace period.** The grace is timed from when this server first saw the reason for this room and turn, not from when the turn was queued. One calm snapshot resets it, and a restarted app starts calm.
+  - **Approval** (no grace): a current `--approval` note, retired once Claude's Stop hook sees it stop afterwards or GPT's chat goes idle.
+  - **GPT, turn not received yet.** None of these fires if the chat already has the notice, its listener is running, or it replied in the last 90 s.
+    - The engine reports the chat `unloaded` (45 s): "Open GPT to continue".
+    - `reconnect` (60 s): "Reconnect GPT's chat".
+    - Manual transport or `needs-send` (30 s): "Press Send in ChatGPT".
+    - Wake delivery `uncertain` (2 min): "Check GPT's chat".
+    - Wake off with no listener (60 s): "Open GPT to continue".
+    - Engine `unavailable` (3 min): "Check ChatGPT is open".
+  - **GPT, turn received.**
+    - The chat is unloaded (45 s), or `reconnect` with a native-bound turn (60 s).
+    - **GPT stopped:** the wake engine inspected the exact bound chat, and no native turn is running at all (90 s). A new turn the person started there doesn't count, and a missing or stale snapshot is not evidence.
+  - **Claude, turn not received yet.**
+    - Hooked: alerts only if the hook hasn't claimed or observed the turn since it last needed delivering (when queued, after an Open chat or Wake request, or after the chat restarted following a claim). Grace 2 min: "Open Claude to continue". A delivered turn is calm even if Claude is busy for a long time.
+    - Without hooks: no listener (60 s).
+  - **Claude stopped** (60 s): the Stop hook reminded the chat once, and it stopped anyway. This doesn't apply if Claude posted any status note this turn, or did anything after the stop.
+- **Self-healing restarts.** `semaphore hook register` records `startedAt` on SessionStart `startup` or `resume`, but not `clear`, `compact` or a missing source. A notice claimed before a restart is offered again once: the turn if it wasn't received, a check-in if it was. A lost notice therefore recovers without the person.
+
+**App.**
+- **Sidebar rows:** one indicator per row (request count, then an amber dot, then the green reply dot). The action label replaces the subtitle in amber text, with a screen-reader description. Rows never move, and the mark clears as soon as the state does; there is no "mark as read".
+- **Sidebar toggle:** an 8 px amber dot while the sidebar is hidden and *another* conversation needs the person. Its accessible name says how many, and its tooltip lists them.
+- **Notifications:** one per room, turn and reason, with *Notify me* on and the app in the background.
+- **Banner:** the label, its explanation and the action (Open chat ↗ or Check setup).
+
+**Evidence of correctness.**
+- Unit tests for every reason and the calm cases: an hour of silence, a listener gap, a chat that already has the notice, a just-replied AI, a note this turn, activity after a stop.
+- Debounce tests: grace timed from first sighting, and a reset on a calm snapshot.
+- Restart-replay tests: once per restart, not on compaction.
+- The isolated harness at 1280×800, with graces off for preview, showed:
+  - the sidebar labels;
+  - the toggle dot and its label "Show sidebar, 3 conversations need you";
+  - the Open GPT banner;
+  - calm "went quiet" rooms (received, with an 8-minute-old note).
+
+Screenshots: `needs-you-audit/attention-*.jpg`. Not exercised live: a real ChatGPT unload, and a real Claude restart replay.

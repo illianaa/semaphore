@@ -310,6 +310,45 @@ test("a queued turn reaches a chat the person reopens in the Claude app, without
   assert.equal(sent(), "", "once per restart");
 });
 
+test("a chat that restarts before starting its claimed turn gets the turn again, once, without any button", async (t) => {
+  const f = fixture(t);
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart", source: "startup" }, { home: f.home, now: Date.now() - 3_600_000 });
+  const r = f.room();
+  await r.app.send("Please review", "claude");
+  const id = r.app.room.pending.id;
+  r.done();
+  assert.equal(f.wake().code, 2, "claimed, then the app quit before the chat acted");
+  assert.equal(f.wake().code, 0);
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart", source: "compact" }, { home: f.home });
+  assert.equal(f.wake().code, 0, "compacting the context is not a restart");
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart", source: "resume" }, { home: f.home });
+  const pump = new ClaudeSignalPump({ root: f.root, home: f.home });
+  assert.match(JSON.stringify(pump.wants(pump.summary("room"))), /:restart:/);
+  const again = f.wake();
+  assert.equal(again.code, 2);
+  assert.match(again.text, /this chat restarted before it started this turn, so here it is again\. it's your turn as Claude/);
+  assert.match(again.text, new RegExp(`--turn ${id}`));
+  assert.equal(f.wake().code, 0, "once per restart");
+  assert.equal(new ClaudeSignalPump({ root: f.root, home: f.home }).wants(pump.summary("room")), null);
+});
+
+test("a chat that restarts while holding a received turn is asked to check in, once", async (t) => {
+  const f = fixture(t);
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart", source: "startup" }, { home: f.home, now: Date.now() - 3_600_000 });
+  const r = f.room();
+  await r.app.send("Long task", "claude");
+  r.app.receive(r.app.room.pending.id, "claude");
+  r.done();
+  assert.equal(f.wake().code, 0);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  registerSession({ session_id: SESSION, hook_event_name: "SessionStart", source: "resume" }, { home: f.home });
+  const woke = f.wake();
+  assert.equal(woke.code, 2);
+  assert.match(woke.text, /this chat restarted while it held a turn\. You still hold the stick/);
+  assert.equal(f.wake().code, 0);
+});
+
 test("Wake Claude asks a chat that received its turn and went quiet to check in, once", async (t) => {
   const f = fixture(t);
   registerSession({ session_id: SESSION, hook_event_name: "SessionStart" }, { home: f.home });
@@ -554,6 +593,8 @@ test("concurrent Stop hook processes remind once, and bad input never blocks a c
   assert.deepEqual(results.map((result) => result.code), [0, 0, 0]);
   const blocked = results.filter((result) => result.stdout);
   assert.equal(blocked.length, 1, "exactly one process claims the reminder");
+  assert.equal(new RoomStore(f.root, "room").read().pending.claudeHook.stoppedAt, undefined,
+    "processes racing the reminder's own stop don't count as Claude stopping again");
   const decision = JSON.parse(blocked[0].stdout);
   assert.equal(decision.decision, "block");
   assert.match(decision.reason, /you still hold the talking stick/);

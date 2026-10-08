@@ -1,113 +1,76 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { quietTurn, claudeChatOffer, claudeWakeOffer, notifyQuietTurns, QUIET_MS } from "../web/attention.mjs";
+import { attentionOf, quietMinutes, claudeChatOffer, claudeWakeOffer, roomsNeedingYou, notifyAttention, QUIET_TEXT_MS } from "../web/attention.mjs";
 
-const now = Date.parse("2026-10-07T12:00:00Z");
-const at = age => new Date(now - age).toISOString();
-function room(speaker = "claude") {
-  return { name: "room", title: "Project", owner: speaker,
-    connections: { claude: { transport: "claude-inbox", wake: "automatic" } },
-    pending: { id: "turn-1", speaker, state: "awaiting-reply", progress: "received",
-      at: at(20 * 60_000), timing: { acknowledgedAt: at(QUIET_MS) } } };
+const now = Date.parse("2026-10-08T12:00:00Z");
+const at = (ms) => new Date(now - ms).toISOString();
+function room(speaker = "claude", { progress = "received", attention = null, name = "room" } = {}) {
+  return { name, owner: speaker, ended: null, lock: { state: "free" }, attention,
+    pending: { id: "turn-1", speaker, state: "awaiting-reply", progress, at: at(10 * 60_000),
+      timing: { queuedAt: at(10 * 60_000), acknowledgedAt: at(9 * 60_000) } },
+    connections: { claude: { transport: "claude-inbox", wake: "automatic" }, astra: { transport: "astra-inbox" } } };
 }
-function note(r, age, kind = "working") {
-  r.statusNote = { turnId: r.pending.id, speaker: r.pending.speaker, kind,
-    text: "Checking the result", updatedAt: at(age),
-    expiresAt: kind === "approval" ? null : new Date(now + 25 * 60_000).toISOString() };
-}
+const stopped = { reason: "claude-stopped", speaker: "claude", label: "Remind Claude to reply", key: "turn-1:claude-stopped" };
 
-test("both agents become quiet based on their receipt, not time spent in the inbox", () => {
-  for (const speaker of ["claude", "astra"]) {
-    const r = room(speaker);
-    assert.equal(quietTurn(r, now).speaker, speaker);
-    r.pending.timing.acknowledgedAt = at(60_000);
-    assert.equal(quietTurn(r, now), null);
-    r.pending.timing.acknowledgedAt = null;
-    assert.equal(quietTurn(r, now), null, "unknown acknowledgment time is not inactivity evidence");
-  }
+test("the app shows only the server's alert, and only for the current turn", () => {
+  assert.equal(attentionOf(room()), null, "silence alone is not an alert");
+  assert.deepEqual(attentionOf(room("claude", { attention: stopped })), stopped);
+  assert.equal(attentionOf(room("claude", { attention: { ...stopped, key: "turn-0:claude-stopped" } })), null, "a stale answer");
+  assert.equal(attentionOf({ ...room("claude", { attention: stopped }), ended: { at: at(0) } }), null);
 });
 
-test("fresh status updates clear quiet, unrelated notes cannot hide it, approvals stay distinct", () => {
+test("a long-silent working turn gets calm text, not an alert", () => {
+  assert.equal(quietMinutes(room(), now), 0, "nine minutes");
+  const r = room(); r.pending.timing.acknowledgedAt = at(QUIET_TEXT_MS + 5 * 60_000);
+  assert.equal(quietMinutes(r, now), 25);
+  r.pending.noteAt = at(60_000);
+  assert.equal(quietMinutes(r, now), 0, "a recent note");
+  assert.equal(quietMinutes(room("claude", { attention: stopped }), now), 0, "an alert says more");
+});
+
+test("Open chat for Claude: offered for an unstarted turn, or when the server says it stopped", () => {
   const r = room();
-  note(r, 60_000);
-  assert.equal(quietTurn(r, now), null);
-  assert.ok(quietTurn(r, now + QUIET_MS));
-  r.statusNote.turnId = "old-turn";
-  assert.ok(quietTurn(r, now));
-  note(r, 24 * 60 * 60_000, "approval");
-  assert.equal(quietTurn(r, now), null);
-  assert.equal(claudeWakeOffer(r, now), null);
-});
-
-test("quiet never overrides ended, taken, queued, delivering or uncertain turns", () => {
-  for (const change of [
-    r => { r.ended = { at: at(0) }; },
-    r => { r.owner = "human"; },
-    r => { r.pending = null; },
-    r => { r.pending.progress = "queued"; },
-    r => { r.pending.state = "delivering"; },
-    r => { r.pending.state = "uncertain"; },
-    r => { r.lock = { state: "stale" }; },
-  ]) {
-    const r = room(); change(r);
-    assert.equal(quietTurn(r, now), null);
-  }
-});
-
-test("Wake Claude gets a cooldown and quiet grace, and still recovers unreceived turns", () => {
-  const r = room();
+  assert.equal(claudeWakeOffer(r, now), null, "working quietly is not an offer");
+  r.attention = stopped;
   assert.equal(claudeWakeOffer(r, now), "quiet");
   r.pending.wakeRequestedAt = at(0);
   assert.equal(claudeWakeOffer(r, now), "waking");
-  assert.equal(claudeWakeOffer(r, now + 60_000), null);
-  assert.equal(quietTurn(r, now + QUIET_MS - 1), null);
-  assert.equal(claudeWakeOffer(r, now + QUIET_MS), "quiet");
+  r.pending.wakeRequestedAt = at(2 * 60_000);
   r.pending.progress = "queued";
-  assert.equal(claudeWakeOffer(r, now + 60_000), "stuck");
-  r.connections.claude.wake = "unavailable";
-  assert.equal(claudeWakeOffer(r, now + QUIET_MS), null);
-});
-
-test("opening a stalled desktop chat stays available when Claude's hook is unavailable", () => {
-  const r = room();
+  r.attention = null;
+  assert.equal(claudeWakeOffer(r, now), "stuck");
   delete r.connections.claude.wake;
-  assert.equal(claudeChatOffer(r, now), "quiet");
   assert.equal(claudeWakeOffer(r, now), null);
-  r.pending.progress = "queued";
-  assert.equal(claudeChatOffer(r, now), "stuck");
-  assert.equal(claudeWakeOffer(r, now), null);
+  assert.equal(claudeChatOffer(r, now), "stuck", "the link works without the hook");
   r.owner = "human";
   assert.equal(claudeChatOffer(r, now), null);
 });
 
-test("quiet notifications survive reloads without repeating, and a new turn can notify", () => {
-  const saved = new Map(); const alerts = [];
-  const options = { now, enabled: true, foreground: false,
-    read: key => saved.get(key), write: (key, value) => saved.set(key, value),
-    notify: (r, quiet) => alerts.push([r.name, quiet.turnId]) };
-  const r = room();
-  notifyQuietTurns([r], { ...options, foreground: true });
-  notifyQuietTurns([r], { ...options, enabled: false });
-  assert.equal(saved.size, 0, "suppressed notifications remain eligible");
-  notifyQuietTurns([r], options);
-  notifyQuietTurns([r], { ...options });
-  note(r, 0);
-  notifyQuietTurns([r], { ...options, now: now + QUIET_MS });
-  assert.deepEqual(alerts, [["room", "turn-1"]]);
-  r.pending.id = "turn-2";
-  notifyQuietTurns([r], options);
-  assert.deepEqual(alerts, [["room", "turn-1"], ["room", "turn-2"]]);
+test("the sidebar toggle counts other rooms that need the person", () => {
+  const rooms = [room("claude", { attention: stopped, name: "a" }), room("claude", { name: "b" }), room("claude", { attention: stopped, name: "c" })];
+  assert.deepEqual(roomsNeedingYou(rooms, "a").map((r) => r.name), ["c"]);
+  assert.deepEqual(roomsNeedingYou(rooms, null).map((r) => r.name), ["a", "c"]);
 });
 
-test("failed OS alerts don't poison later notification attempts or other rooms", () => {
+test("one notification per room, turn and reason, surviving reloads; approvals use their own", () => {
   const saved = new Map(); const alerts = [];
-  const broken = room(); broken.name = "broken";
-  const good = room("astra");
-  const options = { now, enabled: true, foreground: false,
-    read: key => saved.get(key), write: (key, value) => saved.set(key, value),
-    notify: r => { if (r.name === "broken") throw Error("OS unavailable"); alerts.push(r.name); } };
-  notifyQuietTurns([broken, good], options);
-  assert.deepEqual(alerts, ["room"]);
-  notifyQuietTurns([broken, good], { ...options, notify: r => alerts.push(r.name) });
-  assert.deepEqual(alerts, ["room", "broken"]);
+  const options = { enabled: true, foreground: false,
+    read: (key) => saved.get(key), write: (key, value) => saved.set(key, value),
+    notify: (r, attention) => alerts.push([r.name, attention.key]) };
+  const r = room("claude", { attention: stopped });
+  notifyAttention([r], { ...options, foreground: true });
+  notifyAttention([r], { ...options, enabled: false });
+  assert.equal(saved.size, 0, "suppressed notifications remain eligible");
+  notifyAttention([r], options);
+  notifyAttention([r], options);
+  assert.deepEqual(alerts, [["room", "turn-1:claude-stopped"]]);
+  r.attention = { ...stopped, reason: "approval", key: "turn-1:approval" };
+  notifyAttention([r], options);
+  assert.equal(alerts.length, 1, "approvals already notify on their own");
+  r.attention = { ...stopped, reason: "claude-asleep", key: "turn-1:claude-asleep" };
+  notifyAttention([r], options);
+  assert.deepEqual(alerts.at(-1), ["room", "turn-1:claude-asleep"]);
+  const broken = room("claude", { attention: { ...stopped, key: "turn-1:claude-stopped" }, name: "broken" });
+  notifyAttention([broken], { ...options, notify: () => { throw Error("OS unavailable"); } });
+  assert.equal(saved.has("semaphore:attention-notified:broken"), false, "a failed alert can be retried");
 });

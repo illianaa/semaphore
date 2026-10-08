@@ -4293,6 +4293,34 @@ em,
   }
 }
 
+/* A conversation that needs the person to act so an AI can continue: an amber dot and the action
+   in words in its sidebar row, and a dot on the sidebar toggle while the sidebar is hidden. Rows
+   stay where they are; the mark clears as soon as the situation does. */
+.room-dot.attention {
+  width: 7px;
+  height: 7px;
+  margin-top: 7px;
+  background: var(--amber);
+}
+.room-item.attention .room-copy small {
+  color: var(--approval-ink);
+  font-weight: 600;
+}
+.sidebar-toggle {
+  position: relative;
+}
+.sidebar-toggle[data-attention]::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 0 2px var(--paper);
+}
+
 /* A missing update needs attention without claiming that native work has stopped. */
 .room-alerts .state-banner.quiet-holder {
   background: var(--approval-bg);

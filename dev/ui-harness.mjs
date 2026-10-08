@@ -10,6 +10,7 @@ import { RoomStore } from "../lib/core.mjs";
 import { createLiveRoom } from "../lib/rooms.mjs";
 import { registerSession } from "../lib/claude-registry.mjs";
 import { dataHome } from "../lib/paths.mjs";
+import { AttentionTracker } from "../lib/attention.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // --attention registers a fake Claude hook only in an explicitly isolated data home.
@@ -62,6 +63,13 @@ const app = createAppServer({
   wake,
   wakePump: false,
   claudePump: attentionPreview ? { start() {}, close() {}, tick() {} } : false,
+  // A pretend GPT engine: one chat ChatGPT has unloaded, the rest awake. Alerts show without their
+  // grace periods so each state can be looked at straight away.
+  ...(attentionPreview ? {
+    wakePump: { start() {}, close() {}, tick() {}, canSteer: () => false, nativeIdleSince: () => null,
+      mode: (participant) => participant?.id === "00000000-0000-4000-8000-000000000004" ? "unloaded" : participant?.id ? "automatic" : undefined },
+    attentionTracker: new AttentionTracker({ graceScale: 0 }),
+  } : {}),
   // A pretend Claude app record, so the fake hooked Claude chat has an Open chat link.
   claudeDesktop: attentionPreview ? { url: (id) => ([ids.claude, "00000000-0000-4000-8000-000000000003"].includes(id) ? "claude://code/continue?session=local_harness-preview" : null) } : false,
 });
@@ -271,6 +279,22 @@ if (attentionPreview) {
     if (room.pending.receipt) room.pending.receipt.at = ago(3);
   });
   console.log(`Disconnected Claude preview: ${url}/?view=companion#${disconnected}`);
+  // GPT's turn is waiting, and ChatGPT has unloaded its chat.
+  const asleep = createLiveRoom(root, "GPT's chat is asleep").room.name;
+  connect(asleep);
+  edit(asleep, (room) => { room.participants.astra.id = "00000000-0000-4000-8000-000000000004"; });
+  fs.rmSync(path.join(root, asleep, "inbox", "astra", "listener.pid"), { force: true });
+  await send(asleep, "Please check the numbers on the pricing page.", "astra");
+  console.log(`Asleep GPT preview: ${url}/#${asleep}`);
+  // Claude was reminded by its Stop hook, then ended its turn anyway, with no status note.
+  const stopped = createLiveRoom(root, "Claude stopped early").room.name;
+  connect(stopped);
+  await send(stopped, "Please write the release notes.", "claude");
+  edit(stopped, (room) => {
+    room.pending.receivedAt = ago(6);
+    room.pending.claudeHook = { session: ids.claude, turnAt: ago(6.1), stopReminderAt: ago(3), stoppedAt: ago(2.9) };
+  });
+  console.log(`Stopped Claude preview: ${url}/#${stopped}`);
 }
 
 console.log(`UI harness ready at ${url} (rooms in ${root})`);
