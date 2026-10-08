@@ -231,3 +231,17 @@ The remaining acceptance check is a real Open chat click on a stuck Claude chat.
 ### Live recovery acceptance, 7 October 2026
 
 The human subsequently answered the 0.14.2 Needs you check: **“Yes, it continues by itself.”** Project room message 27 records the answer to request `38eff1d2-dbc8-49f6-87b1-0fcb9d99b716`. Open chat recovery without typing is therefore confirmed by the person's live check, completing the outstanding acceptance step. This documentation update changes neither the installed release nor runtime behavior.
+
+## 0.15.0 cutover, 8 October 2026 (GPT)
+
+Runtime commit `60b9825` combines the expanded long-request reader (`dc4bc16`, reviewed and corrected in `1ed2331`) with evidence-based recovery alerts and sidebar indicators (`945d1c2`). Final review fixes expire per-room GPT idle evidence during lock contention, preserve explicit approval notices, and clear old Claude stop evidence after native prompt activity. All **278 tests pass**, with syntax, whitespace and skill checks. Independent critics reviewed the UI and lifecycle fixes. Isolated browser checks cover full desktop scrolling, narrow-window paging, note-only answers, calm working turns and sidebar recovery indicators.
+
+Frozen release: `~/.semaphore/releases/0.15.0-314aad3b1afb1789`, full build `314aad3b1afb1789949aa69f3115f07cb67f03182a8a74fdee47ed4f63342e11`. Candidate health, shell and all ten assets (including `/requests.mjs` and both fonts) matched before activation; the dry run passed. At inventory, three saved turns were pending and none was delivering.
+
+After the native heads-up and room status note, the app-only cutover changed PID 37305 → 23032. Backup: `~/.semaphore/backups/cutover-2026-10-08T22-00-13-015Z`. Live health and all ten assets match the release. All 25 room histories, bindings and pending turn identities/states were preserved. Wake runner 99804, shared engine 99808 and ChatGPT 45900 retained their PIDs and start times. The stable command and both skill links target 0.15.0; old releases and the old wake-runner checkout remain untouched.
+
+GPT rejoined this same native chat and acknowledged turn `f423c6b0-8534-4622-ab17-0c0e045887d0` at revision 35 through the installed release. Its identity and receipt are unchanged. Both seats report automatic wake, GPT reports live steering, and this actively working room has no attention warning.
+
+The stable command installed the fifth Claude hook, `UserPromptSubmit → hook activity`, retaining exactly every prior setting and the settings file's 0600 permissions. Backup: `~/.semaphore/backups/claude-settings-2026-10-08T22-00-25-969Z-d6af8598-4a84-462d-9405-8519dd631883.json`. Status reports all five entries present, no stale hooks and hooks enabled. This hook saves only a native-activity timestamp for already-registered chats, emits no context or decision, and stores no prompt text. It neither starts nor resumes a native chat. Real unload/restart behavior, OS notifications and the new activity event remain ordinary-use acceptance checks; installation and fixtures alone do not establish those outcomes.
+
+This post-install record is separate from the immutable runtime snapshot.
